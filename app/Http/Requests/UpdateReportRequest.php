@@ -6,23 +6,25 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateReportRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return false;
+        return auth()->check() && auth()->user()->role === 'admin';
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
-            //
+            'admin_action' => 'required|in:approved,rejected,warning_given',
+            'admin_notes' => 'nullable|string|max:500',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'admin_action.required' => 'Please select an action',
+            'admin_action.in' => 'Invalid action selected',
+            'admin_notes.max' => 'Notes must not exceed 500 characters',
         ];
     }
 }

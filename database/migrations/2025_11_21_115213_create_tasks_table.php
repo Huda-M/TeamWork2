@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('team_id')->constrained();
             $table->foreignId('programmer_id')->constrained();
-            $table->foreignId('project_id')->constrained();
             $table->string('title');
             $table->text('description')->nullable();
             $table->enum('status',['todo', 'in_progress', 'review', 'done']);

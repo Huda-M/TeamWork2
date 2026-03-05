@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class Conversationeeder extends Seeder
+class ConversationSeeder extends Seeder
 {
     /**
      * Run the database seeds.

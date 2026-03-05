@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Subscription extends Model
 {
-    /** @use HasFactory<\Database\Factories\SubscribtionsFactory> */
     use HasFactory;
     protected $fillable = [
         'company_id',

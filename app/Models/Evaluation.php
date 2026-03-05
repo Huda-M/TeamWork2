@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Evaluation extends Model
 {
-    /** @use HasFactory<\Database\Factories\EvaluationFactory> */
     use HasFactory;
     protected $fillable = [
         'evaluator_id',

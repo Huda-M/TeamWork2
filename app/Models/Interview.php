@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Interview extends Model
 {
-    /** @use HasFactory<\Database\Factories\InterviewsFactory> */
     use HasFactory;
     protected $fillable = [
         'company_id',

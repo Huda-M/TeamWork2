@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProgrammerBadge extends Model
 {
-    /** @use HasFactory<\Database\Factories\ProgrammerBadgeFactory> */
     use HasFactory;
     protected $fillable = [
         'programmer_id',

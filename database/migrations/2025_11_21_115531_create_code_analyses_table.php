@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('code_analyses', function (Blueprint $table) {
-            // $table->id();
+            $table->id();
             // $table->foreignId('programmer_id')->constrained();
             // $table->foreignId('task_id')->constrained();
             // $table->foreignId('project_id')->constrained();
@@ -27,7 +27,7 @@ return new class extends Migration
             // $table->enum('status',['pending','success','failed']);
             // $table->string('branch');
             // $table->text('commit_hash');
-            // $table->timestamps();
+            $table->timestamps();
         });
     }
 

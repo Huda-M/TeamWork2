@@ -15,9 +15,11 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->enum('formation_type',['random', 'manual', 'mixed']);
-            $table->enum('status',['active', 'completed', 'disbanded']);
-            $table->foreignId('project_id')->constrained();
+$table->enum('status',['active', 'completed', 'disbanded', 'forming', 'voting']);            $table->foreignId('project_id')->nullable()->constrained();
             $table->timestamp('disbanded_at')->nullable();
+            $table->foreignId('created_by')
+                  ->nullable()
+                  ->constrained('programmers');
             $table->timestamps();
         });
     }

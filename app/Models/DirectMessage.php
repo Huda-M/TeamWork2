@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DirectMessage extends Model
 {
-    /** @use HasFactory<\Database\Factories\DirectMessageFactory> */
     use HasFactory;
     protected $fillable = [
         'conversation_id',

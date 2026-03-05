@@ -11,14 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('programmers', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained();
-            $table->string('specialty');
-            $table->integer('total_score');
-            $table->string('github_username');
-            $table->timestamps();
-        });
+
+            Schema::create('programmers', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('user_id')->constrained();
+    $table->string('specialty')->nullable();
+    $table->integer('total_score')->default(0);
+    $table->string('github_username')->nullable();
+    $table->boolean('is_available')->default(true);
+    $table->timestamps();
+});
+
     }
 
     /**

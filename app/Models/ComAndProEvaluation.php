@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ComAndProEvaluation extends Model
 {
-    /** @use HasFactory<\Database\Factories\ComAndProEvaluationsFactory> */
     use HasFactory;
     protected $fillable = [
         'interview_id',

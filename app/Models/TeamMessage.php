@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TeamMessage extends Model
 {
-    /** @use HasFactory<\Database\Factories\TeamMessageFactory> */
     use HasFactory;
     protected $fillable = [
         'message_text',

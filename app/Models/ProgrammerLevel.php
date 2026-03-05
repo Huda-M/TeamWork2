@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProgrammerLevel extends Model
 {
-    /** @use HasFactory<\Database\Factories\ProgrammerLevelFactory> */
     use HasFactory;
     protected $fillable = [
         'programmer_id',

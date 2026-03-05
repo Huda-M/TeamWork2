@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class DirectMessageeeder extends Seeder
+class DirectMessageSeeder extends Seeder
 {
     /**
      * Run the database seeds.

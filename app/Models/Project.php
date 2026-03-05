@@ -9,30 +9,55 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
 {
-    /** @use HasFactory<\Database\Factories\ProjectFactory> */
     use HasFactory;
+
     protected $fillable = [
         'title',
-        'category_name',
+        'description',
+        'category',
         'difficulty',
         'estimated_duration_days',
-        'max_team_size',
-        'num_of_team',
-        'description',
+        'team_size',
+        'min_team_size',
+        'max_teams',
         'user_id',
     ];
-    public function teams():HasMany{
+
+    protected $casts = [
+        'team_size' => 'integer',
+        'min_team_size' => 'integer',
+        'max_teams' => 'integer',
+    ];
+
+    public function teams()
+    {
         return $this->hasMany(Team::class);
     }
+
+    public function hasRoomForNewTeam()
+    {
+        return $this->teams()->count() < $this->max_teams;
+    }
+
+    public function getTotalAvailableSlots()
+    {
+        $totalMembers = $this->teams()
+            ->withCount('activeMembers')
+            ->get()
+            ->sum('active_members_count');
+
+        $totalCapacity = $this->teams()->count() * $this->team_size;
+
+        return $totalCapacity - $totalMembers;
+    }
+
     public function tasks():HasMany{
         return $this->hasMany(Task::class);
     }
     public function projectSkills():HasMany{
         return $this->hasMany(ProjectSkill::class);
     }
-    public function projectInvitations():HasMany{
-        return $this->hasMany(ProjectInvitation::class);
-    }
+
     public function user():BelongsTo{
         return $this->belongsTo(User::class);
     }
@@ -46,7 +71,5 @@ class Project extends Model
     public function evaluations():HasMany{
         return $this->hasMany(Evaluation::class);
     }
-    public function codeAnalyses():HasMany{
-        return $this->hasMany(CodeAnalysis::class);
-    }
+
 }

@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CodeAnalyses extends Model
 {
-    /** @use HasFactory<\Database\Factories\CodeAnalysFactory> */
     use HasFactory;
     protected $fillable = [
         'programmer_id',

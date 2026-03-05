@@ -9,17 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Skill extends Model
 {
-    /** @use HasFactory<\Database\Factories\SkillFactory> */
     use HasFactory;
     protected $fillable = [
         'name',
     ];
-    public function projectSkills():HasMany{
-        return $this->hasMany(ProjectSkill::class);
-    }
-    public function programmerSkills():HasMany{
-        return $this->hasMany(ProgrammerSkill::class);
-    }
     public function programmers():BelongsToMany
     {
         return $this->belongsToMany(Programmer::class, 'programmer_skills');

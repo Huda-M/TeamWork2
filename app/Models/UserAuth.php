@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserAuth extends Model
 {
-    /** @use HasFactory<\Database\Factories\UserAuthFactory> */
     use HasFactory;
     protected $fillable = [
         'user_id',
@@ -23,4 +22,7 @@ class UserAuth extends Model
     public function user():BelongsTo{
         return $this->belongsTo(User::class);
     }
+    protected $casts = [
+        'token_expires_at' => 'datetime',
+    ];
 }

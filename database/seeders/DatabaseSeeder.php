@@ -1,25 +1,42 @@
 <?php
-
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\User;
+use App\Models\Programmer;
+use App\Models\Team;
+use App\Models\Task;
+use Illuminate\Support\Facades\DB;
+use Faker\Factory as FakerFactory;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
+    protected $faker;
 
-    /**
-     * Seed the application's database.
-     */
+    public function __construct()
+    {
+        $this->faker = FakerFactory::create();
+    }
+
     public function run(): void
     {
-        // User::factory(10)->create();
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        User::truncate();
+        Programmer::truncate();
+        Team::truncate();
+        Task::truncate();
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+        // إنشاء البيانات
+        // $this->createAdminUsers();
+        // $programmers = $this->createProgrammers(50);
+        // $teams = $this->createTeams(15, $programmers);
+        // $this->createTasksForTeams($teams);
+        // $this->createStatistics($teams);
+
+        $this->command->info('✅ Database seeded successfully!');
     }
+
 }

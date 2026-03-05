@@ -6,23 +6,41 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreTeamMemberRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return false;
+        return auth()->check() && auth()->user()->programmer;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
-            //
+            'programmer_id' => 'required|exists:programmers,id',
+            'role' => 'required|in:leader,member',
+            'message' => 'nullable|string|max:500',
+            'expires_at' => 'nullable|date|after:now',
         ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'programmer_id.required' => 'Programmer ID is required',
+'programmer_id.exists' => 'The selected programmer does not exist',
+
+'role.required' => 'Role is required',
+'role.in' => 'Role must be either leader or member',
+
+'message.max' => 'Message must not exceed 500 characters',
+
+'expires_at.after' => 'Expiration date must be after the current time',
+
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'role' => $this->role ?? 'member',
+        ]);
     }
 }
