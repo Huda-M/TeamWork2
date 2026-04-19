@@ -108,117 +108,115 @@ class TeamController extends Controller
     }
 
     public function store(Request $request)
-    {
-        DB::beginTransaction();
+{
+    DB::beginTransaction();
 
-        try {
-            $user = Auth::user();
+    try {
+        $user = Auth::user();
 
-            if ($user->role !== 'programmer') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only programmers can create teams'
-                ], 403);
-            }
-
-            if (!$user->programmer) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Programmer profile not found'
-                ], 404);
-            }
-
-            $programmer = $user->programmer;
-
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255',
-                'description' => 'nullable|string',
-                'formation_type' => 'required|in:random,manual,mixed',
-                'max_members' => 'required|integer|min:3|max:20',
-                'min_members' => 'required|integer|min:1|max:10',
-                'is_public' => 'required|boolean',
-                'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert',
-                'required_skills' => 'nullable|array',
-                'required_skills.*' => 'string',
-                'preferred_skills' => 'nullable|array',
-                'preferred_skills.*' => 'string',
-                'project_id' => 'nullable|exists:projects,id',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            if ($programmer->is_in_team) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You are already in a team'
-                ], 400);
-            }
-
-            // إنشاء الفريق بحالة active مباشرة (لا forming ولا voting)
-            $team = Team::create([
-                'name' => $request->name,
-                'description' => $request->description,
-                'formation_type' => $request->formation_type,
-                'is_public' => $request->is_public,
-                'experience_level' => $request->experience_level ?? 'beginner',
-                'required_skills' => $request->required_skills,
-                'preferred_skills' => $request->preferred_skills,
-                'project_id' => $request->project_id,
-                'status' => 'active',   // تم التعديل: الفريق نشط فوراً
-                'created_by' => $programmer->id,
-            ]);
-
-            // جعل المنشئ قائداً (leader) مباشرة
-            TeamMember::create([
-                'team_id' => $team->id,
-                'programmer_id' => $programmer->id,
-                'role' => 'leader',   // تم التعديل: leader بدلاً من member
-                'joined_at' => now(),
-                'joined_by' => $programmer->id,
-            ]);
-
-            if (!$team->is_public) {
-                $team->update(['join_code' => strtoupper(substr(md5(uniqid()), 0, 8))]);
-            }
-
-            Log::info('Team created with immediate leader', [
-                'team_id' => $team->id,
-                'team_name' => $team->name,
-                'leader_id' => $programmer->id,
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Team created successfully. You are the team leader.',
-                'data' => [
-                    'team' => $team->fresh(),
-                    'join_code' => $team->join_code,
-                    'current_members' => 1,
-                    'max_members' => $team->max_members,
-                    'your_role' => 'leader',
-                    'can_invite' => true,
-                ]
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Failed to create team', ['error' => $e->getMessage()]);
-
+        if ($user->role !== 'programmer') {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create team',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Only programmers can create teams'
+            ], 403);
         }
+
+        if (!$user->programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        $programmer = $user->programmer;
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'formation_type' => 'required|in:random,manual,mixed',
+            'max_members' => 'required|integer|min:3|max:20',
+            'min_members' => 'required|integer|min:1|max:10',
+            'is_public' => 'required|boolean',
+            'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert',
+            'required_skills' => 'nullable|array',
+            'required_skills.*' => 'string',
+            'preferred_skills' => 'nullable|array',
+            'preferred_skills.*' => 'string',
+            'project_id' => 'nullable|exists:projects,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        if ($programmer->is_in_team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are already in a team'
+            ], 400);
+        }
+
+        // إنشاء الفريق بدون created_by
+        $team = Team::create([
+            'name' => $request->name,
+            'description' => $request->description,
+            'formation_type' => $request->formation_type,
+            'is_public' => $request->is_public,
+            'experience_level' => $request->experience_level ?? 'beginner',
+            'required_skills' => $request->required_skills,
+            'preferred_skills' => $request->preferred_skills,
+            'project_id' => $request->project_id,
+            'status' => 'active',
+        ]);
+
+        // جعل المنشئ قائداً
+        TeamMember::create([
+            'team_id' => $team->id,
+            'programmer_id' => $programmer->id,
+            'role' => 'leader',
+            'joined_at' => now(),
+            'joined_by' => $programmer->id,
+        ]);
+
+        if (!$team->is_public) {
+            $team->update(['join_code' => strtoupper(substr(md5(uniqid()), 0, 8))]);
+        }
+
+        Log::info('Team created with immediate leader (no creator field)', [
+            'team_id' => $team->id,
+            'team_name' => $team->name,
+            'leader_id' => $programmer->id,
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team created successfully. You are the team leader.',
+            'data' => [
+                'team' => $team->fresh(),
+                'join_code' => $team->join_code,
+                'current_members' => 1,
+                'max_members' => $team->max_members,
+                'your_role' => 'leader',
+                'can_invite' => true,
+            ]
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Failed to create team', ['error' => $e->getMessage()]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create team',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function inviteByUsername(Request $request, $id)
     {

@@ -26,8 +26,7 @@ class Team extends Model
         'avatar_url',
         'required_skills',
         'preferred_skills',
-        'experience_level',
-        'created_by'
+        'experience_level'
     ];
 
     protected $casts = [

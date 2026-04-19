@@ -92,28 +92,28 @@ Route::middleware('auth:sanctum', 'check.user.status')->group(function () {
         Route::get('/mixed/options', [TeamController::class, 'mixedTeamJoining']);
         Route::post('/join/mixed', [TeamController::class, 'joinViaMixedMethod']);
 
-
-        Route::post('/{id}/start-voting', [TeamController::class, 'startVoting']);
-        Route::post('/{id}/vote', [TeamController::class, 'vote']);
-        Route::get('/{id}/voting-status', [TeamController::class, 'votingStatus']);
+        // ========== مسارات التصويت معطلة ==========
+        // Route::post('/{id}/start-voting', [TeamController::class, 'startVoting']);
+        // Route::post('/{id}/vote', [TeamController::class, 'vote']);
+        // Route::get('/{id}/voting-status', [TeamController::class, 'votingStatus']);
+        // ========================================
 
         Route::get('/{id}/statistics', [TeamController::class, 'teamStatistics']);
     });
 
-Route::prefix('tasks')->group(function () {
-    Route::get('/team/{team}', [TaskController::class, 'getTeamTasks']);
-    Route::get('/team/{team}/stats', [TaskController::class, 'getTeamTaskStats']);
-    Route::post('/team/{team}', [TaskController::class, 'store']);
+    Route::prefix('tasks')->group(function () {
+        Route::get('/team/{team}', [TaskController::class, 'getTeamTasks']);
+        Route::get('/team/{team}/stats', [TaskController::class, 'getTeamTaskStats']);
+        Route::post('/team/{team}', [TaskController::class, 'store']);
 
-    Route::get('/my', [TaskController::class, 'getMyTasks']);
-    Route::get('/{task}/history', [TaskController::class, 'getTaskHistory']);
+        Route::get('/my', [TaskController::class, 'getMyTasks']);
+        Route::get('/{task}/history', [TaskController::class, 'getTaskHistory']);
 
-    Route::put('/{task}', [TaskController::class, 'update']);
-    Route::delete('/{task}', [TaskController::class, 'destroy']);
-    Route::post('/{task}/assign', [TaskController::class, 'assignTask']);
-    Route::post('/{task}/update-status', [TaskController::class, 'updateStatus']);
-
-});
+        Route::put('/{task}', [TaskController::class, 'update']);
+        Route::delete('/{task}', [TaskController::class, 'destroy']);
+        Route::post('/{task}/assign', [TaskController::class, 'assignTask']);
+        Route::post('/{task}/update-status', [TaskController::class, 'updateStatus']);
+    });
 
     Route::prefix('v1')->group(function () {
         Route::post('/users', [UserController::class, 'store']);
@@ -133,16 +133,13 @@ Route::prefix('tasks')->group(function () {
         Route::delete('/skills/{id}', [SkillController::class, 'destroy']);
     });
 });
+
 Route::prefix('evaluations')->group(function () {
     Route::post('/projects/{projectId}/teams/{teamId}/start', [EvaluationController::class, 'startEvaluation']);
-
     Route::post('/projects/{projectId}/teams/{teamId}', [EvaluationController::class, 'store']);
-
     Route::get('/projects/{projectId}', [EvaluationController::class, 'index']);
-
     Route::get('/my/as-evaluator', [EvaluationController::class, 'myEvaluationsAsEvaluator']);
     Route::get('/my/as-evaluated', [EvaluationController::class, 'myEvaluationsAsEvaluated']);
-
     Route::get('/programmer/{programmerId}/stats', [EvaluationController::class, 'programmerStats']);
 });
 
