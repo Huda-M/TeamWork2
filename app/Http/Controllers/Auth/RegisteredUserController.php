@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/Auth/RegisteredUserController.php
 
 namespace App\Http\Controllers\Auth;
 
@@ -10,105 +11,124 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 
 class RegisteredUserController extends Controller
 {
-
-public function register(Request $request): JsonResponse
-{
-    $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
-        'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        'role' => ['required', 'in:company,programmer,admin'],
-    ]);
-
-    cache()->put('registration:' . $request->email, [
-        'name' => $request->name,
-        'password' => $request->password,
-        'role' => $request->role,
-    ], now()->addMinutes(30));
-
-    EmailVerificationCode::createForEmail($request->email);
-
-    return response()->json([
-        'message' => 'Verification code sent to your email',
-        'email' => $request->email,
-    ], 200);
-}
-
-
-public function verifyAndCreate(Request $request): JsonResponse
-{
-    $request->validate([
-        'email' => ['required', 'email'],
-        'code' => ['required', 'string', 'size:6'],
-    ]);
-
-    if (!EmailVerificationCode::verify($request->email, $request->code)) {
-        throw ValidationException::withMessages([
-            'code' => ['Invalid or expired verification code.'],
-        ]);
-    }
-
-
-    $registrationData = cache()->get('registration:' . $request->email);
-
-    if (!$registrationData) {
-        return response()->json([
-            'message' => 'Registration data expired. Please register again.',
-        ], 400);
-    }
-
-    $user = User::create([
-        'name' => $registrationData['name'],
-        'email' => $request->email,
-        'password' => Hash::make($registrationData['password']),
-        'role' => $registrationData['role'],
-        'email_verified_at' => now(),
-    ]);
-
-    event(new Registered($user));
-
-    cache()->forget('registration:' . $request->email);
-
-    Auth::login($user);
-
-    return response()->json([
-        'message' => 'Registration successful',
-        'user' => $user,
-        'token' => $user->createToken('auth_token')->plainTextToken,
-        'profile_completed' => false,
-    ], 201);
-}
-
-
-    public function completeProfile(Request $request): JsonResponse
+    /**
+     * الخطوة 1: إرسال كود التفعيل
+     */
+    public function register(Request $request): JsonResponse
     {
-        $user = $request->user();
-
-        $validated = $request->validate([
-            'user_name' => ['required', 'string', 'max:255', 'unique:users,user_name,' . $user->id],
-            'country' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:20'],
-            'gender' => ['required', 'in:male,female'],
-            'date_of_birth' => ['required', 'date', 'before:today'],
-            'avatar_url' => ['nullable', 'url'],
-            'behance_url' => ['nullable', 'url'],
-            'bio' => ['nullable', 'string', 'max:1000'],
+        $request->validate([
+            'full_name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'source' => ['required', 'in:mobile,web'],
         ]);
 
-        $user->update($validated);
-        $user->markProfileAsCompleted();
+        $role = $request->source === 'mobile' ? 'programmer' : 'company';
+
+        cache()->put('registration:' . $request->email, [
+            'full_name' => $request->full_name,
+            'password' => $request->password,
+            'role' => $role,
+            'source' => $request->source,
+        ], now()->addMinutes(30));
+
+        EmailVerificationCode::createForEmail($request->email);
 
         return response()->json([
-            'message' => 'Profile completed successfully',
-            'user' => $user->fresh(),
+            'message' => 'Verification code sent to your email',
+            'email' => $request->email,
+            'source' => $request->source,
+            'role' => $role,
         ], 200);
     }
 
+    /**
+     * الخطوة 2: التحقق من الكود وإنشاء الحساب
+     */
+    public function verifyAndCreate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+            'code' => ['required', 'string', 'size:6'],
+        ]);
+
+        if (!EmailVerificationCode::verify($request->email, $request->code)) {
+            throw ValidationException::withMessages([
+                'code' => ['Invalid or expired verification code.'],
+            ]);
+        }
+
+        $registrationData = cache()->get('registration:' . $request->email);
+
+        if (!$registrationData) {
+            return response()->json([
+                'message' => 'Registration data expired. Please register again.',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // إنشاء المستخدم
+            $user = User::create([
+                'full_name' => $registrationData['full_name'],
+                'email' => $request->email,
+                'password' => Hash::make($registrationData['password']),
+                'role' => $registrationData['role'],
+                'email_verified_at' => now(),
+            ]);
+
+            event(new Registered($user));
+
+            cache()->forget('registration:' . $request->email);
+
+            Auth::login($user);
+
+            DB::commit();
+
+            // تحميل البيانات الإضافية
+            $responseData = [
+                'id' => $user->id,
+                'full_name' => $user->full_name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'email_verified_at' => $user->email_verified_at,
+            ];
+
+            if ($user->role === 'programmer' && $user->programmer) {
+                $responseData['programmer'] = $user->programmer;
+            }
+
+            return response()->json([
+                'message' => 'Registration successful',
+                'user' => $responseData,
+                'token' => $user->createToken('auth_token')->plainTextToken,
+                'profile_completed' => false,
+                'source' => $registrationData['source'],
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Registration failed', [
+                'email' => $request->email,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Registration failed. Please try again.',
+            ], 500);
+        }
+    }
+
+    /**
+     * إعادة إرسال الكود
+     */
     public function resendCode(Request $request): JsonResponse
     {
         $request->validate([
@@ -122,15 +142,77 @@ public function verifyAndCreate(Request $request): JsonResponse
         ], 200);
     }
 
+    /**
+     * إكمال البروفايل (للمبرمجين)
+     */
+    public function completeProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
 
+        if ($user->role !== 'programmer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only programmers can complete profile here'
+            ], 403);
+        }
+
+        $programmer = $user->programmer;
+
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'user_name' => ['required', 'string', 'max:255', 'unique:programmers,user_name,' . $programmer->id],
+            'phone' => ['required', 'string', 'max:20'],
+            'avatar_url' => ['nullable', 'url'],
+            'bio' => ['nullable', 'string', 'max:1000'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'specialty' => ['nullable', 'string', 'max:255'],
+            'github_username' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $programmer->update($validated);
+        $programmer->markProfileAsCompleted();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile completed successfully',
+            'data' => $programmer->fresh()
+        ], 200);
+    }
+
+    /**
+     * التحقق من حالة البروفايل
+     */
     public function profileStatus(Request $request): JsonResponse
     {
         $user = $request->user();
 
+        if ($user->role === 'programmer') {
+            $profile = $user->programmer;
+            $completed = $profile ? $profile->profile_completed : false;
+        } elseif ($user->role === 'company') {
+            $profile = $user->company;
+            $completed = $profile ? $profile->profile_completed : false;
+        } else {
+            $completed = true;
+            $profile = null;
+        }
+
         return response()->json([
-            'profile_completed' => $user->profile_completed,
-            'is_profile_complete' => $user->isProfileCompleted(),
-            'user' => $user,
+            'profile_completed' => $completed,
+            'role' => $user->role,
+            'user' => [
+                'id' => $user->id,
+                'full_name' => $user->full_name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'profile' => $profile,
         ], 200);
     }
 }

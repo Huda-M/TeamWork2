@@ -1,42 +1,30 @@
 <?php
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\User;
-use App\Models\Programmer;
-use App\Models\Team;
-use App\Models\Task;
-use Illuminate\Support\Facades\DB;
-use Faker\Factory as FakerFactory;
 
 class DatabaseSeeder extends Seeder
 {
-    protected $faker;
-
-    public function __construct()
-    {
-        $this->faker = FakerFactory::create();
-    }
-
     public function run(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        // ✅ إنشاء مستخدم Admin افتراضي
+        if (!User::where('email', 'admin@example.com')->exists()) {
+            User::create([
+                'full_name' => 'Admin User',  // ✅ استخدم full_name بدلاً من name
+                'email' => 'admin@example.com',
+                'password' => bcrypt('password'),
+                'role' => 'admin',
+            ]);
+        }
 
-        User::truncate();
-        Programmer::truncate();
-        Team::truncate();
-        Task::truncate();
+        $this->call([
+            SkillSeeder::class,
+            TrackSeeder::class,
+            ProjectSeeder::class,
+        ]);
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
-
-        // إنشاء البيانات
-        // $this->createAdminUsers();
-        // $programmers = $this->createProgrammers(50);
-        // $teams = $this->createTeams(15, $programmers);
-        // $this->createTasksForTeams($teams);
-        // $this->createStatistics($teams);
-
-        $this->command->info('✅ Database seeded successfully!');
+        $this->command->info('✅ All seeders completed!');
     }
-
 }

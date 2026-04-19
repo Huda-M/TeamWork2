@@ -10,23 +10,11 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('full_name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password')->nullable();
             $table->enum('role', ['admin', 'company', 'programmer']);
-
-            $table->string('user_name')->nullable();
-            $table->string('country')->nullable();
-            $table->string('phone')->nullable();
-            $table->string('avatar_url')->nullable();
-            $table->string('behance_url')->nullable();
-            $table->text('bio')->nullable();
-            $table->enum('gender', ['male', 'female'])->nullable();
-            $table->date('date_of_birth')->nullable();
-
-            $table->boolean('profile_completed')->default(false);
-
             $table->rememberToken();
             $table->timestamps();
         });
@@ -35,14 +23,6 @@ return new class extends Migration
             $table->string('email')->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
-        });
-
-        Schema::create('email_verification_codes', function (Blueprint $table) {
-            $table->id();
-            $table->string('email')->index();
-            $table->string('code', 6);
-            $table->timestamp('expires_at');
-            $table->timestamps();
         });
 
         Schema::create('sessions', function (Blueprint $table) {
@@ -59,7 +39,6 @@ return new class extends Migration
     {
         Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('email_verification_codes');
         Schema::dropIfExists('sessions');
     }
 };

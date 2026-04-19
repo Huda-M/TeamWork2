@@ -1,4 +1,5 @@
 <?php
+// app/Models/Programmer.php
 
 namespace App\Models;
 
@@ -15,27 +16,131 @@ class Programmer extends Model
 
     protected $fillable = [
         'user_id',
+        'user_name',
+        'phone',
+        'avatar_url',
+        'cover_image',
+        'behance_url',
+        'title',
         'specialty',
         'total_score',
         'github_username',
-        'behance_url',
-        'current_team_id',
+        'portfolio_url',
+        'linkedin_url',
+        'twitter_url',
         'is_available',
         'hourly_rate',
         'preferred_working_hours',
         'timezone',
+        'current_team_id',
+        'profile_completed',
     ];
 
     protected $casts = [
         'is_available' => 'boolean',
         'hourly_rate' => 'decimal:2',
         'preferred_working_hours' => 'array',
+        'profile_completed' => 'boolean',
     ];
 
-
+    // العلاقات
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function skills(): BelongsToMany
+    {
+        return $this->belongsToMany(Skill::class, 'programmer_skills')->withTimestamps();
+    }
+
+    public function tracks(): BelongsToMany
+    {
+        return $this->belongsToMany(Track::class, 'programmer_track')
+                    ->withPivot('progress_percentage', 'started_at', 'completed_at')
+                    ->withTimestamps();
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class, 'team_members')
+                    ->withPivot('role', 'joined_at', 'left_at')
+                    ->withTimestamps();
+    }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    public function currentTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'current_team_id');
+    }
+
+    // أكسسوارات
+    public function getFullNameAttribute()
+    {
+        return $this->user->full_name;
+    }
+
+    public function getEmailAttribute()
+    {
+        return $this->user->email;
+    }
+
+    public function getExperienceLevelAttribute(): string
+    {
+        if ($this->total_score >= 2000) return 'expert';
+        if ($this->total_score >= 1000) return 'advanced';
+        if ($this->total_score >= 500) return 'intermediate';
+        return 'beginner';
+    }
+
+    public function getIsInTeamAttribute(): bool
+    {
+        return $this->teams()->wherePivotNull('left_at')->exists();
+    }
+
+    public function getActiveTeamAttribute(): ?Team
+    {
+        return $this->teams()
+            ->wherePivotNull('left_at')
+            ->where('teams.status', 'active')
+            ->first();
+    }
+
+    // دوال مساعدة
+    public function markProfileAsCompleted(): void
+    {
+        if (!$this->profile_completed && $this->isProfileCompleted()) {
+            $this->update(['profile_completed' => true]);
+        }
+    }
+
+    public function isProfileCompleted(): bool
+    {
+        $requiredFields = ['user_name', 'phone'];
+
+        foreach ($requiredFields as $field) {
+            if (empty($this->$field)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function addScore(int $points, string $reason, array $metadata = []): void
+    {
+        $this->increment('total_score', $points);
+
+        ProgrammerScoreLog::create([
+            'programmer_id' => $this->id,
+            'points' => $points,
+            'reason' => $reason,
+            'metadata' => $metadata,
+        ]);
     }
 
     public function teamMessages(): HasMany
@@ -48,10 +153,6 @@ class Programmer extends Model
         return $this->hasMany(TeamMember::class);
     }
 
-    public function tasks(): HasMany
-    {
-        return $this->hasMany(Task::class);
-    }
 
     public function splitTasks(): HasMany
     {
@@ -72,18 +173,6 @@ class Programmer extends Model
     public function programmerActivities(): HasMany
     {
         return $this->hasMany(ProgrammerActivity::class);
-    }
-
-    public function teams(): BelongsToMany
-    {
-        return $this->belongsToMany(Team::class, 'team_members')
-            ->withPivot('role', 'joined_at', 'left_at')
-            ->withTimestamps();
-    }
-
-    public function currentTeam(): BelongsTo
-    {
-        return $this->belongsTo(Team::class, 'current_team_id');
     }
 
     public function ledTeams(): BelongsToMany
@@ -188,29 +277,6 @@ class Programmer extends Model
         return $query->where('total_score', '>=', $minScore);
     }
 
-
-    public function getActiveTeamAttribute(): ?Team
-    {
-        return $this->teams()
-            ->wherePivotNull('left_at')
-            ->where('teams.status', 'active')
-            ->first();
-    }
-
-    public function getIsInTeamAttribute(): bool
-    {
-        return !is_null($this->active_team);
-    }
-
-    public function getExperienceLevelAttribute(): string
-    {
-        if ($this->total_score >= 2000) return 'expert';
-        if ($this->total_score >= 1000) return 'advanced';
-        if ($this->total_score >= 500) return 'intermediate';
-        return 'beginner';
-    }
-
-
     public function canJoinTeam(Team $team): bool
     {
         return !$this->is_in_team &&
@@ -244,19 +310,6 @@ class Programmer extends Model
         $teamLevel = $levelOrder[$team->experience_level] ?? 0;
 
         return $programmerLevel >= $teamLevel;
-    }
-
-
-    public function addScore(int $points, string $reason, array $metadata = []): void
-    {
-        $this->increment('total_score', $points);
-
-        ProgrammerScoreLog::create([
-            'programmer_id' => $this->id,
-            'points' => $points,
-            'reason' => $reason,
-            'metadata' => $metadata,
-        ]);
     }
 
     public function updateStatistics(): void

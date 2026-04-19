@@ -17,6 +17,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
 
+
 Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::post('/register/verify', [RegisteredUserController::class, 'verifyAndCreate']);
 Route::post('/register/resend-code', [RegisteredUserController::class, 'resendCode']);

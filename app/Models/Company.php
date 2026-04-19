@@ -21,6 +21,16 @@ class Company extends Model
     public function subscribtions():HasMany{
         return $this->hasMany(Subscribtions::class);
     }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    public function scopeVerified($query)
+    {
+        return $query->whereNotNull('verified_at');
+    }
     public function payment():HasMany{
         return $this->hasMany(Payment::class);
     }

@@ -34,19 +34,6 @@ class TeamMember extends Model
         return $this->belongsTo(Programmer::class);
     }
 
-    public function votesReceived()
-    {
-        return $this->hasMany(TeamVote::class, 'candidate_id', 'programmer_id');
-    }
-
-    public function votesGiven()
-    {
-        return $this->hasMany(TeamVote::class, 'voter_id', 'programmer_id');
-    }
-
-
-
-
     public function inviter(): BelongsTo
     {
         return $this->belongsTo(Programmer::class, 'joined_by');

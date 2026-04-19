@@ -1,4 +1,5 @@
 <?php
+// app/Models/User.php
 
 namespace App\Models;
 
@@ -14,20 +15,10 @@ class User extends Authenticatable
     use HasFactory, Notifiable, HasApiTokens;
 
     protected $fillable = [
-        'name',
-        'user_name',
+        'full_name',
         'email',
         'password',
-        'phone',
-        'gender',
         'role',
-        'bio',
-        'country',
-        'date_of_birth',
-        'img_url',
-        'avatar_url',
-        'behance_url',
-        'profile_completed',
         'email_verified_at',
     ];
 
@@ -36,32 +27,78 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    protected function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    // العلاقات
+    public function programmer(): HasOne
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'date_of_birth' => 'date',
-            'profile_completed' => 'boolean',
-        ];
+        return $this->hasOne(Programmer::class);
     }
 
-    public function notifications()
+    public function company(): HasOne
     {
-        return $this->morphMany(\Illuminate\Notifications\DatabaseNotification::class, 'notifiable')->orderBy('created_at', 'desc');
+        return $this->hasOne(Company::class);
     }
 
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    // الحصول على الملف الشخصي
+    public function getProfileAttribute()
+    {
+        if ($this->role === 'programmer' && $this->programmer) {
+            return $this->programmer;
+        }
+
+        if ($this->role === 'company' && $this->company) {
+            return $this->company;
+        }
+
+        return null;
+    }
+
+    // التحقق من اكتمال البروفايل
     public function isProfileCompleted(): bool
     {
-        $requiredFields = ['user_name', 'country', 'phone', 'gender', 'date_of_birth'];
+        $profile = $this->profile;
+
+        if (!$profile) return false;
+
+        $requiredFields = ['user_name', 'phone'];
 
         foreach ($requiredFields as $field) {
-            if (empty($this->$field)) {
+            if (empty($profile->$field)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    // Boot method
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function ($user) {
+            if ($user->role === 'programmer') {
+                $user->programmer()->create([]);
+            } elseif ($user->role === 'company') {
+                $user->company()->create([]);
+            }
+        });
+    }
+
+
+
+    public function notifications()
+    {
+        return $this->morphMany(\Illuminate\Notifications\DatabaseNotification::class, 'notifiable')->orderBy('created_at', 'desc');
     }
 
     public function markProfileAsCompleted(): void
@@ -75,21 +112,6 @@ class User extends Authenticatable
     public function userAuth(): HasOne
     {
         return $this->hasOne(UserAuth::class);
-    }
-
-    public function projects(): HasMany
-    {
-        return $this->hasMany(Project::class);
-    }
-
-    public function programmer(): HasOne
-    {
-        return $this->hasOne(Programmer::class);
-    }
-
-    public function company(): HasOne
-    {
-        return $this->hasOne(Company::class);
     }
 
     public function reported(): HasMany
@@ -133,25 +155,6 @@ class User extends Authenticatable
     {
         return $this->company ? $this->company->projects : collect();
     }
-
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::created(function ($user) {
-            if ($user->role === 'programmer') {
-                Programmer::create([
-                    'user_id' => $user->id,
-                    'specialty' => 'General',
-                    'total_score' => 0,
-                    'github_username' => '',
-                    'is_available' => true,
-                ]);
-            }
-        });
-    }
-
 
     public function scopeProgrammers($query)
     {

@@ -13,7 +13,6 @@ return new class extends Migration
             $table->foreignId('team_id')->constrained();
             $table->foreignId('programmer_id')->constrained();
             $table->enum('role',['leader', 'member']);
-            $table->integer('votes_count')->default(0);
             $table->timestamp('left_at')->nullable();
             $table->timestamp('joined_at')->nullable();
             $table->foreignId('joined_by')->nullable()->constrained('programmers');
