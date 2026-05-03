@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::table('teams', function (Blueprint $table) {
             $table->string('github_url')->nullable()->after('description');
-            $table->string('category')->nullable()->after('github_url');
-            $table->string('required_role')->nullable()->after('category');
+            $table->json('category')->nullable()->after('github_url');
+            $table->json('required_role')->nullable()->after('category');
         });
     }
 
