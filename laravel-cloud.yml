@@ -1,3 +1,4 @@
 build:
   commands:
     - composer install --no-dev --optimize-autoloader
+    - echo "Skipping npm"
