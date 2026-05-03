@@ -34,6 +34,8 @@ class Team extends Model
         'disbanded_at' => 'datetime',
         'required_skills' => 'array',
         'preferred_skills' => 'array',
+        'category' => 'array',
+    'required_role' => 'array',
     ];
 
      public function getMaxMembersAttribute()

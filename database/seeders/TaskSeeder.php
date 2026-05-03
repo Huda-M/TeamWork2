@@ -2,16 +2,33 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Task;
+use App\Models\Team;
+use App\Models\Programmer;
 
 class TaskSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        //
+        $teams = Team::all();
+
+        foreach ($teams as $team) {
+            $members = $team->activeMembers->pluck('programmer_id')->toArray();
+            if (empty($members)) continue;
+
+            for ($i = 1; $i <= 5; $i++) {
+                Task::create([
+                    'team_id' => $team->id,
+                    'programmer_id' => fake()->randomElement($members),
+                    'title' => fake()->sentence(3),
+                    'description' => fake()->paragraph(),
+                    'status' => fake()->randomElement(['todo', 'in_progress', 'review', 'done']),
+                    'estimated_hours' => fake()->numberBetween(4, 40),
+                    'actual_hours' => fake()->optional(0.7)->numberBetween(3, 50),
+                    'deadline' => fake()->dateTimeBetween('now', '+30 days'),
+                ]);
+            }
+        }
     }
 }

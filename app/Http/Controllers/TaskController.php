@@ -75,67 +75,7 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * Create a new task
-     */
-    public function store(StoreTaskRequest $request, Team $team)
-    {
-        try {
-            $user = $request->user();
-            $programmer = $user->programmer;
 
-            if (!$team->isMember($programmer->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only team members can create tasks'
-                ], 403);
-            }
-
-            DB::beginTransaction();
-
-            $task = $team->tasks()->create([
-                'programmer_id' => $request->programmer_id ?? $programmer->id,
-                'project_id' => $team->project_id,
-                'title' => $request->title,
-                'description' => $request->description,
-                'status' => $request->status ?? 'todo',
-                'estimated_hours' => $request->estimated_hours,
-                'deadline' => $request->deadline,
-                'priority' => $request->priority ?? 5,
-                'complexity' => $request->complexity ?? 'medium',
-            ]);
-
-            if ($request->has('required_skills')) {
-                $task->update(['required_skills' => $request->required_skills]);
-            }
-
-            Log::info('Task created', [
-                'task_id' => $task->id,
-                'team_id' => $team->id,
-                'created_by' => $programmer->id
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'data' => $task->load('programmer.user'),
-                'message' => 'Task created successfully'
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating task: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create task'
-            ], 500);
-        }
-    }
-
-    /**
-     * Assign task to a programmer
-     */
     public function assignTask(AssignTaskRequest $request, Task $task)
     {
         try {
@@ -569,4 +509,229 @@ class TaskController extends Controller
             ], 500);
         }
     }
+
+    public function store(StoreTaskRequest $request, Team $team)
+{
+    try {
+        $user = $request->user();
+        $programmer = $user->programmer;
+
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json(['success' => false, 'message' => 'Only team leader can create tasks'], 403);
+        }
+
+        if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
+            return response()->json(['success' => false, 'message' => 'Assigned programmer not in team'], 400);
+        }
+
+        DB::beginTransaction();
+
+        $task = $team->tasks()->create([
+            'programmer_id' => $request->programmer_id ?? $programmer->id,
+            'project_id' => $team->project_id,
+            'title' => $request->title,
+            'description' => $request->description,
+            'status' => $request->status ?? 'todo',
+            'estimated_hours' => $request->estimated_hours,
+            'deadline' => $request->deadline,
+            'priority' => $request->priority ?? 5,
+            'complexity' => $request->complexity ?? 'medium',
+            'git_link' => $request->git_link,
+            'tags' => $request->tags,
+            'created_by' => $programmer->id, // add this
+        ]);
+
+        // رفع الملفات المرفقة (إذا وجدت)
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('task_attachments', 'public');
+                $task->attachments()->create([
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                    'uploaded_by' => $programmer->id,
+                ]);
+            }
+        }
+
+        DB::commit();
+
+        return response()->json(['success' => true, 'data' => $task->load('programmer.user', 'creator.user', 'attachments'), 'message' => 'Task created']);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error creating task: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to create task'], 500);
+    }
+}
+
+
+public function show(Task $task)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
+
+        if (!$task->team->isMember($programmer->id) && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $task->load([
+            'programmer.user',
+            'creator.user',
+            'attachments.uploader.user',
+            'team.project'
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'priority' => $task->priority,
+                'status' => $task->status,
+                'deadline' => $task->deadline,
+                'estimated_hours' => $task->estimated_hours,
+                'actual_hours' => $task->actual_hours,
+                'git_link' => $task->git_link,
+                'tags' => $task->tags,
+                'created_at' => $task->created_at,
+                'completed_at' => $task->completed_at,
+                'created_by' => $task->creator ? [
+                    'id' => $task->creator->id,
+                    'name' => $task->creator->user->full_name,
+                ] : null,
+                'assigned_to' => $task->programmer ? [
+                    'id' => $task->programmer->id,
+                    'name' => $task->programmer->user->full_name,
+                ] : null,
+                'attachments' => $task->attachments->map(function($att) {
+                    return [
+                        'id' => $att->id,
+                        'file_name' => $att->file_name,
+                        'file_url' => asset('storage/' . $att->file_path),
+                        'file_size' => $att->file_size,
+                        'uploaded_by' => $att->uploader->user->full_name,
+                        'uploaded_at' => $att->created_at,
+                    ];
+                }),
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error showing task: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
+    }
+}
+/**
+ * عرض المهام المكتملة للمبرمج الحالي
+ * يعرض: اسم المهمة، تاريخ الانتهاء
+ */
+public function completedTasks(Request $request)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        $query = Task::where('programmer_id', $programmer->id)
+            ->where('status', 'done')
+            ->with(['team.project'])
+            ->orderBy('completed_at', 'desc');
+
+        // فلتر حسب التاريخ (اختياري)
+        if ($request->has('from_date')) {
+            $query->whereDate('completed_at', '>=', $request->from_date);
+        }
+        if ($request->has('to_date')) {
+            $query->whereDate('completed_at', '<=', $request->to_date);
+        }
+
+        $tasks = $query->paginate(20);
+
+        $result = $tasks->map(function($task) {
+            return [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'completion_date' => $task->completed_at ? $task->completed_at->toDateString() : $task->updated_at->toDateString(),
+                'project_name' => $task->team->project->title ?? null,
+                'estimated_hours' => $task->estimated_hours,
+                'actual_hours' => $task->actual_hours,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'completed_tasks' => $result,
+                'total' => $tasks->total(),
+                'current_page' => $tasks->currentPage(),
+                'last_page' => $tasks->lastPage(),
+            ],
+            'message' => 'Completed tasks fetched successfully'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching completed tasks: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch completed tasks'], 500);
+    }
+}
+
+/**
+ * عرض المهام قيد التنفيذ (in_progress, review) للمبرمج الحالي
+ * يعرض: اسم المشروع، اسم المهمة، تاريخ الـ due date
+ */
+public function inProgressTasks(Request $request)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        $query = Task::where('programmer_id', $programmer->id)
+            ->whereIn('status', ['in_progress', 'review'])
+            ->with(['team.project'])
+            ->orderBy('deadline', 'asc');
+
+        $tasks = $query->paginate(20);
+
+        $result = $tasks->map(function($task) {
+            return [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'project_name' => $task->team->project->title ?? null,
+                'due_date' => $task->deadline->toDateString(),
+                'priority' => $task->priority,
+                'status' => $task->status,
+                'days_remaining' => now()->diffInDays($task->deadline, false),
+                'is_overdue' => $task->deadline->isPast(),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'in_progress_tasks' => $result,
+                'total' => $tasks->total(),
+                'current_page' => $tasks->currentPage(),
+                'last_page' => $tasks->lastPage(),
+            ],
+            'message' => 'In-progress tasks fetched successfully'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching in-progress tasks: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch in-progress tasks'], 500);
+    }
+}
 }

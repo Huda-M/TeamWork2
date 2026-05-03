@@ -42,6 +42,9 @@ class Task extends Model
         'assigned_at',
         'reassigned_from',
         'reassigned_at',
+        'git_link',
+    'tags',
+'created_by',
     ];
 
     protected $casts = [
@@ -60,6 +63,7 @@ class Task extends Model
         'assigned_skills' => 'array',
         'needs_review' => 'boolean',
         'is_blocked' => 'boolean',
+        'tags' => 'array',
     ];
 
     /**
@@ -69,6 +73,16 @@ class Task extends Model
     {
         return $this->belongsTo(Team::class);
     }
+
+    public function creator(): BelongsTo
+{
+    return $this->belongsTo(Programmer::class, 'created_by');
+}
+
+public function attachments(): HasMany
+{
+    return $this->hasMany(TaskAttachment::class);
+}
 
     /**
      * Get the programmer assigned to the task

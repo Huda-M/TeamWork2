@@ -15,6 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('title');
             $table->string('category_name');
+            $table->enum('status', ['pending', 'active', 'completed', 'cancelled'])
+                  ->default('pending');
             $table->string('difficulty')->nullable();
             $table->integer('estimated_duration_days');
             $table->integer('max_team_size');

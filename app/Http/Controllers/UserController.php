@@ -99,32 +99,6 @@ class UserController extends Controller
         ]);
     }
 
-public function getNotifications(Request $request)
-{
-    try {
-        $user = Auth::user();
-
-        $notifications = $user->notifications()
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'notifications' => $notifications,
-                'unread_count' => $user->unreadNotifications->count()
-            ],
-            'message' => 'Notifications fetched successfully'
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error fetching notifications: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to fetch notifications'
-        ], 500);
-    }
-}
 
 public function markNotificationAsRead($notificationId)
 {
@@ -229,78 +203,6 @@ public function markAllNotificationsAsRead()
         }
     }
 
-    public function markNotificationAsRead($notificationId)
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
-            }
-
-            $notification = $user->notifications()->where('id', $notificationId)->first();
-
-            if ($notification) {
-                $notification->markAsRead();
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Notification marked as read',
-                    'data' => [
-                        'notification_id' => $notificationId,
-                        'read_at' => $notification->read_at
-                    ]
-                ]);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Notification not found'
-            ], 404);
-
-        } catch (\Exception $e) {
-            Log::error('Error marking notification as read: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to mark notification as read'
-            ], 500);
-        }
-    }
-
-    public function markAllNotificationsAsRead()
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
-            }
-
-            $count = $user->unreadNotifications->count();
-            $user->unreadNotifications->markAsRead();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'All notifications marked as read',
-                'data' => [
-                    'marked_count' => $count
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error marking all notifications as read: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to mark all notifications as read'
-            ], 500);
-        }
-    }
 
     public function deleteNotification($notificationId)
     {

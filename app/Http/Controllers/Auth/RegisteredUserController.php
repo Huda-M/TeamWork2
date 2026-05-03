@@ -142,48 +142,55 @@ class RegisteredUserController extends Controller
         ], 200);
     }
 
-    /**
-     * إكمال البروفايل (للمبرمجين)
-     */
-    public function completeProfile(Request $request): JsonResponse
-    {
-        $user = $request->user();
 
-        if ($user->role !== 'programmer') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only programmers can complete profile here'
-            ], 403);
-        }
+public function completeProfile(Request $request): JsonResponse
+{
+    $user = $request->user();
 
-        $programmer = $user->programmer;
-
-        if (!$programmer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Programmer profile not found'
-            ], 404);
-        }
-
-        $validated = $request->validate([
-            'user_name' => ['required', 'string', 'max:255', 'unique:programmers,user_name,' . $programmer->id],
-            'phone' => ['required', 'string', 'max:20'],
-            'avatar_url' => ['nullable', 'url'],
-            'bio' => ['nullable', 'string', 'max:1000'],
-            'title' => ['nullable', 'string', 'max:255'],
-            'specialty' => ['nullable', 'string', 'max:255'],
-            'github_username' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $programmer->update($validated);
-        $programmer->markProfileAsCompleted();
-
+    if ($user->role !== 'programmer') {
         return response()->json([
-            'success' => true,
-            'message' => 'Profile completed successfully',
-            'data' => $programmer->fresh()
-        ], 200);
+            'success' => false,
+            'message' => 'Only programmers can complete profile here'
+        ], 403);
     }
+
+    $programmer = $user->programmer;
+
+    if (!$programmer) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Programmer profile not found'
+        ], 404);
+    }
+
+    $validated = $request->validate([
+        'user_name'        => ['required', 'string', 'max:255', 'unique:programmers,user_name,' . $programmer->id],
+        'phone'            => ['required', 'string', 'max:20'],
+        'track'            => ['required', 'string', 'max:255'],               // المسار (إجباري)
+        'experience_level' => ['required', 'in:beginner,intermediate,advanced,expert'], // مستوى الخبرة
+        'skills'           => ['nullable', 'array'],                           // مصفوفة من المهارات
+        'skills.*'         => ['string', 'max:100'],
+        'avatar_url'       => ['nullable', 'url'],
+        'bio'              => ['nullable', 'string', 'max:1000'],
+        'title'            => ['nullable', 'string', 'max:255'],
+        'specialty'        => ['nullable', 'string', 'max:255'],
+        'github_username'  => ['nullable', 'string', 'max:255'],
+    ]);
+
+    // تحويل الـ skills إلى JSON إذا وُجد
+    if (isset($validated['skills'])) {
+        $validated['skills'] = json_encode($validated['skills']);
+    }
+
+    $programmer->update($validated);
+    $programmer->markProfileAsCompleted();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Profile completed successfully',
+        'data'    => $programmer->fresh()
+    ], 200);
+}
 
     /**
      * التحقق من حالة البروفايل

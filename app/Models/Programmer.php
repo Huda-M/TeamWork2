@@ -34,6 +34,10 @@ class Programmer extends Model
         'timezone',
         'current_team_id',
         'profile_completed',
+        // الحقول الجديدة
+        'experience_level',
+        'track',
+        'skills',
     ];
 
     protected $casts = [
@@ -41,13 +45,44 @@ class Programmer extends Model
         'hourly_rate' => 'decimal:2',
         'preferred_working_hours' => 'array',
         'profile_completed' => 'boolean',
+        'skills' => 'array',               // تحويل JSON إلى مصفوفة تلقائياً
     ];
 
-    // العلاقات
+    // العلاقة مع المستخدم
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
+
+    // أكسسوارات مساعدة
+    public function getFullNameAttribute()
+    {
+        return $this->user->full_name;
+    }
+
+    public function getEmailAttribute()
+    {
+        return $this->user->email;
+    }
+
+    public function isProfileCompleted(): bool
+    {
+        $requiredFields = ['user_name', 'phone', 'experience_level', 'track'];
+        foreach ($requiredFields as $field) {
+            if (empty($this->$field)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public function markProfileAsCompleted(): void
+    {
+        if (!$this->profile_completed && $this->isProfileCompleted()) {
+            $this->update(['profile_completed' => true]);
+        }
+    }
+
 
     public function skills(): BelongsToMany
     {
@@ -78,16 +113,6 @@ class Programmer extends Model
         return $this->belongsTo(Team::class, 'current_team_id');
     }
 
-    // أكسسوارات
-    public function getFullNameAttribute()
-    {
-        return $this->user->full_name;
-    }
-
-    public function getEmailAttribute()
-    {
-        return $this->user->email;
-    }
 
     public function getExperienceLevelAttribute(): string
     {
@@ -110,26 +135,6 @@ class Programmer extends Model
             ->first();
     }
 
-    // دوال مساعدة
-    public function markProfileAsCompleted(): void
-    {
-        if (!$this->profile_completed && $this->isProfileCompleted()) {
-            $this->update(['profile_completed' => true]);
-        }
-    }
-
-    public function isProfileCompleted(): bool
-    {
-        $requiredFields = ['user_name', 'phone'];
-
-        foreach ($requiredFields as $field) {
-            if (empty($this->$field)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
 
     public function addScore(int $points, string $reason, array $metadata = []): void
     {
@@ -217,21 +222,6 @@ class Programmer extends Model
         return $this->hasMany(CodeAnalyses::class);
     }
 
-
-    public function projectInvitations(): HasMany
-    {
-        return $this->hasMany(ProjectInvitation::class);
-    }
-
-    public function sentProjectInvitations(): HasMany
-    {
-        return $this->hasMany(ProjectInvitation::class, 'invited_by');
-    }
-
-    public function receivedProjectInvitations(): HasMany
-    {
-        return $this->hasMany(ProjectInvitation::class, 'programmer_id');
-    }
 
     public function teamInvitations(): HasMany
     {
@@ -348,19 +338,4 @@ class Programmer extends Model
         return ($completedOnTime / $totalTasks) * 100;
     }
 
-
-    public function awards(): BelongsToMany
-    {
-        return $this->belongsToMany(Awards::class, 'programmer_awards')
-            ->withPivot('earned_at', 'points_earned', 'metadata')
-            ->withTimestamps();
-    }
-
-    public function hasAchievement($achievementId): bool
-    {
-        return $this->awards()
-            ->where('awards.id', $achievementId)
-            ->where('awards.type', Awards::TYPE_ACHIEVEMENT)
-            ->exists();
-    }
 }

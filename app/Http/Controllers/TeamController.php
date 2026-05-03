@@ -107,13 +107,107 @@ class TeamController extends Controller
         }
     }
 
-    public function store(Request $request)
+    public function getTeamDetails($id)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_name' => $team->name,
+                'project_title' => $team->project->title,
+                'project_description' => $team->project->description,
+                'members' => $team->activeMembers->map(function($member) {
+                    return [
+                        'programmer_id' => $member->programmer_id,
+                        'name' => $member->programmer->user->full_name,
+                        'role' => $member->role, // 'leader' or 'member'
+                    ];
+                })
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching team details: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+    }
+}
+
+public function swapLeader(Request $request, $teamId, $programmerId)
+{
+    try {
+        $user = Auth::user();
+        $currentLeader = $user->programmer;
+
+        $team = Team::findOrFail($teamId);
+
+        // التحقق من أن المستخدم الحالي هو قائد الفريق أو أدمن عام
+        if (!$team->isLeader($currentLeader->id) && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $newLeader = Programmer::findOrFail($programmerId);
+
+        // التأكد أن المبرمج الجديد عضو في الفريق
+        if (!$team->isMember($newLeader->id)) {
+            return response()->json(['success' => false, 'message' => 'Programmer is not a member of this team'], 400);
+        }
+
+        DB::transaction(function () use ($team, $currentLeader, $newLeader) {
+            // جعل القائد الحالي member
+            TeamMember::where('team_id', $team->id)
+                      ->where('programmer_id', $currentLeader->id)
+                      ->update(['role' => 'member']);
+
+            // جعل العضو الجديد leader
+            TeamMember::where('team_id', $team->id)
+                      ->where('programmer_id', $newLeader->id)
+                      ->update(['role' => 'leader']);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Leader role transferred from {$currentLeader->user->full_name} to {$newLeader->user->full_name}"
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error swapping leader: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to swap leader'], 500);
+    }
+}
+
+public function softDeleteTeam($id)
+{
+    try {
+        $user = Auth::user();
+        $team = Team::findOrFail($id);
+
+        // التحقق من الصلاحية: إما قائد الفريق أو أدمن عام
+        $isLeader = $team->isLeader($user->programmer->id);
+        if (!$isLeader && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $team->delete(); // soft delete
+
+        // إخراج الأعضاء من الفريق (اختياري، إذا أردنا تفعيل left_at)
+        $team->activeMembers()->update(['left_at' => now()]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team soft deleted successfully'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error soft deleting team: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to delete team'], 500);
+    }
+}
+
+public function store(StoreTeamRequest $request)
 {
     DB::beginTransaction();
 
     try {
         $user = Auth::user();
-
         if ($user->role !== 'programmer') {
             return response()->json([
                 'success' => false,
@@ -121,38 +215,15 @@ class TeamController extends Controller
             ], 403);
         }
 
-        if (!$user->programmer) {
+        $programmer = $user->programmer;
+        if (!$programmer) {
             return response()->json([
                 'success' => false,
                 'message' => 'Programmer profile not found'
             ], 404);
         }
 
-        $programmer = $user->programmer;
-
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'formation_type' => 'required|in:random,manual,mixed',
-            'max_members' => 'required|integer|min:3|max:20',
-            'min_members' => 'required|integer|min:1|max:10',
-            'is_public' => 'required|boolean',
-            'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert',
-            'required_skills' => 'nullable|array',
-            'required_skills.*' => 'string',
-            'preferred_skills' => 'nullable|array',
-            'preferred_skills.*' => 'string',
-            'project_id' => 'nullable|exists:projects,id',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
+        // التحقق من أن المبرمج ليس لديه فريق نشط بالفعل
         if ($programmer->is_in_team) {
             return response()->json([
                 'success' => false,
@@ -160,20 +231,23 @@ class TeamController extends Controller
             ], 400);
         }
 
-        // إنشاء الفريق بدون created_by
+        // إنشاء الفريق
         $team = Team::create([
             'name' => $request->name,
             'description' => $request->description,
             'formation_type' => $request->formation_type,
             'is_public' => $request->is_public,
-            'experience_level' => $request->experience_level ?? 'beginner',
+            'experience_level' => $request->experience_level ?? 'intermediate',
             'required_skills' => $request->required_skills,
             'preferred_skills' => $request->preferred_skills,
             'project_id' => $request->project_id,
             'status' => 'active',
+            'github_url' => $request->github_url,
+            'category' => $request->category,
+            'required_role' => $request->required_role,
         ]);
 
-        // جعل المنشئ قائداً
+        // إضافة المنشئ كقائد للفريق
         TeamMember::create([
             'team_id' => $team->id,
             'programmer_id' => $programmer->id,
@@ -182,28 +256,59 @@ class TeamController extends Controller
             'joined_by' => $programmer->id,
         ]);
 
+        // إذا كان الفريق خاصاً، قم بإنشاء join code
+        $joinCode = null;
         if (!$team->is_public) {
-            $team->update(['join_code' => strtoupper(substr(md5(uniqid()), 0, 8))]);
+            $joinCode = strtoupper(substr(md5(uniqid()), 0, 8));
+            $team->update(['join_code' => $joinCode]);
         }
 
-        Log::info('Team created with immediate leader (no creator field)', [
-            'team_id' => $team->id,
-            'team_name' => $team->name,
-            'leader_id' => $programmer->id,
-        ]);
+        // إرسال الدعوات للمبرمجين إذا وُجدت
+        $invitationsSent = [];
+        if ($request->has('invitations') && !empty($request->invitations) && !$team->is_public) {
+            foreach ($request->invitations as $invitedId) {
+                // لا تدع نفس الشخص مرتين
+                if ($invitedId == $programmer->id) continue;
+
+                $invitedProgrammer = Programmer::find($invitedId);
+                if (!$invitedProgrammer) continue;
+
+                // التحقق من أن المبرمج المدعو ليس لديه فريق نشط
+                if ($invitedProgrammer->is_in_team) {
+                    continue;
+                }
+
+                // التحقق من وجود دعوة معلقة سابقة
+                $existing = TeamInvitation::where('team_id', $team->id)
+                    ->where('programmer_id', $invitedId)
+                    ->where('status', 'pending')
+                    ->first();
+                if ($existing) continue;
+
+                $invitation = TeamInvitation::create([
+                    'team_id' => $team->id,
+                    'programmer_id' => $invitedId,
+                    'invited_by' => $programmer->id,
+                    'message' => "You are invited to join team '{$team->name}'",
+                    'status' => 'pending',
+                    'expires_at' => now()->addDays(7),
+                ]);
+                $invitationsSent[] = $invitation->id;
+            }
+        }
 
         DB::commit();
 
         return response()->json([
             'success' => true,
-            'message' => 'Team created successfully. You are the team leader.',
+            'message' => $team->is_public ? 'Team created successfully' : 'Private team created with invitations',
             'data' => [
-                'team' => $team->fresh(),
-                'join_code' => $team->join_code,
+                'team' => $team->fresh(['project']),
+                'join_code' => $joinCode,
                 'current_members' => 1,
                 'max_members' => $team->max_members,
                 'your_role' => 'leader',
-                'can_invite' => true,
+                'invitations_sent' => $invitationsSent,
             ]
         ], 201);
 

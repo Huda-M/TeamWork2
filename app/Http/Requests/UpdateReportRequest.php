@@ -12,12 +12,14 @@ class UpdateReportRequest extends FormRequest
     }
 
     public function rules(): array
-    {
-        return [
-            'admin_action' => 'required|in:approved,rejected,warning_given',
-            'admin_notes' => 'nullable|string|max:500',
-        ];
-    }
+{
+    return [
+        'target_user_id' => 'required|exists:users,id',
+        'report_type' => 'required|in:harassment,inappropriate_content,spam,fake_account,cheating,offensive_behavior,other',
+        'description' => 'required|string|min:10|max:1000',
+        'evidence' => 'nullable|array', // or json
+    ];
+}
 
     public function messages(): array
     {

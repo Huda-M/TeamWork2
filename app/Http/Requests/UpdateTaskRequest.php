@@ -35,6 +35,8 @@ class UpdateTaskRequest extends FormRequest
             'completed_at' => 'nullable|date',
             'reviewed_at' => 'nullable|date',
             'reviewed_by' => 'nullable|exists:programmers,id',
+            'attachments' => 'nullable|array',
+        'attachments.*' => 'file|max:10240',
         ];
     }
 

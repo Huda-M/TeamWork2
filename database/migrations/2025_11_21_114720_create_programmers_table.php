@@ -13,6 +13,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('user_name')->unique()->nullable();
+            $table->string('track')->nullable();
             $table->string('phone')->nullable();
             $table->string('avatar_url')->nullable();
             $table->string('cover_image')->nullable();

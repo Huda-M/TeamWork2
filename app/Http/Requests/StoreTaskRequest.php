@@ -11,21 +11,27 @@ class StoreTaskRequest extends FormRequest
         return auth()->check();
     }
 
-    public function rules(): array
-    {
-        return [
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'programmer_id' => 'nullable|exists:programmers,id',
-            'status' => 'nullable|in:todo,in_progress,review,done,cancelled',
-            'estimated_hours' => 'required|integer|min:1|max:500',
-            'deadline' => 'required|date|after:today',
-            'priority' => 'nullable|integer|min:1|max:10',
-            'complexity' => 'nullable|in:low,medium,high,critical',
-            'required_skills' => 'nullable|array',
-            'required_skills.*' => 'string',
-        ];
-    }
+        public function rules(): array
+{
+    return [
+        'title' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'programmer_id' => 'nullable|exists:programmers,id',
+        'status' => 'nullable|in:todo,in_progress,review,done,cancelled',
+        'estimated_hours' => 'required|integer|min:1|max:500',
+        'deadline' => 'required|date|after:today',
+        'priority' => 'nullable|integer|min:1|max:10',
+        'complexity' => 'nullable|in:low,medium,high,critical',
+        'required_skills' => 'nullable|array',
+        'attachments' => 'nullable|array',
+        'attachments.*' => 'file|max:10240',
+        'required_skills.*' => 'string',
+        'git_link' => 'nullable|url',                 // جديد
+        'tags' => 'nullable|array',                  // جديد
+        'tags.*' => 'string|max:50',                 // جديد
+    ];
+}
+
 
     public function messages(): array
     {

@@ -27,9 +27,14 @@ Route::post('/reset-password/verify', [NewPasswordController::class, 'verifyRese
 Route::post('/reset-password', [NewPasswordController::class, 'store']);
 Route::post('/email/verify', [VerifyEmailController::class, 'verify']);
 
-Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirectToProvider']);
-Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'handleProviderCallback']);
-Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
+
+
+Route::middleware('start.session')->group(function () {
+    Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirectToProvider']);
+    Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'handleProviderCallback']);
+    Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
+});
+
 
 Route::prefix('v1')->group(function () {
     Route::get('/users', [UserController::class, 'index']);
@@ -42,18 +47,41 @@ Route::prefix('v1')->group(function () {
     Route::get('/projects/{id}', [ProjectController::class, 'show']);
     Route::get('/projects/{id}/teams', [ProjectController::class, 'teams']);
 
+
     Route::get('/skills', [SkillController::class, 'index']);
     Route::get('/skills/popular', [SkillController::class, 'popular']);
     Route::get('/skills/{id}', [SkillController::class, 'show']);
 });
 
-Route::middleware('auth:sanctum', 'check.user.status')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', fn(Request $request) => $request->user());
     Route::post('/logout', [LoginController::class, 'logout']);
     Route::post('/register/complete-profile', [RegisteredUserController::class, 'completeProfile']);
     Route::get('/profile/status', [RegisteredUserController::class, 'profileStatus']);
     Route::post('/change-password', [NewPasswordController::class, 'changePassword']);
+    Route::get('/tasks/{task}', [TaskController::class, 'show']);
+    // المهام المكتملة (للمبرمج المسجل فقط)
+Route::get('/tasks/completed', [TaskController::class, 'completedTasks']);
 
+// المهام قيد التنفيذ (للمبرمج المسجل فقط)
+Route::get('/tasks/in-progress', [TaskController::class, 'inProgressTasks']);
+    Route::get('/my-projects', [ProjectController::class, 'myProjects']);
+    Route::get('/users/{userId}/projects', [ProjectController::class, 'getUserProjects']);
+    Route::get('/my/statistics', [ProgrammerController::class, 'myStatistics']);
+    // عرض تفاصيل التيم
+Route::get('/teams/{id}/details', [TeamController::class, 'getTeamDetails']);
+// عرض تفاصيل المشروع للمبرمج الحالي (دوره، أعضاء فريقه، مهامه)
+Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
+
+// ترقية عضو إلى قائد (swap leader)
+Route::post('/teams/{teamId}/swap-leader/{programmerId}', [TeamController::class, 'swapLeader']);
+
+// حذف التيم soft delete
+Route::delete('/teams/{id}/soft', [TeamController::class, 'softDeleteTeam']);
+
+// إنهاء المشروع (للأدمن فقط)
+Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
+    Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
     Route::prefix('notifications')->group(function () {
         Route::get('/', [UserController::class, 'getNotifications']);
         Route::get('/unread-count', [UserController::class, 'getUnreadCount']);
@@ -91,13 +119,6 @@ Route::middleware('auth:sanctum', 'check.user.status')->group(function () {
 
         Route::get('/mixed/options', [TeamController::class, 'mixedTeamJoining']);
         Route::post('/join/mixed', [TeamController::class, 'joinViaMixedMethod']);
-
-        // ========== مسارات التصويت معطلة ==========
-        // Route::post('/{id}/start-voting', [TeamController::class, 'startVoting']);
-        // Route::post('/{id}/vote', [TeamController::class, 'vote']);
-        // Route::get('/{id}/voting-status', [TeamController::class, 'votingStatus']);
-        // ========================================
-
         Route::get('/{id}/statistics', [TeamController::class, 'teamStatistics']);
     });
 
