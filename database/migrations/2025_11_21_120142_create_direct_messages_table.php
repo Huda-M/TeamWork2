@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('direct_messages', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('conversation_id')->constrained('conversation')->cascadeOnDelete();
+            $table->foreignId('conversation_id')->constrained('conversations')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained();
             $table->string('message_text');
             $table->boolean('is_read');
