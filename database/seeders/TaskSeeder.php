@@ -19,10 +19,10 @@ class TaskSeeder extends Seeder
             for ($i = 1; $i <= 5; $i++) {
                 Task::create([
                     'team_id' => $team->id,
-                    'programmer_id' => fake()->randomElement($members),
+                    'programmer_id' => collect($members)->random(),
                     'title' => fake()->sentence(3),
                     'description' => fake()->paragraph(),
-                    'status' => fake()->randomElement(['todo', 'in_progress', 'review', 'done']),
+                    'status' => collect(['todo', 'in_progress', 'review', 'done'])->random(),
                     'estimated_hours' => fake()->numberBetween(4, 40),
                     'actual_hours' => fake()->optional(0.7)->numberBetween(3, 50),
                     'deadline' => fake()->dateTimeBetween('now', '+30 days'),
