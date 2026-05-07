@@ -17,15 +17,18 @@ class TaskSeeder extends Seeder
             if (empty($members)) continue;
 
             for ($i = 1; $i <= 5; $i++) {
+                // إنشاء instance من Faker بشكل صريح
+                $faker = app(\Faker\Generator::class);
+                
                 Task::create([
                     'team_id' => $team->id,
-                    'programmer_id' => collect($members)->random(),
-                    'title' => fake()->sentence(3),
-                    'description' => fake()->paragraph(),
-                    'status' => collect(['todo', 'in_progress', 'review', 'done'])->random(),
-                    'estimated_hours' => fake()->numberBetween(4, 40),
-                    'actual_hours' => fake()->optional(0.7)->numberBetween(3, 50),
-                    'deadline' => fake()->dateTimeBetween('now', '+30 days'),
+                    'programmer_id' => $faker->randomElement($members),
+                    'title' => $faker->sentence(3),
+                    'description' => $faker->paragraph(),
+                    'status' => $faker->randomElement(['todo', 'in_progress', 'review', 'done']),
+                    'estimated_hours' => $faker->numberBetween(4, 40),
+                    'actual_hours' => $faker->optional(0.7)->numberBetween(3, 50),
+                    'deadline' => $faker->dateTimeBetween('now', '+30 days'),
                 ]);
             }
         }
