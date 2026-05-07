@@ -143,6 +143,8 @@ class RegisteredUserController extends Controller
     }
 
 
+// app/Http/Controllers/Auth/RegisteredUserController.php
+
 public function completeProfile(Request $request): JsonResponse
 {
     $user = $request->user();
@@ -164,23 +166,9 @@ public function completeProfile(Request $request): JsonResponse
     }
 
     $validated = $request->validate([
-        'user_name'        => ['required', 'string', 'max:255', 'unique:programmers,user_name,' . $programmer->id],
-        'phone'            => ['required', 'string', 'max:20'],
-        'track'            => ['required', 'string', 'max:255'],               // المسار (إجباري)
-        'experience_level' => ['required', 'in:beginner,intermediate,advanced,expert'], // مستوى الخبرة
-        'skills'           => ['nullable', 'array'],                           // مصفوفة من المهارات
-        'skills.*'         => ['string', 'max:100'],
-        'avatar_url'       => ['nullable', 'url'],
-        'bio'              => ['nullable', 'string', 'max:1000'],
-        'title'            => ['nullable', 'string', 'max:255'],
-        'specialty'        => ['nullable', 'string', 'max:255'],
-        'github_username'  => ['nullable', 'string', 'max:255'],
+        'track'            => ['required', 'string', 'max:255'],
+        'experience_level' => ['required', 'in:beginner,intermediate,advanced,expert'],
     ]);
-
-    // تحويل الـ skills إلى JSON إذا وُجد
-    if (isset($validated['skills'])) {
-        $validated['skills'] = json_encode($validated['skills']);
-    }
 
     $programmer->update($validated);
     $programmer->markProfileAsCompleted();
