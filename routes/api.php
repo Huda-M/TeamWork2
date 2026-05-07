@@ -29,11 +29,14 @@ Route::post('/email/verify', [VerifyEmailController::class, 'verify']);
 
 
 
-Route::middleware('start.session')->group(function () {
-    Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirectToProvider']);
-    Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'handleProviderCallback']);
-    Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
-});
+// routes/api.php
+
+Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirectToProvider'])
+    ->middleware('start.session');
+
+Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'handleProviderCallback']);
+
+Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
 
 
 Route::prefix('v1')->group(function () {
