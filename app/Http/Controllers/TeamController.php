@@ -202,125 +202,38 @@ public function softDeleteTeam($id)
     }
 }
 
-public function store(StoreTeamRequest $request)
+// app/Http/Controllers/TeamController.php
+
+public function store(Request $request)
 {
-    DB::beginTransaction();
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'description' => ['nullable', 'string'],
+        'is_public' => ['boolean'],
+        'github_url' => ['nullable', 'url'],
+        'category' => ['nullable', 'array'],
+        'required_role' => ['nullable', 'array'],
+        'invitations' => ['nullable', 'array'],
+        'invitations.*' => ['integer', 'exists:programmers,id'],
+    ]);
 
-    try {
-        $user = Auth::user();
-        if ($user->role !== 'programmer') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only programmers can create teams'
-            ], 403);
+    $team = Team::create($validated);
+
+    // إرسال دعوات للمبرمجين
+    if (!empty($validated['invitations'])) {
+        foreach ($validated['invitations'] as $programmerId) {
+            TeamInvitation::create([
+                'team_id' => $team->id,
+                'programmer_id' => $programmerId,
+            ]);
         }
-
-        $programmer = $user->programmer;
-        if (!$programmer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Programmer profile not found'
-            ], 404);
-        }
-
-        // التحقق من أن المبرمج ليس لديه فريق نشط بالفعل
-        if ($programmer->is_in_team) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You are already in a team'
-            ], 400);
-        }
-
-        // إنشاء الفريق
-        $team = Team::create([
-            'name' => $request->name,
-            'description' => $request->description,
-            'formation_type' => $request->formation_type,
-            'is_public' => $request->is_public,
-            'experience_level' => $request->experience_level ?? 'intermediate',
-            'required_skills' => $request->required_skills,
-            'preferred_skills' => $request->preferred_skills,
-            'project_id' => $request->project_id,
-            'status' => 'active',
-            'github_url' => $request->github_url,
-            'category' => $request->category,
-            'required_role' => $request->required_role,
-        ]);
-
-        // إضافة المنشئ كقائد للفريق
-        TeamMember::create([
-            'team_id' => $team->id,
-            'programmer_id' => $programmer->id,
-            'role' => 'leader',
-            'joined_at' => now(),
-            'joined_by' => $programmer->id,
-        ]);
-
-        // إذا كان الفريق خاصاً، قم بإنشاء join code
-        $joinCode = null;
-        if (!$team->is_public) {
-            $joinCode = strtoupper(substr(md5(uniqid()), 0, 8));
-            $team->update(['join_code' => $joinCode]);
-        }
-
-        // إرسال الدعوات للمبرمجين إذا وُجدت
-        $invitationsSent = [];
-        if ($request->has('invitations') && !empty($request->invitations) && !$team->is_public) {
-            foreach ($request->invitations as $invitedId) {
-                // لا تدع نفس الشخص مرتين
-                if ($invitedId == $programmer->id) continue;
-
-                $invitedProgrammer = Programmer::find($invitedId);
-                if (!$invitedProgrammer) continue;
-
-                // التحقق من أن المبرمج المدعو ليس لديه فريق نشط
-                if ($invitedProgrammer->is_in_team) {
-                    continue;
-                }
-
-                // التحقق من وجود دعوة معلقة سابقة
-                $existing = TeamInvitation::where('team_id', $team->id)
-                    ->where('programmer_id', $invitedId)
-                    ->where('status', 'pending')
-                    ->first();
-                if ($existing) continue;
-
-                $invitation = TeamInvitation::create([
-                    'team_id' => $team->id,
-                    'programmer_id' => $invitedId,
-                    'invited_by' => $programmer->id,
-                    'message' => "You are invited to join team '{$team->name}'",
-                    'status' => 'pending',
-                    'expires_at' => now()->addDays(7),
-                ]);
-                $invitationsSent[] = $invitation->id;
-            }
-        }
-
-        DB::commit();
-
-        return response()->json([
-            'success' => true,
-            'message' => $team->is_public ? 'Team created successfully' : 'Private team created with invitations',
-            'data' => [
-                'team' => $team->fresh(['project']),
-                'join_code' => $joinCode,
-                'current_members' => 1,
-                'max_members' => $team->max_members,
-                'your_role' => 'leader',
-                'invitations_sent' => $invitationsSent,
-            ]
-        ], 201);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Failed to create team', ['error' => $e->getMessage()]);
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to create team',
-            'error' => $e->getMessage()
-        ], 500);
     }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Team created successfully',
+        'data' => $team->fresh()
+    ], 201);
 }
 
     public function inviteByUsername(Request $request, $id)
