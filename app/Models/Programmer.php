@@ -112,19 +112,7 @@ private function calculateLevelFromStars()
     return 'beginner';
 }
 
-// دالة لإضافة النجوم والترقية
-public function addStars($points)
-{
-    $this->stars += $points;
-    $oldLevel = $this->level;
-    $newLevel = $this->calculateLevelFromStars();
-    
-    if ($newLevel > $oldLevel) {
-        $this->level = $newLevel;
-        // حدث ترقية - يمكن إرسال إشعار
-    }
-    $this->save();
-}
+
 
 private function calculateLevelFromStars()
 {
