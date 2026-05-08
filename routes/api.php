@@ -110,6 +110,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{task}/update-status', [TaskController::class, 'updateStatus']);
     });
 
+Route::prefix('profile')->group(function () {
+    Route::put('/update', [ProfileController::class, 'updateProfile']);
+    Route::get('/my-stats', [ProfileController::class, 'myStats']);
+    Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
+    Route::get('/team-members/{projectId}/to-evaluate', [ProfileController::class, 'teamMembersToEvaluate']);
+    Route::post('/evaluate/{projectId}/{evaluatedId}', [ProfileController::class, 'submitEvaluation']);
+    Route::delete('/soft-delete', [ProfileController::class, 'softDeleteAccount']);
+    Route::get('/zero-project/{projectId}', [ProfileController::class, 'zeroProject']);
+    Route::get('/project-details/{projectId}', [ProfileController::class, 'projectDetails']);
+});
+
     // Teams
     Route::prefix('teams')->group(function () {
         // General team operations
