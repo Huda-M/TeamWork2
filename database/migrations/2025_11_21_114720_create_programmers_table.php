@@ -18,6 +18,10 @@ return new class extends Migration
             $table->string('avatar_url')->nullable();
             $table->string('cover_image')->nullable();
             $table->string('behance_url')->nullable();
+            $table->text('bio')->nullable();
+            $table->string('avatar')->nullable();
+            $table->integer('level')->default(0);
+            $table->integer('stars')->default(0);
             $table->timestamps();
         });
     }
