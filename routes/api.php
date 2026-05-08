@@ -82,7 +82,7 @@ Route::post('/teams/{teamId}/swap-leader/{programmerId}', [TeamController::class
 
 // حذف التيم soft delete
 Route::delete('/teams/{id}/soft', [TeamController::class, 'softDeleteTeam']);
-
+Route::post('/teams/{teamId}/change-leader/{programmerId}', [TeamController::class, 'swapLeader']);
 // إنهاء المشروع (للأدمن فقط)
 Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
     Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
