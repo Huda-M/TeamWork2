@@ -143,46 +143,40 @@ class RegisteredUserController extends Controller
     }
 
 
-// app/Http/Controllers/Auth/RegisteredUserController.php
-
-public function completeProfile(Request $request): JsonResponse
+public function completeProfile(Request $request)
 {
-    $user = $request->user();
-
-    if ($user->role !== 'programmer') {
-        return response()->json([
-            'success' => false,
-            'message' => 'Only programmers can complete profile here'
-        ], 403);
-    }
-
+    $user = Auth::user();
     $programmer = $user->programmer;
-
-    if (!$programmer) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Programmer profile not found'
-        ], 404);
-    }
-
+    
     $validated = $request->validate([
-        'track'            => ['required', 'string', 'max:255'],
-        'experience_level' => ['required', 'in:beginner,intermediate,advanced,expert'],
+        'user_name' => 'required|string|unique:programmers,user_name,'.$programmer->id,
+        'phone' => 'nullable|string',
+        'experience_level' => 'required|in:beginner,junior,senior,expert',
+        'track' => 'required|string',
+        'bio' => 'nullable|string',
+        'avatar' => 'nullable|image|max:2048',
     ]);
-
+    
+    // تعيين النقاط (total_score) حسب المستوى
+    $pointsMap = [
+        'beginner' => 0,
+        'junior' => 50,
+        'senior' => 200,
+    ];
+    
+    if ($request->hasFile('avatar')) {
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $validated['avatar'] = $path;
+    }
+    
+    $validated['total_score'] = $pointsMap[$validated['experience_level']];
+    $validated['profile_completed'] = true;
+    
     $programmer->update($validated);
-    $programmer->markProfileAsCompleted();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Profile completed successfully',
-        'data'    => $programmer->fresh()
-    ], 200);
+    
+    return response()->json(['success' => true, 'message' => 'Profile completed']);
 }
-
-    /**
-     * التحقق من حالة البروفايل
-     */
+    
     public function profileStatus(Request $request): JsonResponse
     {
         $user = $request->user();
