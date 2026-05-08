@@ -34,7 +34,10 @@ class Programmer extends Model
         'timezone',
         'current_team_id',
         'profile_completed',
-        // الحقول الجديدة
+        'bio',
+        'avatar',
+        'level',
+        'stars',
         'experience_level',
         'track',
         'skills',
@@ -82,6 +85,34 @@ class Programmer extends Model
             $this->update(['profile_completed' => true]);
         }
     }
+    public function calculateLevel()
+{
+    if ($this->total_score >= 2000) return 'expert';
+    if ($this->total_score >= 1000) return 'senior';
+    if ($this->total_score >= 500) return 'junior';
+    return 'beginner';
+}
+
+// دالة لإضافة النجوم والترقية
+public function addStars($points)
+{
+    $this->stars += $points;
+    $oldLevel = $this->level;
+    $newLevel = $this->calculateLevelFromStars();
+    
+    if ($newLevel > $oldLevel) {
+        $this->level = $newLevel;
+        // حدث ترقية - يمكن إرسال إشعار
+    }
+    $this->save();
+}
+
+private function calculateLevelFromStars()
+{
+    if ($this->stars >= 550) return 3; // senior
+    if ($this->stars >= 300) return 2; // junior
+    return 1; // beginner
+}
 
 
     public function skills(): BelongsToMany
