@@ -165,7 +165,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Reports (with status check)
-    Route::prefix('reports')->middleware('check.user.status')->group(function () {
+    Route::prefix('reports')->group(function () {
         Route::post('/', [ReportController::class, 'store']);
         Route::get('/my', [ReportController::class, 'myReports']);
         Route::get('/against-me', [ReportController::class, 'reportsAgainstMe']);
