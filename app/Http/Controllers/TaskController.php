@@ -14,14 +14,7 @@ use Illuminate\Support\Facades\Log;
 
 class TaskController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
 
-    /**
-     * Get tasks for a specific team
-     */
     public function getTeamTasks(Team $team, Request $request)
     {
         try {
