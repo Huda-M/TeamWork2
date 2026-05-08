@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Task;
 use App\Models\Team;
+use Faker\Factory as FakerFactory;
 
 class TaskSeeder extends Seeder
 {
@@ -16,10 +17,10 @@ class TaskSeeder extends Seeder
             $members = $team->activeMembers->pluck('programmer_id')->toArray();
             if (empty($members)) continue;
 
+            // استخدام Faker بالطريقة الصحيحة
+            $faker = FakerFactory::create();
+
             for ($i = 1; $i <= 5; $i++) {
-                // إنشاء instance من Faker بشكل صريح
-                $faker = app(\Faker\Generator::class);
-                
                 Task::create([
                     'team_id' => $team->id,
                     'programmer_id' => $faker->randomElement($members),
@@ -29,6 +30,8 @@ class TaskSeeder extends Seeder
                     'estimated_hours' => $faker->numberBetween(4, 40),
                     'actual_hours' => $faker->optional(0.7)->numberBetween(3, 50),
                     'deadline' => $faker->dateTimeBetween('now', '+30 days'),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
             }
         }
