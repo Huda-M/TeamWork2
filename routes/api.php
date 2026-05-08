@@ -62,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/register/complete-profile', [RegisteredUserController::class, 'completeProfile']);
     Route::get('/profile/status', [RegisteredUserController::class, 'profileStatus']);
     Route::post('/change-password', [NewPasswordController::class, 'changePassword']);
+    Route::get('/projects/{projectId}/tasks', [ProjectController::class, 'projectTasks']);
     Route::get('/tasks/{task}', [TaskController::class, 'show']);
     // المهام المكتملة (للمبرمج المسجل فقط)
 Route::get('/tasks/completed', [TaskController::class, 'completedTasks']);
