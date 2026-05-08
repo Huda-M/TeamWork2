@@ -67,6 +67,25 @@ class Programmer extends Model
     {
         return $this->user->email;
     }
+    public function addStars($points)
+{
+    $this->stars += $points;
+    $oldLevelNum = $this->level;
+    $newLevelNum = $this->calculateLevelFromStars();
+    
+    if ($newLevelNum > $oldLevelNum) {
+        $this->level = $newLevelNum;
+        // هنا يمكن إضافة حدث أو إشعار
+    }
+    $this->save();
+}
+
+private function calculateLevelFromStars()
+{
+    if ($this->stars >= 550) return 3; // senior
+    if ($this->stars >= 300) return 2; // junior
+    return 1; // beginner
+}
 
     public function isProfileCompleted(): bool
     {
