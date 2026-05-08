@@ -202,39 +202,116 @@ public function softDeleteTeam($id)
     }
 }
 
-// app/Http/Controllers/TeamController.php
-
 public function store(Request $request)
-{
-    $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'description' => ['nullable', 'string'],
-        'is_public' => ['boolean'],
-        'github_url' => ['nullable', 'url'],
-        'category' => ['nullable', 'array'],
-        'required_role' => ['nullable', 'array'],
-        'invitations' => ['nullable', 'array'],
-        'invitations.*' => ['integer', 'exists:programmers,id'],
-    ]);
-
-    $team = Team::create($validated);
-
-    // إرسال دعوات للمبرمجين
-    if (!empty($validated['invitations'])) {
-        foreach ($validated['invitations'] as $programmerId) {
-            TeamInvitation::create([
-                'team_id' => $team->id,
-                'programmer_id' => $programmerId,
+    {
+        DB::beginTransaction();
+        try {
+            // التحقق من أن المستخدم programmer
+            $user = Auth::user();
+            if (!$user || $user->role !== 'programmer') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only programmers can create teams'
+                ], 403);
+            }
+ 
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Programmer profile not found'
+                ], 404);
+            }
+ 
+            // Validation - بسيط
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'description' => ['nullable', 'string'],
+                'is_public' => ['nullable', 'boolean'],
+                'github_url' => ['nullable', 'url'],
+                'category' => ['nullable', 'array'],
+                'required_role' => ['nullable', 'array'],
+                'invitations' => ['nullable', 'array'],
+                'invitations.*' => ['integer', 'exists:programmers,id'],
             ]);
+ 
+            // تحضير بيانات الفريق
+            $teamData = [
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'is_public' => $validated['is_public'] ?? false,
+                'formation_type' => 'manual',
+                'status' => 'active',
+                'max_members' => 5,
+                'min_members' => 2,
+                'experience_level' => 'intermediate',
+            ];
+ 
+            // إضافة الحقول الإضافية
+            if (isset($validated['github_url'])) {
+                $teamData['github_url'] = $validated['github_url'];
+            }
+ 
+            if (isset($validated['category'])) {
+                $teamData['category'] = json_encode($validated['category']);
+            }
+ 
+            if (isset($validated['required_role'])) {
+                $teamData['required_role'] = json_encode($validated['required_role']);
+            }
+ 
+            // إنشاء الفريق
+            $team = Team::create($teamData);
+ 
+            // إضافة المُنشئ كـ leader
+            TeamMember::create([
+                'team_id' => $team->id,
+                'programmer_id' => $programmer->id,
+                'role' => 'leader',
+                'joined_at' => now(),
+                'joined_by' => $programmer->id,
+            ]);
+ 
+            // إرسال الدعوات
+            if (!empty($validated['invitations'])) {
+                foreach ($validated['invitations'] as $programmerId) {
+                    // تجنب دعوة المنشئ لنفسه
+                    if ($programmerId !== $programmer->id) {
+                        TeamInvitation::create([
+                            'team_id' => $team->id,
+                            'programmer_id' => $programmerId,
+                            'invited_by' => $programmer->id,
+                            'message' => "You've been invited to join team '{$team->name}'",
+                            'status' => 'pending',
+                            'expires_at' => now()->addDays(7),
+                        ]);
+                    }
+                }
+            }
+ 
+            Log::info('Team created', [
+                'team_id' => $team->id,
+                'created_by' => $programmer->id
+            ]);
+ 
+            DB::commit();
+ 
+            return response()->json([
+                'success' => true,
+                'message' => 'Team created successfully',
+                'data' => $team->fresh()->load('activeMembers.programmer.user')
+            ], 201);
+ 
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating team: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create team',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Team created successfully',
-        'data' => $team->fresh()
-    ], 201);
-}
 
     public function inviteByUsername(Request $request, $id)
     {
@@ -834,35 +911,4 @@ public function store(Request $request)
         }
     }
 
-    // ================== دوال التصويت (معطلة بالكامل) ==================
-
-    public function startVoting($teamId)
-    {
-        return response()->json([
-            'success' => false,
-            'message' => 'Voting system is disabled. The team creator is automatically the leader.'
-        ], 400);
-    }
-
-    public function vote(Request $request, $teamId)
-    {
-        return response()->json([
-            'success' => false,
-            'message' => 'Voting system is disabled. No votes are required.'
-        ], 400);
-    }
-
-    public function votingStatus($teamId)
-    {
-        return response()->json([
-            'success' => true,
-            'message' => 'Voting is disabled. The team leader is assigned at creation.',
-            'data' => [
-                'voting_enabled' => false,
-                'leader_assigned' => true
-            ]
-        ]);
-    }
-
-    // إزالة الدوال المساعدة: checkTeamCompletion, sendVotingStartedNotifications, handleTieVote, sendRunoffVotingNotifications, processVotingResults, announceWinner, calculatePercentage
-}
+   
