@@ -685,6 +685,45 @@ public function myProjectDetails($projectId, Request $request)
         return 'general';
     }
 
+    public function markAsCompleted($projectId)
+{
+    try {
+        $user = Auth::user();
+        $project = Project::findOrFail($projectId);
+
+        // التحقق من الصلاحية: أدمن أو قائد فريق في هذا المشروع
+        $isAuthorized = false;
+        if ($user->role === 'admin') {
+            $isAuthorized = true;
+        } elseif ($user->role === 'programmer' && $user->programmer) {
+            // هل المستخدم قائد أي فريق تابع لهذا المشروع؟
+            $isLeader = \App\Models\Team::where('project_id', $projectId)
+                ->whereHas('activeMembers', function($q) use ($user) {
+                    $q->where('programmer_id', $user->programmer->id)
+                      ->where('role', 'leader');
+                })->exists();
+            $isAuthorized = $isLeader;
+        }
+
+        if (!$isAuthorized) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admin or team leader can mark project as completed'
+            ], 403);
+        }
+
+        $project->update(['status' => 'completed']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Project marked as completed'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error marking project completed: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to mark project'], 500);
+    }
+}
+
     public function projectTasks($projectId, Request $request)
 {
     try {
