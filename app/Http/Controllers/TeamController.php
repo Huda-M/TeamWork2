@@ -814,6 +814,52 @@ public function store(Request $request)
         }
     }
 
+    // في TeamController.php
+public function updateTeam(Request $request, $id)
+{
+    try {
+        $user = Auth::user();
+        $team = Team::findOrFail($id);
+
+        // التحقق من الصلاحية: فقط قائد الفريق أو الأدمن
+        $isLeader = $team->isLeader($user->programmer->id);
+        if (!$isLeader && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader can update team settings'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+            'github_url' => 'nullable|url',
+            'avatar_url' => 'nullable|url',
+            'is_public' => 'nullable|boolean',
+            'category' => 'nullable|array',
+            'required_role' => 'nullable|array',
+            'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert',
+        ]);
+
+        $team->update($validated);
+
+        // إذا تم تحديث is_public وتم جعله خاصاً، يمكن إعادة توليد join_code
+        if ($request->has('is_public') && !$request->is_public && !$team->join_code) {
+            $team->join_code = strtoupper(substr(md5(uniqid()), 0, 8));
+            $team->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team settings updated successfully',
+            'data' => $team->fresh(['activeMembers.programmer.user'])
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error updating team: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to update team'], 500);
+    }
+}
+
     public function joinViaAIRecommendation(Request $request)
     {
         $validator = Validator::make($request->all(), [
