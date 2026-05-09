@@ -47,6 +47,63 @@ class ProjectController extends Controller
             ], 500);
         }
     }
+    // في ProjectController.php
+public function zeroProjects()
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        // المشاريع التي ليس لها أي فريق (zero teams) أو لديها فرق ولكن ليس لديها أي مهام
+        $projects = Project::whereDoesntHave('teams')
+            ->orWhereHas('teams', function($q) {
+                $q->doesntHave('tasks');
+            })
+            ->with(['teams.activeMembers.programmer.user', 'teams.tasks'])
+            ->get();
+
+        $result = $projects->map(function($project) {
+            $teams = $project->teams;
+            $totalMembers = $teams->sum(fn($team) => $team->activeMembers->count());
+            $totalTasks = $teams->sum(fn($team) => $team->tasks->count());
+            $pendingTasks = $teams->sum(fn($team) => $team->tasks->whereNotIn('status', ['done', 'cancelled'])->count());
+            $activeMembersCount = $teams->sum(fn($team) => $team->activeMembers->count());
+
+            // جمع صور وأسماء الأعضاء (لو أردت عرضهم)
+            $members = $teams->flatMap(function($team) {
+                return $team->activeMembers->map(function($member) {
+                    return [
+                        'name' => $member->programmer->user->full_name,
+                        'track' => $member->programmer->track,
+                        'avatar_url' => $member->programmer->avatar_url,
+                    ];
+                });
+            })->unique('name')->values();
+
+            return [
+                'project_id' => $project->id,
+                'project_title' => $project->title,
+                'description' => $project->description,
+                'total_members' => $totalMembers,
+                'total_tasks' => $totalTasks,
+                'pending_tasks' => $pendingTasks,
+                'active_members_count' => $activeMembersCount,
+                'members' => $members,  // اسم، تراك، صورة
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+            'message' => 'Zero projects fetched successfully'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching zero projects: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch zero projects'], 500);
+    }
+}
 
     public function store(StoreTaskRequest $request, Team $team)
 {
