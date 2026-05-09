@@ -177,29 +177,15 @@ public function swapLeader(Request $request, $teamId, $programmerId)
 
 public function softDeleteTeam($id)
 {
-    try {
-        $user = Auth::user();
-        $team = Team::findOrFail($id);
-
-        // التحقق من الصلاحية: إما قائد الفريق أو أدمن عام
-        $isLeader = $team->isLeader($user->programmer->id);
-        if (!$isLeader && $user->role !== 'admin') {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        $team->delete(); // soft delete
-
-        // إخراج الأعضاء من الفريق (اختياري، إذا أردنا تفعيل left_at)
-        $team->activeMembers()->update(['left_at' => now()]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Team soft deleted successfully'
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Error soft deleting team: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to delete team'], 500);
+    $user = Auth::user();
+    $team = Team::findOrFail($id);
+    $isLeader = $team->isLeader($user->programmer->id);
+    if (!$isLeader && $user->role !== 'admin') {
+        return response()->json(['message' => 'Unauthorized'], 403);
     }
+    $team->delete(); // soft delete (بفضل SoftDeletes في الموديل)
+    $team->activeMembers()->update(['left_at' => now()]);
+    return response()->json(['success' => true, 'message' => 'Team soft deleted']);
 }
 
 public function store(Request $request)
