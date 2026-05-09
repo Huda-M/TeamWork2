@@ -679,14 +679,11 @@ public function completedTasks(Request $request)
     }
 }
 
-/**
- * عرض المهام قيد التنفيذ (in_progress, review) للمبرمج الحالي
- * يعرض: اسم المشروع، اسم المهمة، تاريخ الـ due date
- */
+// في TaskController.php
 public function inProgressTasks(Request $request)
 {
     try {
-        $user = auth()->user();
+        $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
@@ -704,6 +701,14 @@ public function inProgressTasks(Request $request)
         $tasks = $query->paginate(20);
 
         $result = $tasks->map(function($task) {
+            // حساب نسبة الوقت المنقضي
+            $createdAt = $task->created_at;
+            $deadline = $task->deadline;
+            $totalDays = $createdAt->diffInDays($deadline);
+            $passedDays = $createdAt->diffInDays(now());
+            $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
+            if ($percentageTimePassed > 100) $percentageTimePassed = 100;
+
             return [
                 'task_id' => $task->id,
                 'task_title' => $task->title,
@@ -713,6 +718,7 @@ public function inProgressTasks(Request $request)
                 'status' => $task->status,
                 'days_remaining' => now()->diffInDays($task->deadline, false),
                 'is_overdue' => $task->deadline->isPast(),
+                'percentage_time_passed' => $percentageTimePassed,   // ✅ الحقل الجديد
             ];
         });
 
@@ -730,5 +736,6 @@ public function inProgressTasks(Request $request)
         Log::error('Error fetching in-progress tasks: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to fetch in-progress tasks'], 500);
     }
+
 }
 }
