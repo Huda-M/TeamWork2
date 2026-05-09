@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens , SoftDeletes;;
+    use HasFactory, Notifiable, HasApiTokens , SoftDeletes;
 
     protected $fillable = [
         'full_name',
