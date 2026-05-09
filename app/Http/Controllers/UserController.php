@@ -80,24 +80,45 @@ class UserController extends Controller
         ]);
     }
 
-    public function destroy(string $id)
-    {
-        $user = User::find($id);
+public function destroy($id)
+{
+    try {
+        $user = Auth::user();
+        $targetUser = User::find($id);
 
-        if (! $user) {
+        if (!$targetUser) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'User not found']
-                , 404);
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
         }
 
-        $user->delete();
+        // السماح للمستخدم بحذف نفسه، أو للأدمن بحذف أي مستخدم
+        if ($user->id !== $targetUser->id && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        // Soft delete
+        $targetUser->delete();
+
+        // إبطال التوكنات الحالية (اختياري)
+        $targetUser->tokens()->delete();
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'User Deleted Successfully',
+            'success' => true,
+            'message' => 'Account deleted successfully'
         ]);
+    } catch (\Exception $e) {
+        Log::error('Error deleting user: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete account'
+        ], 500);
     }
+}
 
 
 public function markNotificationAsRead($notificationId)
