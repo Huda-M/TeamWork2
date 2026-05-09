@@ -616,14 +616,11 @@ public function show(Task $task)
         return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
     }
 }
-/**
- * عرض المهام المكتملة للمبرمج الحالي
- * يعرض: اسم المهمة، تاريخ الانتهاء
- */
+// في TaskController.php، داخل دالة completedTasks()
 public function completedTasks(Request $request)
 {
     try {
-        $user = auth()->user();
+        $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
@@ -633,12 +630,18 @@ public function completedTasks(Request $request)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
+        // عدد المهام المنجزة هذا الأسبوع
+        $tasksThisWeek = Task::where('programmer_id', $programmer->id)
+            ->where('status', 'done')
+            ->whereBetween('completed_at', [now()->startOfWeek(), now()->endOfWeek()])
+            ->count();
+
         $query = Task::where('programmer_id', $programmer->id)
             ->where('status', 'done')
             ->with(['team.project'])
             ->orderBy('completed_at', 'desc');
 
-        // فلتر حسب التاريخ (اختياري)
+        // فلتر حسب التاريخ
         if ($request->has('from_date')) {
             $query->whereDate('completed_at', '>=', $request->from_date);
         }
@@ -662,8 +665,9 @@ public function completedTasks(Request $request)
         return response()->json([
             'success' => true,
             'data' => [
+                'num_of_tasks_done' => $tasks->total(),
+                'num_of_tasks_done_this_week' => $tasksThisWeek,   // ✅ الحقل الجديد
                 'completed_tasks' => $result,
-                'total' => $tasks->total(),
                 'current_page' => $tasks->currentPage(),
                 'last_page' => $tasks->lastPage(),
             ],
