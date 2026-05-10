@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use App\Models\Programmer;
 use App\Http\Requests\StoreProgrammerRequest;
 use App\Http\Requests\UpdateProgrammerRequest;
+use App\Models\Team;
+use App\Models\User;
+use Illuminate\Support\Facades\Http;
 
 class ProgrammerController extends Controller
 {
@@ -179,6 +182,43 @@ public function programmerStatistics($id)
             'data' => [
                 'programmer' => $programmer
             ]
+        ]);
+    }
+
+    public function joinTeam(){
+        $user = auth()->user();
+        $programmer = Programmer::query()->where('user_id', $user->id)->firstOrFail();
+        $teams = Team::query()->where('status','forming')->get();
+        $payload = [
+            'user_profile'=>[
+                'user_id'=>$user->id,
+                'full_name'=>$user->full_name,
+                'skills'=>$programmer->skills,
+                'experience'=>optional($programmer->programmerLevel)->current_level ?? 1,
+            ],
+            'teams'=>$teams->map(function($team){
+                return [
+                    'id'=>$team->id,
+                    'name'=>$team->name,
+                    'status'=>$team->status,
+                    'req_skills'=>$team->required_skills,
+                    'req_exp_level'=>$team->experience_level,
+                    'composition'=>$team->teamMembers->map(function($member){
+                        return [
+                            'user_id'=>$member->programmer->user_id,
+                            'full_name'=>$member->programmer->user->full_name,
+                            'experience'=>optional($member->programmer->programmerLevel)->current_level ?? 1,
+                        ];
+                    })
+                ];
+            })
+        ];
+
+        Http::post('https://arabicsoft-ai-team-matcher.hf.space/api/match-teams', $payload);
+
+        return response()->json([
+            'success' => true,
+            'data' => $payload
         ]);
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 
 class Programmer extends Model
 {
@@ -104,6 +105,11 @@ class Programmer extends Model
     public function statistics(): HasOne
     {
         return $this->hasOne(ProgrammerStatistic::class);
+    }
+
+    public function programmerLevel(): HasOne
+    {
+        return $this->hasOne(ProgrammerLevel::class);
     }
 
     // ========== أكسسوارات ==========

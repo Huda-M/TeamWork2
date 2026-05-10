@@ -13,11 +13,11 @@ return new class extends Migration
     {
         Schema::create('programmer_levels', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('programmer_id')->constrained();
-            $table->integer('current_level');
-            $table->integer('current_xp');
-            $table->integer('xp_to_next_level');
-            $table->integer('ranking_position');
+            $table->foreignId('programmer_id')->constrained()->onDelete('cascade');
+            $table->integer('current_level')->default(1);
+            $table->integer('current_xp')->default(0);
+            $table->integer('xp_to_next_level')->default(100);
+            $table->integer('ranking_position')->default(0);
             $table->timestamps();
         });
     }

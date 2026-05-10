@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             TeamMemberSeeder::class,
             TaskSeeder::class,
             EvaluationSeeder::class,
+            ProgrammerLevelSeeder::class,
         ]);
     }
 }

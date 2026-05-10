@@ -16,6 +16,7 @@ use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -215,3 +216,6 @@ Route::prefix('profile')->group(function () {
     });
 
 });
+
+Route::post('/ai/match-teams', [ProgrammerController::class, 'joinTeam'])->middleware('auth:sanctum');
+

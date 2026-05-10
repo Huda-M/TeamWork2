@@ -24,6 +24,7 @@ class TeamSeeder extends Seeder
                     'project_id' => $project->id,
                     'is_public' => true,
                     'experience_level' => 'intermediate',
+                    'required_skills' => ['laravel','php','mysql','html','css','js'],
                 ]);
             }
         }
