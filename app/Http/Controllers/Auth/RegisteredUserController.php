@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 class RegisteredUserController extends Controller
 {
@@ -86,16 +87,21 @@ class RegisteredUserController extends Controller
             $user->programmer()->create([
                 'profile_completed' => false,
             ]);
-        } elseif ($user->role === 'company') {
-            $user->company()->create([
-                'company_name' => $user->full_name,
-                'phone' => null,
-                'cr_number' => null,
-                'about' => null,
-                'country' => null,
-                'location' => null,
-                'profile_completed' => false,
-            ]);
+        } } elseif ($user->role === 'company') {
+    $user->company()->create([
+        'company_name' => $user->full_name,
+        'phone' => '0000000000',                         // قيمة مؤقتة
+        'cr_number' => 'TEMP_' . Str::random(10),        // قيمة مؤقتة فريدة
+        'about' => null,
+        'country' => 'Unknown',                          // قيمة مؤقتة
+        'location' => 'Unknown',                         // قيمة مؤقتة
+        'industry' => 'General',                         // قيمة افتراضية لـ NOT NULL
+        'size' => '1-10',                                // قيمة افتراضية
+        'website' => 'https://temp.com',                 // قيمة افتراضية
+        'subscription_end_date' => now()->addYear(),     // تاريخ مستقبلي
+        'profile_completed' => false,
+    ]);
+
         }
 
         event(new Registered($user));
