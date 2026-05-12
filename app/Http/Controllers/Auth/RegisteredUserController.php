@@ -182,6 +182,69 @@ public function completeProfile(Request $request)
         return response()->json(['message' => 'Server Error: ' . $e->getMessage()], 500); // لتسهيل التصحيح
     }
 }
+   
+
+public function completeCompanyProfile(Request $request): JsonResponse
+{
+    $user = $request->user();
+
+    if ($user->role !== 'company') {
+        return response()->json([
+            'success' => false,
+            'message' => 'Only companies can complete profile here'
+        ], 403);
+    }
+
+    $company = $user->company;
+
+    if (!$company) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Company profile not found'
+        ], 404);
+    }
+
+    $validated = $request->validate([
+        'company_name' => ['required', 'string', 'max:255'],
+        'phone'        => ['required', 'string', 'max:20'],
+        'cr_number'    => ['required', 'string', 'unique:companies,cr_number,' . $company->id],
+        'about'        => ['required', 'string', 'min:20'],
+        'country'      => ['required', 'string', 'max:100'],
+        'location'     => ['required', 'string', 'max:255'],
+        'logo'         => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:5120'], // 5MB
+        'social_links' => ['nullable', 'array'],
+        'social_links.*' => ['url', 'max:255'], // كل رابط يجب أن يكون URL صالح
+    ]);
+
+    // رفع الشعار
+    if ($request->hasFile('logo')) {
+        // حذف الشعار القديم إن وجد
+        if ($company->logo) {
+            Storage::disk('public')->delete($company->logo);
+        }
+        $path = $request->file('logo')->store('company_logos', 'public');
+        $validated['logo'] = $path;
+    }
+
+    // تحديث الحقول
+    $company->update([
+        'company_name' => $validated['company_name'],
+        'phone'        => $validated['phone'],
+        'cr_number'    => $validated['cr_number'],
+        'about'        => $validated['about'],
+        'country'      => $validated['country'],
+        'location'     => $validated['location'],
+        'logo'         => $validated['logo'] ?? $company->logo,
+        'social_links' => $validated['social_links'] ?? null,
+        'profile_completed' => true,
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Company profile completed successfully',
+        'data'    => $company->fresh()
+    ], 200);
+}
     
     public function profileStatus(Request $request): JsonResponse
     {
