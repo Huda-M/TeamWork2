@@ -145,42 +145,42 @@ class RegisteredUserController extends Controller
 
 public function completeProfile(Request $request)
 {
-    $user = Auth::user();
-    
-    // تأكد أن المستخدم هو programmer
-    if ($user->role !== 'programmer') {
-        return response()->json(['message' => 'Only programmers can complete profile'], 403);
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['message' => 'Only programmers can complete profile'], 403);
+        }
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['message' => 'Programmer profile not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'experience_level' => 'required|in:beginner,junior,senior,expert',
+            'track' => 'required|string',
+        ]);
+
+        $pointsMap = [
+            'beginner' => 0,
+            'junior' => 50,
+            'senior' => 200,
+        ];
+
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $validated['avatar_url'] = $path;  // تم التصحيح
+        }
+
+        $validated['total_score'] = $pointsMap[$validated['experience_level']] ?? 0;
+        $validated['profile_completed'] = true;
+
+        $programmer->update($validated);
+
+        return response()->json(['success' => true, 'message' => 'Profile completed']);
+    } catch (\Exception $e) {
+        Log::error('Profile completion error: ' . $e->getMessage());
+        return response()->json(['message' => 'Server Error: ' . $e->getMessage()], 500); // لتسهيل التصحيح
     }
-    
-    $programmer = $user->programmer;
-    
-    // تأكد أن programmer موجود
-    if (!$programmer) {
-        return response()->json(['message' => 'Programmer profile not found'], 404);
-    }
-    
-    $validated = $request->validate([
-        'experience_level' => 'required|in:beginner,junior,senior,expert',
-        'track' => 'required|string',
-    ]);
-    
-    $pointsMap = [
-        'beginner' => 0,
-        'junior' => 50,
-        'senior' => 200,
-    ];
-    
-    if ($request->hasFile('avatar')) {
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $validated['avatar'] = $path;
-    }
-    
-    $validated['total_score'] = $pointsMap[$validated['experience_level']] ?? 0;
-    $validated['profile_completed'] = true;
-    
-    $programmer->update($validated);
-    
-    return response()->json(['success' => true, 'message' => 'Profile completed']);
 }
     
     public function profileStatus(Request $request): JsonResponse
