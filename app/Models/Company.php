@@ -10,15 +10,33 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Company extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'user_id',
         'company_name',
+        'phone',                 // جديد
+        'cr_number',             // جديد
+        'about',                 // جديد
+        'country',               // جديد
+        'location',              // جديد
+        'logo',                  // جديد
+        'social_links',          // جديد
+        'profile_completed',     // جديد
         'industry',
         'size',
         'website',
         'subscription_end_date',
     ];
-    public function subscribtions():HasMany{
+
+    protected $casts = [
+        'social_links' => 'array',
+        'subscription_end_date' => 'date',
+        'profile_completed' => 'boolean',
+    ];
+
+    // العلاقات (كما هي موجودة)
+    public function subscribtions(): HasMany
+    {
         return $this->hasMany(Subscribtions::class);
     }
 
@@ -31,19 +49,35 @@ class Company extends Model
     {
         return $query->whereNotNull('verified_at');
     }
-    public function payment():HasMany{
+
+    public function payment(): HasMany
+    {
         return $this->hasMany(Payment::class);
     }
-    public function user():BelongsTo{
+
+    public function user(): BelongsTo
+    {
         return $this->belongsTo(User::class);
     }
-    public function interview():HasMany{
+
+    public function interview(): HasMany
+    {
         return $this->hasMany(Interview::class);
     }
-    public function ComAndProEvaluations():HasMany{
-        return $this->hasMany(ComAndProEvaluation::class,'company_id');
+
+    public function ComAndProEvaluations(): HasMany
+    {
+        return $this->hasMany(ComAndProEvaluation::class, 'company_id');
     }
-    public function conversation():HasMany{
+
+    public function conversation(): HasMany
+    {
         return $this->hasMany(Conversation::class);
+    }
+
+    // إضافة accessor للحصول على رابط الشعار الكامل
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logo ? asset('storage/' . $this->logo) : null;
     }
 }
