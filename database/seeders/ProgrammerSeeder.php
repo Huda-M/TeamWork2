@@ -19,7 +19,7 @@ class ProgrammerSeeder extends Seeder
                     'user_name' => $user->full_name,
                     'phone' => '01000000000',
                     'track' => collect(['Frontend Developer', 'Backend Developer', 'Full Stack Developer', 'Mobile Developer'])->random(),
-                    'experience_level' => collect(['beginner', 'intermediate', 'advanced', 'expert'])->random(),
+                    'experience_level' => collect(['beginner', 'junior', 'senior', 'advanced'])->random(),
                     'profile_completed' => true,
                     'skills' => json_encode(collect(['Laravel', 'React', 'Vue.js', 'Python', 'Node.js'])->random(3)->toArray()),
                 ]
