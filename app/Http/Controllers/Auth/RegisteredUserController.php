@@ -149,12 +149,8 @@ public function completeProfile(Request $request)
     $programmer = $user->programmer;
     
     $validated = $request->validate([
-        'user_name' => 'required|string|unique:programmers,user_name,'.$programmer->id,
-        'phone' => 'nullable|string',
         'experience_level' => 'required|in:beginner,junior,senior,expert',
         'track' => 'required|string',
-        'bio' => 'nullable|string',
-        'avatar' => 'nullable|image|max:2048',
     ]);
     
     // تعيين النقاط (total_score) حسب المستوى
