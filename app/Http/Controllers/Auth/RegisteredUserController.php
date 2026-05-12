@@ -87,7 +87,7 @@ class RegisteredUserController extends Controller
             $user->programmer()->create([
                 'profile_completed' => false,
             ]);
-        } } elseif ($user->role === 'company') {
+        }  elseif ($user->role === 'company') {
     $user->company()->create([
         'company_name' => $user->full_name,
         'phone' => '0000000000',                         // قيمة مؤقتة
