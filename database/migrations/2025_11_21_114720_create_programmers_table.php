@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('track')->nullable();
             $table->string('phone')->nullable();
             $table->string('avatar_url')->nullable();
+            $table->integer('total_score')->default(0);
             $table->string('cover_image')->nullable();
             $table->string('behance_url')->nullable();
             $table->text('bio')->nullable();
