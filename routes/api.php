@@ -66,7 +66,7 @@ Route::prefix('v1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
-
+    Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
     // User profile & general
     Route::get('/user', fn(Request $request) => $request->user());
     Route::post('/logout', [LoginController::class, 'logout']);
