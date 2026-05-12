@@ -89,8 +89,8 @@ class User extends Authenticatable
         static::created(function ($user) {
             if ($user->role === 'programmer') {
                 $user->programmer()->create([]);
-            } elseif ($user->role === 'company') {
-                $user->company()->create([]);
+            // } elseif ($user->role === 'company') {
+            //     $user->company()->create([]);
             }
         });
     }
