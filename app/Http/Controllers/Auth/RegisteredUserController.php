@@ -49,82 +49,99 @@ class RegisteredUserController extends Controller
         ], 200);
     }
 
-    /**
-     * الخطوة 2: التحقق من الكود وإنشاء الحساب
-     */
     public function verifyAndCreate(Request $request): JsonResponse
-    {
-        $request->validate([
-            'email' => ['required', 'email'],
-            'code' => ['required', 'string', 'size:6'],
+{
+    $request->validate([
+        'email' => ['required', 'email'],
+        'code' => ['required', 'string', 'size:6'],
+    ]);
+
+    if (!EmailVerificationCode::verify($request->email, $request->code)) {
+        throw ValidationException::withMessages([
+            'code' => ['Invalid or expired verification code.'],
+        ]);
+    }
+
+    $registrationData = cache()->get('registration:' . $request->email);
+
+    if (!$registrationData) {
+        return response()->json([
+            'message' => 'Registration data expired. Please register again.',
+        ], 400);
+    }
+
+    DB::beginTransaction();
+    try {
+        // إنشاء المستخدم
+        $user = User::create([
+            'full_name' => $registrationData['full_name'],
+            'email' => $request->email,
+            'password' => Hash::make($registrationData['password']),
+            'role' => $registrationData['role'],
+            'email_verified_at' => now(),
         ]);
 
-        if (!EmailVerificationCode::verify($request->email, $request->code)) {
-            throw ValidationException::withMessages([
-                'code' => ['Invalid or expired verification code.'],
-            ]);
-        }
-
-        $registrationData = cache()->get('registration:' . $request->email);
-
-        if (!$registrationData) {
-            return response()->json([
-                'message' => 'Registration data expired. Please register again.',
-            ], 400);
-        }
-
-        DB::beginTransaction();
-        try {
-            // إنشاء المستخدم
-            $user = User::create([
-                'full_name' => $registrationData['full_name'],
-                'email' => $request->email,
-                'password' => Hash::make($registrationData['password']),
-                'role' => $registrationData['role'],
-                'email_verified_at' => now(),
-            ]);
-
-            event(new Registered($user));
-
-            cache()->forget('registration:' . $request->email);
-
-            Auth::login($user);
-
-            DB::commit();
-
-            // تحميل البيانات الإضافية
-            $responseData = [
-                'id' => $user->id,
-                'full_name' => $user->full_name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'email_verified_at' => $user->email_verified_at,
-            ];
-
-            if ($user->role === 'programmer' && $user->programmer) {
-                $responseData['programmer'] = $user->programmer;
-            }
-
-            return response()->json([
-                'message' => 'Registration successful',
-                'user' => $responseData,
-                'token' => $user->createToken('auth_token')->plainTextToken,
+        // 🔹 إنشاء البروفايل حسب الدور
+        if ($user->role === 'programmer') {
+            $user->programmer()->create([
                 'profile_completed' => false,
-                'source' => $registrationData['source'],
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Registration failed', [
-                'email' => $request->email,
-                'error' => $e->getMessage()
             ]);
-
-            return response()->json([
-                'message' => 'Registration failed. Please try again.',
-            ], 500);
+        } elseif ($user->role === 'company') {
+            $user->company()->create([
+                'company_name' => $user->full_name,
+                'phone' => null,
+                'cr_number' => null,
+                'about' => null,
+                'country' => null,
+                'location' => null,
+                'profile_completed' => false,
+            ]);
         }
+
+        event(new Registered($user));
+
+        cache()->forget('registration:' . $request->email);
+
+        Auth::login($user);
+
+        DB::commit();
+
+        $responseData = [
+            'id' => $user->id,
+            'full_name' => $user->full_name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'email_verified_at' => $user->email_verified_at,
+        ];
+
+        if ($user->role === 'programmer' && $user->programmer) {
+            $responseData['programmer'] = $user->programmer;
+        }
+        if ($user->role === 'company' && $user->company) {
+            $responseData['company'] = $user->company;
+        }
+
+        return response()->json([
+            'message' => 'Registration successful',
+            'user' => $responseData,
+            'token' => $user->createToken('auth_token')->plainTextToken,
+            'profile_completed' => false,
+            'source' => $registrationData['source'],
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Registration failed', [
+            'email' => $request->email,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'message' => 'Registration failed. Please try again.',
+        ], 500);
     }
+}
 
     /**
      * إعادة إرسال الكود
