@@ -12,8 +12,9 @@ class LoginController extends Controller
 {
     public function login(Request $request)
     {
+        // تعديل قاعدة التحقق: نطلب email و password فقط
         $validator = Validator::make($request->all(), [
-            'login' => 'required|string',
+            'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
@@ -21,11 +22,8 @@ class LoginController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $loginType = filter_var($request->login, FILTER_VALIDATE_EMAIL) ? 'email' : 'user_name';
-
-        $request->merge([$loginType => $request->login]);
-
-        if (Auth::attempt($request->only($loginType, 'password'))) {
+        // نحاول تسجيل الدخول باستخدام email و password
+        if (Auth::attempt($request->only('email', 'password'))) {
             $user = Auth::user();
 
             if (is_null($user->email_verified_at)) {
@@ -42,56 +40,54 @@ class LoginController extends Controller
             return response()->json([
                 'message' => 'Login successful.',
                 'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'user_name' => $user->user_name,
-                    'role' => $user->role,
+                    'id'         => $user->id,
+                    'name'       => $user->name,
+                    'email'      => $user->email,
+                    'user_name'  => $user->user_name,   // ما زلنا نرسله لكن لا نستخدمه للتسجيل
+                    'role'       => $user->role,
                     'avatar_url' => $user->avatar_url,
-                    'country' => $user->country,
-                    'phone' => $user->phone,
-                    'is_verified' => !is_null($user->email_verified_at),
+                    'country'    => $user->country,
+                    'phone'      => $user->phone,
+                    'is_verified'=> !is_null($user->email_verified_at),
                 ],
-                'token' => $token,
+                'token'      => $token,
                 'token_type' => 'Bearer'
             ], 200);
         }
 
-        return response()->json(['message' => 'Incorrect login data.'], 401);
+        return response()->json(['message' => 'Incorrect email or password.'], 401);
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-
         return response()->json(['message' => 'Successful logout.'], 200);
     }
 
+    public function changePassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'password' => 'required|string|confirmed|min:8',
+        ]);
 
-public function changePassword(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'current_password' => 'required|string',
-        'password' => 'required|string|confirmed|min:8',
-    ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
-    if ($validator->fails()) {
-        return response()->json(['errors' => $validator->errors()], 422);
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'The current password is incorrect.'], 400);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return response()->json(['message' => 'Password changed successfully.'], 200);
     }
-
-    $user = $request->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User is not found.'], 404);
-    }
-
-    if (!Hash::check($request->current_password, $user->password)) {
-        return response()->json(['message' => 'The current password is incorrect.'], 400);
-    }
-
-    $user->password = Hash::make($request->password);
-    $user->save();
-
-    return response()->json(['message' => 'The password has been successfully changed.'], 200);
-}
 }
