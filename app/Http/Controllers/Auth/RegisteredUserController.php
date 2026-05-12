@@ -146,14 +146,24 @@ class RegisteredUserController extends Controller
 public function completeProfile(Request $request)
 {
     $user = Auth::user();
+    
+    // تأكد أن المستخدم هو programmer
+    if ($user->role !== 'programmer') {
+        return response()->json(['message' => 'Only programmers can complete profile'], 403);
+    }
+    
     $programmer = $user->programmer;
+    
+    // تأكد أن programmer موجود
+    if (!$programmer) {
+        return response()->json(['message' => 'Programmer profile not found'], 404);
+    }
     
     $validated = $request->validate([
         'experience_level' => 'required|in:beginner,junior,senior,expert',
         'track' => 'required|string',
     ]);
     
-    // تعيين النقاط (total_score) حسب المستوى
     $pointsMap = [
         'beginner' => 0,
         'junior' => 50,
@@ -165,7 +175,7 @@ public function completeProfile(Request $request)
         $validated['avatar'] = $path;
     }
     
-    $validated['total_score'] = $pointsMap[$validated['experience_level']];
+    $validated['total_score'] = $pointsMap[$validated['experience_level']] ?? 0;
     $validated['profile_completed'] = true;
     
     $programmer->update($validated);
