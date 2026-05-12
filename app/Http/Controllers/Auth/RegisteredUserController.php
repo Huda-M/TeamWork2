@@ -247,30 +247,30 @@ public function completeCompanyProfile(Request $request): JsonResponse
 }
     
     public function profileStatus(Request $request): JsonResponse
-    {
-        $user = $request->user();
+{
+    $user = $request->user();
 
-        if ($user->role === 'programmer') {
-            $profile = $user->programmer;
-            $completed = $profile ? $profile->profile_completed : false;
-        } elseif ($user->role === 'company') {
-            $profile = $user->company;
-            $completed = $profile ? $profile->profile_completed : false;
-        } else {
-            $completed = true;
-            $profile = null;
-        }
-
-        return response()->json([
-            'profile_completed' => $completed,
-            'role' => $user->role,
-            'user' => [
-                'id' => $user->id,
-                'full_name' => $user->full_name,
-                'email' => $user->email,
-                'role' => $user->role,
-            ],
-            'profile' => $profile,
-        ], 200);
+    if ($user->role === 'programmer') {
+        $profile = $user->programmer;
+        $completed = $profile ? $profile->profile_completed : false;
+    } elseif ($user->role === 'company') {
+        $profile = $user->company;
+        $completed = $profile ? $profile->profile_completed : false;
+    } else {
+        $completed = true;
+        $profile = null;
     }
+
+    return response()->json([
+        'profile_completed' => $completed,
+        'role' => $user->role,
+        'user' => [
+            'id' => $user->id,
+            'full_name' => $user->full_name,
+            'email' => $user->email,
+            'role' => $user->role,
+        ],
+        'profile' => $profile,
+    ], 200);
+}
 }
