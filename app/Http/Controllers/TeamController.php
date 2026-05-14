@@ -16,6 +16,12 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @OA\Tag(
+ *     name="Teams",
+ *     description="Team management – create, view, invite, join, and update teams"
+ * )
+ */
 class TeamController extends Controller
 {
     protected $teamMatchingService;
@@ -28,7 +34,63 @@ class TeamController extends Controller
         $this->aiRecommendationService = $aiRecommendationService;
     }
 
-    // ================== دوال عامة (بدون تصويت) ==================
+    /**
+     * @OA\Get(
+     *     path="/teams",
+     *     operationId="getTeams",
+     *     tags={"Teams"},
+     *     summary="List all teams with filtering",
+     *     description="Returns a paginated list of teams. Supports filtering by status, project, experience level, and publicity.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="status",
+     *         in="query",
+     *         description="Team status (active, closed, etc.)",
+     *         required=false,
+     *         @OA\Schema(type="string", example="active")
+     *     ),
+     *     @OA\Parameter(
+     *         name="project_id",
+     *         in="query",
+     *         description="Filter by project ID",
+     *         required=false,
+     *         @OA\Schema(type="integer", example=3)
+     *     ),
+     *     @OA\Parameter(
+     *         name="experience_level",
+     *         in="query",
+     *         description="Required experience level",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"beginner","intermediate","advanced","expert"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="is_public",
+     *         in="query",
+     *         description="Filter public/private teams",
+     *         required=false,
+     *         @OA\Schema(type="boolean", example=true)
+     *     ),
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Page number",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
 
     public function index(Request $request)
     {
@@ -67,7 +129,34 @@ class TeamController extends Controller
             ], 500);
         }
     }
-
+/**
+     * @OA\Get(
+     *     path="/teams/{id}",
+     *     operationId="showTeam",
+     *     tags={"Teams"},
+     *     summary="Get a single team by ID",
+     *     description="Returns detailed information about a specific team, including members count and available slots.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Team ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Team details",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=404, description="Team not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
     public function showTeam($id)
     {
         try {
@@ -106,7 +195,25 @@ class TeamController extends Controller
             ], 500);
         }
     }
-
+/**
+     * @OA\Get(
+     *     path="/teams/{id}/details",
+     *     operationId="getTeamDetails",
+     *     tags={"Teams"},
+     *     summary="Get simplified team details",
+     *     description="Returns a lightweight version of team info: name, project title, and member list.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Success"),
+     *     @OA\Response(response=404, description="Team not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
     public function getTeamDetails($id)
 {
     try {
@@ -132,7 +239,39 @@ class TeamController extends Controller
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
 }
-
+/**
+     * @OA\Post(
+     *     path="/teams/{teamId}/change-leader/{programmerId}",
+     *     operationId="swapLeader",
+     *     tags={"Teams"},
+     *     summary="Transfer leadership to another team member",
+     *     description="Allows the current leader (or admin) to assign leadership to a different programmer in the same team.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="teamId",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="programmerId",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Leadership transferred",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Team or programmer not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
 public function swapLeader(Request $request, $teamId, $programmerId)
 {
     try {
@@ -174,7 +313,33 @@ public function swapLeader(Request $request, $teamId, $programmerId)
         return response()->json(['success' => false, 'message' => 'Failed to swap leader'], 500);
     }
 }
-
+/**
+     * @OA\Delete(
+     *     path="/teams/{id}/soft-delete",
+     *     operationId="softDeleteTeam",
+     *     tags={"Teams"},
+     *     summary="Soft‑delete a team",
+     *     description="Marks the team as deleted (soft delete) and records the leave time for all members. Only the leader or admin can perform this.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Team soft‑deleted",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Team not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
 public function softDeleteTeam($id)
 {
     $user = Auth::user();
@@ -187,7 +352,41 @@ public function softDeleteTeam($id)
     $team->activeMembers()->update(['left_at' => now()]);
     return response()->json(['success' => true, 'message' => 'Team soft deleted']);
 }
-
+/**
+     * @OA\Post(
+     *     path="/teams",
+     *     operationId="createTeam",
+     *     tags={"Teams"},
+     *     summary="Create a new team",
+     *     description="Only programmers can create teams. The creator becomes the leader. Invitations can be sent to other programmers.",
+     *     security={{"Bearer": {}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name"},
+     *             @OA\Property(property="name", type="string", example="Frontend Squad"),
+     *             @OA\Property(property="description", type="string", example="React experts"),
+     *             @OA\Property(property="is_public", type="boolean", example=false),
+     *             @OA\Property(property="github_url", type="string", format="url", example="https://github.com/org/repo"),
+     *             @OA\Property(property="category", type="array", @OA\Items(type="string"), example={"Frontend","UI/UX"}),
+     *             @OA\Property(property="required_role", type="array", @OA\Items(type="string"), example={"frontend","designer"}),
+     *             @OA\Property(property="invitations", type="array", @OA\Items(type="integer"), description="Array of programmer IDs to invite", example={7,12})
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Team created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="Only programmers can create teams"),
+     *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
 public function store(Request $request)
     {
         DB::beginTransaction();
@@ -298,7 +497,45 @@ public function store(Request $request)
             ], 500);
         }
     }
-
+/**
+     * @OA\Post(
+     *     path="/teams/{id}/invite",
+     *     operationId="inviteByUsername",
+     *     tags={"Teams"},
+     *     summary="Invite a programmer by username",
+     *     description="Team leader can invite a programmer (by username) to join the team. Invitation expires after 7 days by default.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Team ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"username"},
+     *             @OA\Property(property="username", type="string", example="john_doe"),
+     *             @OA\Property(property="message", type="string", example="We'd love to have you on board!"),
+     *             @OA\Property(property="expires_at", type="string", format="date-time", example="2025-06-01T12:00:00Z")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Invitation sent",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=403, description="Only leader can invite"),
+     *     @OA\Response(response=404, description="Team or user not found"),
+     *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
+     */
     public function inviteByUsername(Request $request, $id)
     {
         DB::beginTransaction();
