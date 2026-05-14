@@ -12,21 +12,7 @@
         }
     ],
     "paths": {
-        "/api/test": {
-            "get": {
-                "tags": [
-                    "Test"
-                ],
-                "summary": "Test endpoint",
-                "operationId": "28e36defdc583280e27438fb4d5ab803",
-                "responses": {
-                    "200": {
-                        "description": "Success"
-                    }
-                }
-            }
-        },
-        "/api/tasks/my": {
+        "/tasks/my": {
             "get": {
                 "tags": [
                     "Tasks"
@@ -149,7 +135,7 @@
                 ]
             }
         },
-        "/api/tasks/completed": {
+        "/tasks/completed": {
             "get": {
                 "tags": [
                     "Tasks"
@@ -236,7 +222,7 @@
                 ]
             }
         },
-        "/api/tasks/in-progress": {
+        "/tasks/in-progress": {
             "get": {
                 "tags": [
                     "Tasks"
@@ -353,12 +339,8 @@
     },
     "tags": [
         {
-            "name": "Test",
-            "description": "Test"
-        },
-        {
             "name": "Tasks",
-            "description": "Tasks"
+            "description": "المهام والتو-دو"
         }
     ]
 }
