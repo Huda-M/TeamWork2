@@ -36,7 +36,7 @@ class TeamController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/teams",
+     *     path="/api/teams"
      *     operationId="getTeams",
      *     tags={"Teams"},
      *     summary="List all teams with filtering",
@@ -131,7 +131,7 @@ class TeamController extends Controller
     }
 /**
      * @OA\Get(
-     *     path="/teams/{id}",
+     *     path="/api/teams/{id}",
      *     operationId="showTeam",
      *     tags={"Teams"},
      *     summary="Get a single team by ID",
@@ -197,7 +197,7 @@ class TeamController extends Controller
     }
 /**
      * @OA\Get(
-     *     path="/teams/{id}/details",
+     *     path="/api/teams/{id}/details",
      *     operationId="getTeamDetails",
      *     tags={"Teams"},
      *     summary="Get simplified team details",
@@ -241,7 +241,7 @@ class TeamController extends Controller
 }
 /**
      * @OA\Post(
-     *     path="/teams/{teamId}/change-leader/{programmerId}",
+     *     path="/api/teams/{teamId}/change-leader/{programmerId}",
      *     operationId="swapLeader",
      *     tags={"Teams"},
      *     summary="Transfer leadership to another team member",
@@ -315,7 +315,7 @@ public function swapLeader(Request $request, $teamId, $programmerId)
 }
 /**
      * @OA\Delete(
-     *     path="/teams/{id}/soft-delete",
+     *     path="/api/teams/{id}/soft-delete",
      *     operationId="softDeleteTeam",
      *     tags={"Teams"},
      *     summary="Soft‑delete a team",
@@ -354,7 +354,7 @@ public function softDeleteTeam($id)
 }
 /**
      * @OA\Post(
-     *     path="/teams",
+     *     path="/api/teams",
      *     operationId="createTeam",
      *     tags={"Teams"},
      *     summary="Create a new team",
@@ -499,7 +499,7 @@ public function store(Request $request)
     }
 /**
      * @OA\Post(
-     *     path="/teams/{id}/invite",
+     *     path="/api/teams/{id}/invite",
      *     operationId="inviteByUsername",
      *     tags={"Teams"},
      *     summary="Invite a programmer by username",
