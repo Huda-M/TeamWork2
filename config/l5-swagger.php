@@ -104,10 +104,7 @@ return [
         ],
 
         'scanOptions' => [
-    'analyser' => new \OpenApi\Analysers\ReflectionAnalyser([
-        new \OpenApi\Analysers\DocBlockAnnotationFactory(),
-        new \OpenApi\Analysers\AttributeAnnotationFactory(),
-    ]),
+    'analyser' => null,
     'default_processors_configuration' => [],
     'analysis' => null,
     'processors' => [],
