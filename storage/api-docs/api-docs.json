@@ -1,0 +1,364 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Team Work API",
+        "description": "API Documentation",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Local Server"
+        }
+    ],
+    "paths": {
+        "/api/test": {
+            "get": {
+                "tags": [
+                    "Test"
+                ],
+                "summary": "Test endpoint",
+                "operationId": "28e36defdc583280e27438fb4d5ab803",
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/api/tasks/my": {
+            "get": {
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "جلب مهامي مع الفلترة",
+                "description": "جلب جميع المهام الموكلة للمبرمج الحالي مع إمكانية الفلترة حسب الحالة والفريق",
+                "operationId": "getMyTasks",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "حالة المهمة",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "todo",
+                                "in_progress",
+                                "review",
+                                "done",
+                                "cancelled"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "team_id",
+                        "in": "query",
+                        "description": "معرف الفريق",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "رقم الصفحة",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "عدد النتائج",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "قائمة المهام",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "per_page": {
+                                                    "type": "integer"
+                                                },
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "title": {
+                                                                "type": "string"
+                                                            },
+                                                            "status": {
+                                                                "type": "string"
+                                                            },
+                                                            "priority": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "غير مصرح"
+                    },
+                    "403": {
+                        "description": "ممنوع"
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/tasks/completed": {
+            "get": {
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "جلب المهام المنجزة",
+                "description": "جلب جميع المهام المكتملة للمبرمج الحالي مع إحصائيات",
+                "operationId": "getCompletedTasks",
+                "parameters": [
+                    {
+                        "name": "from_date",
+                        "in": "query",
+                        "description": "بداية النطاق (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to_date",
+                        "in": "query",
+                        "description": "نهاية النطاق (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "رقم الصفحة",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "المهام المنجزة",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "num_of_tasks_done": {
+                                                    "type": "integer"
+                                                },
+                                                "num_of_tasks_done_this_week": {
+                                                    "type": "integer"
+                                                },
+                                                "completed_tasks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "غير مصرح"
+                    },
+                    "403": {
+                        "description": "ممنوع"
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/tasks/in-progress": {
+            "get": {
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "جلب المهام قيد التنفيذ",
+                "description": "جلب جميع المهام في حالة التنفيذ أو المراجعة للمبرمج الحالي",
+                "operationId": "getInProgressTasks",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "رقم الصفحة",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "عدد النتائج",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "المهام قيد التنفيذ",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "in_progress_tasks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "task_id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "task_title": {
+                                                                "type": "string"
+                                                            },
+                                                            "project_name": {
+                                                                "type": "string"
+                                                            },
+                                                            "due_date": {
+                                                                "type": "string",
+                                                                "format": "date"
+                                                            },
+                                                            "priority": {
+                                                                "type": "integer"
+                                                            },
+                                                            "status": {
+                                                                "type": "string"
+                                                            },
+                                                            "days_remaining": {
+                                                                "type": "integer"
+                                                            },
+                                                            "is_overdue": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "percentage_time_passed": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "غير مصرح"
+                    },
+                    "403": {
+                        "description": "ممنوع"
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "Bearer": {
+                "type": "http",
+                "description": "Enter your Bearer token",
+                "bearerFormat": "JWT",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Test",
+            "description": "Test"
+        },
+        {
+            "name": "Tasks",
+            "description": "Tasks"
+        }
+    ]
+}
