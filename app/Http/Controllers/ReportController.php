@@ -12,30 +12,6 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use OpenApi\Annotations as OA;
 
-/**
- * @OA\Info(
- *     version="1.0.0",
- *     title="Team Work API",
- *     description="API Documentation"
- * )
- *
- * @OA\Server(
- *     url=L5_SWAGGER_CONST_HOST,
- *     description="Server"
- * )
- *
- * @OA\SecurityScheme(
- *     securityScheme="Bearer",
- *     type="http",
- *     scheme="bearer",
- *     bearerFormat="JWT"
- * )
- *
- * @OA\Tag(
- *     name="Reports",
- *     description="Report management"
- * )
- */
 class ReportController extends Controller
 {
     public function index(Request $request)
