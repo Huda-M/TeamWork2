@@ -12,30 +12,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use OpenApi\Annotations as OA;
 
-/**
- * @OA\Info(
- *     version="1.0.0",
- *     title="Team Work API",
- *     description="API Documentation"
- * )
- *
- * @OA\Server(
- *     url=L5_SWAGGER_CONST_HOST,
- *     description="Server"
- * )
- *
- * @OA\SecurityScheme(
- *     securityScheme="Bearer",
- *     type="http",
- *     scheme="bearer",
- *     bearerFormat="JWT"
- * )
- *
- * @OA\Tag(
- *     name="Programmers",
- *     description="Programmer management"
- * )
- */
+
 class ProgrammerController extends Controller
 {
     /**
