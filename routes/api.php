@@ -42,7 +42,7 @@ use App\Http\Controllers\CompanyProgrammerController;
 |--------------------------------------------------------------------------
 | API Routes - Public (No Authentication)
 |--------------------------------------------------------------------------
-*/
+
 Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::post('/register/verify', [RegisteredUserController::class, 'verifyAndCreate']);
 Route::post('/register/resend-code', [RegisteredUserController::class, 'resendCode']);
