@@ -6,6 +6,13 @@ use OpenApi\Annotations as OA;
 
 
 /**
+* @OA\OpenApi(
+ *     openapi="3.0.0",
+ *     info=@OA\Info(
+ *         version="1.0.0",
+ *         title="Team Work API",
+ *         description="API Documentation..."
+ *     ),
  * @OA\Info(
  *     title="Team Work API",
  *     version="1.0.0",
