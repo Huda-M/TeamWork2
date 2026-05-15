@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use OpenApi\Annotations as OA;
 
+/**
+ * @OA\Tag(
+ *     name="Reports",
+ *     description="Report information"
+ * )
+ */
 class ReportController extends Controller
 {
     public function index(Request $request)
