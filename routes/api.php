@@ -26,8 +26,23 @@ use App\Http\Controllers\CompanyProgrammerController;
  *     title="Team Work API",
  *     description="API Documentation"
  * )
+ * 
+ * @OA\Server(
+ *     url=L5_SWAGGER_CONST_HOST,
+ *     description="Server"
+ * )
+ * 
+ * @OA\SecurityScheme(
+ *     securityScheme="Bearer",
+ *     type="http",
+ *     scheme="bearer",
+ *     bearerFormat="JWT"
+ * )
+ * 
+ * @OA\PathItem(
+ *     path="/api"
+ * )
  */
-/*
 |--------------------------------------------------------------------------
 | API Routes - Public (No Authentication)
 |--------------------------------------------------------------------------
