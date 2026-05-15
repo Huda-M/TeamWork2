@@ -39,9 +39,7 @@ use App\Http\Controllers\CompanyProgrammerController;
  *     bearerFormat="JWT"
  * )
  */
-|--------------------------------------------------------------------------
-| API Routes - Public (No Authentication)
-|--------------------------------------------------------------------------
+
 
 Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::post('/register/verify', [RegisteredUserController::class, 'verifyAndCreate']);
