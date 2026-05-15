@@ -37,7 +37,7 @@ class TeamController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/api/teams"
+     *     path="/api/teams",
      *     operationId="getTeams",
      *     tags={"Teams"},
      *     summary="List all teams with filtering",
