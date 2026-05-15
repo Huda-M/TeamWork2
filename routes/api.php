@@ -17,7 +17,8 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProfileController;
-
+use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyProgrammerController;
 
 /**
  * @OA\Info(
@@ -47,6 +48,17 @@ Route::middleware('start.session')->group(function () {
     Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
 });
 
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::prefix('company')->group(function () {
+        Route::get('/profile', [CompanyController::class, 'showProfile']);
+        Route::put('/profile', [CompanyController::class, 'updateProfile']);
+        Route::delete('/soft-delete', [CompanyController::class, 'softDelete']);
+        Route::get('/programmers', [CompanyProgrammerController::class, 'index']);
+        Route::get('/programmers/{id}', [CompanyProgrammerController::class, 'show']);
+    });
+
+});
 // Public API v1 (Read-only)
 Route::prefix('v1')->group(function () {
     // Users
