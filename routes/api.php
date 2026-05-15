@@ -38,10 +38,6 @@ use App\Http\Controllers\CompanyProgrammerController;
  *     scheme="bearer",
  *     bearerFormat="JWT"
  * )
- * 
- * @OA\PathItem(
- *     path="/api"
- * )
  */
 |--------------------------------------------------------------------------
 | API Routes - Public (No Authentication)
