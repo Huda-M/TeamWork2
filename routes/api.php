@@ -18,6 +18,14 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProfileController;
 
+
+/**
+ * @OA\Info(
+ *     version="1.0.0",
+ *     title="Team Work API",
+ *     description="API Documentation"
+ * )
+ */
 /*
 |--------------------------------------------------------------------------
 | API Routes - Public (No Authentication)
