@@ -22,7 +22,7 @@ class ProgrammerController extends Controller
 {
     /**
      * @OA\Get(
-     *     path="/v1/programmers",
+     *     path="/api/v1/programmers",
      *     tags={"Programmers"},
      *     summary="جلب قائمة المبرمجين",
      *     description="الحصول على قائمة بجميع المبرمجين المسجلين",
@@ -77,7 +77,7 @@ class ProgrammerController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/v1/programmers/{id}",
+     *     path="/api/v1/programmers/{id}",
      *     tags={"Programmers"},
      *     summary="جلب بيانات مبرمج محدد",
      *     description="الحصول على تفاصيل مبرمج واحد",
@@ -123,7 +123,7 @@ class ProgrammerController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/my/statistics",
+     *     path="/api/my/statistics",
      *     tags={"Statistics"},
      *     summary="جلب إحصائياتي",
      *     description="الحصول على إحصائيات شاملة عن المبرمج الحالي",
@@ -220,7 +220,7 @@ class ProgrammerController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/programmers/{id}/statistics",
+     *     path="/api/programmers/{id}/statistics",
      *     tags={"Statistics"},
      *     summary="جلب إحصائيات مبرمج محدد",
      *     description="الحصول على إحصائيات مبرمج آخر",
