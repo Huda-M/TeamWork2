@@ -20,33 +20,7 @@ use OpenApi\Annotations as OA;
  *     securityScheme="Bearer",
  *     type="http",
  *     scheme="bearer",
- *     bearerFormat="JWT",
- *     description="Enter your Bearer token"
- * )
- *
- * @OA\Tag(
- *     name="Tasks",
- *     description="Task Management"
- * )
- *
- * @OA\Tag(
- *     name="Teams",
- *     description="Team Management"
- * )
- *
- * @OA\Tag(
- *     name="Projects",
- *     description="Project Management"
- * )
- *
- * @OA\Tag(
- *     name="Statistics",
- *     description="Statistics"
- * )
- *
- * @OA\Tag(
- *     name="Reports",
- *     description="Reports"
+ *     bearerFormat="JWT"
  * )
  */
 class OpenApi
