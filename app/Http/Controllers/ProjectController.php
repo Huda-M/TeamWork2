@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Annotations as OA;
 
+/**
+ * @OA\Tag(
+ *     name="Projects",
+ *     description="Project information"
+ * )
+ */
 class ProjectController extends Controller
 {
     public function index(Request $request)
