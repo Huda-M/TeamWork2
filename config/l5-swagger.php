@@ -105,7 +105,7 @@ return [
         ],
 
         'scanOptions' => [
-    'analyser' => null,
+    'analyser' => \OpenApi\Analysers\AnnotationAnalyser::class,
     'default_processors_configuration' => [],
     'analysis' => null,
     'processors' => [],
