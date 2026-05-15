@@ -24,19 +24,20 @@ use App\Http\Controllers\CompanyProgrammerController;
  * @OA\Info(
  *     version="1.0.0",
  *     title="Team Work API",
- *     description="API Documentation"
+ *     description="API Documentation for Team Work System"
  * )
  * 
  * @OA\Server(
  *     url=L5_SWAGGER_CONST_HOST,
- *     description="Server"
+ *     description="API Server"
  * )
  * 
  * @OA\SecurityScheme(
- *     securityScheme="Bearer",
  *     type="http",
+ *     securityScheme="Bearer",
  *     scheme="bearer",
- *     bearerFormat="JWT"
+ *     bearerFormat="JWT",
+ *     description="Login with username and password to get the authentication token"
  * )
  */
 
