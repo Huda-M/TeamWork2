@@ -41,6 +41,8 @@ class ProgrammerController extends Controller
     /**
      * @OA\Get(
      *     path="/api/v1/programmers",
+     *     operationId="getProgrammers",
+     
      *     tags={"Programmers"},
      *     summary="جلب قائمة المبرمجين",
      *     description="الحصول على قائمة بجميع المبرمجين المسجلين",
