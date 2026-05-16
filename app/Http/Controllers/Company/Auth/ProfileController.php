@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Company\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Company\Auth\CompleteProfileRequest;
+use App\Http\Requests\Company\Auth\UpdateProfileRequest;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -37,8 +38,24 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function updateProfile(){
+    public function updateProfile(UpdateProfileRequest $request){
+        $data = $request->validated();
+        $company = Company::where("user_id", auth()->user()->id)->first();
 
+        if($request->hasFile('logo')){
+            if($company->logo){
+                Storage::delete($company->logo);
+            }
+            $data['logo'] = $request->file('logo')->store('logos', 'public');
+        }
+        
+        $company->update($data);
+
+        return response()->json([
+            "message" => "Profile updated successfully",
+            "status" => 200,
+            "company" => $company
+        ]);
     }
 
      public function deleteProfile(){

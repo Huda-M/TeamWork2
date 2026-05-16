@@ -31,10 +31,14 @@ class Company extends Model
         'profile_completed' => 'boolean',
     ];
 
+    protected $appends = [
+        'logo',
+    ];
+
     // العلاقات (كما هي موجودة)
-    public function subscribtions(): HasMany
+    public function subscription(): HasMany
     {
-        return $this->hasMany(Subscribtions::class);
+        return $this->hasMany(Subscription::class);
     }
 
     public function projects(): HasMany
@@ -73,8 +77,8 @@ class Company extends Model
     }
 
     // إضافة accessor للحصول على رابط الشعار الكامل
-    public function getLogoUrlAttribute(): ?string
+    public function getLogoAttribute(): ?string
     {
-        return $this->logo ? asset('storage/' . $this->logo) : null;
+        return $this->logo ? asset('storage/'.$this->logo) : null;
     }
 }

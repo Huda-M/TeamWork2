@@ -23,7 +23,6 @@ class Programmer extends Model
         'behance_url',
         'title',
         'specialty',
-        'total_score',
         'github_username',
         'portfolio_url',
         'linkedin_url',
@@ -37,6 +36,9 @@ class Programmer extends Model
         'experience_level',
         'track',
         'skills',
+        'bio',
+        'total_score',
+        
     ];
 
     protected $casts = [
@@ -259,5 +261,10 @@ class Programmer extends Model
     public function scopeWithHighScore($query, $minScore = 500)
     {
         return $query->where('total_score', '>=', $minScore);
+    }
+
+    public function jopOffers()
+    {
+        return $this->hasMany(JopOffer::class);
     }
 }
