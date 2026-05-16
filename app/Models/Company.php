@@ -24,12 +24,10 @@ class Company extends Model
         'social_links',          // جديد
         'profile_completed',     // جديد
         'industry',
-        'subscription_end_date',
     ];
 
     protected $casts = [
         'social_links' => 'array',
-        'subscription_end_date' => 'date',
         'profile_completed' => 'boolean',
     ];
 

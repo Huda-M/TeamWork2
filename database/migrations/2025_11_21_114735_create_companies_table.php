@@ -24,7 +24,6 @@ return new class extends Migration
 
             // حقول إضافية
             $table->string('industry');
-            $table->date('subscription_end_date');
 
             $table->boolean('profile_completed')->default(false);
             $table->timestamps();

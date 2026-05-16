@@ -39,8 +39,6 @@ class UserSeeder extends Seeder
                 'location' => 'Cairo, Smart Village, Building B3',
                 'social_links' => json_encode(['https://linkedin.com/company/techsolutions', 'https://twitter.com/techsolutions']),
                 'industry' => 'Information Technology',
-                'size' => '50-200',
-                'website' => 'https://techsolutions.com',
             ],
             [
                 'email' => 'company2@example.com',
@@ -53,8 +51,6 @@ class UserSeeder extends Seeder
                 'location' => 'Dubai, Internet City, Building 12',
                 'social_links' => json_encode(['https://instagram.com/creativeagency', 'https://facebook.com/creativeagency']),
                 'industry' => 'Design & Marketing',
-                'size' => '10-50',
-                'website' => 'https://creativeagency.com',
             ],
         ];
 
@@ -86,9 +82,6 @@ class UserSeeder extends Seeder
                     'social_links' => $data['social_links'],
                     'profile_completed' => true,
                     'industry' => $data['industry'],
-                    'size' => $data['size'],
-                    'website' => $data['website'],
-                    'subscription_end_date' => Carbon::now()->addMonths(6),
                 ]
             );
         }
