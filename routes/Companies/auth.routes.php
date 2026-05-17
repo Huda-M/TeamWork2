@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Route;
 Route::controller(AuthController::class)->prefix('company/auth')->group(function () {
     Route::post('/login', 'login');
     Route::post('/register', 'register');
+    Route::get('/{provider}/redirect', 'redirectToProvider');
+    Route::get('/{provider}/callback', 'handleProviderCallback');
 });
 
 Route::controller(AuthController::class)->prefix('company/auth')->middleware('auth:sanctum')->group(function () {

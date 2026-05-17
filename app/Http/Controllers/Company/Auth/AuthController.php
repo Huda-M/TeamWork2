@@ -7,8 +7,11 @@ use App\Http\Requests\Company\Auth\ChangePasswordRequest;
 use App\Http\Requests\Company\Auth\LoginRequest;
 use App\Http\Requests\Company\Auth\RegisterRequest;
 use App\Models\User;
+use App\Models\UserAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
 {
@@ -86,6 +89,94 @@ class AuthController extends Controller
             'message' => 'Password changed successfully',
             'status' => 200,
             'user' => $user->load('company'),
+        ]);
+    }
+
+    public function redirectToProvider($provider)
+    {
+        return response()->json([
+            'url' => Socialite::driver($provider)->stateless()->redirect()->getTargetUrl()
+        ]);
+    }
+
+    public function handleProviderCallback($provider)
+    {
+        try {
+            $socialUser = Socialite::driver($provider)->stateless()->user();
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to authenticate using ' . ucfirst($provider),
+                'status' => 401,
+            ]);
+        }
+
+        $userAuth = UserAuth::where('provider_type', $provider)
+            ->where('provider_user_id', $socialUser->getId())
+            ->first();
+
+        if ($userAuth) {
+            $user = $userAuth->user;
+
+            if ($user->role !== 'company') {
+                return response()->json([
+                    'message' => 'You are not authorized to login as company',
+                    'status' => 403,
+                ]);
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Login successfully',
+                'status' => 200,
+                'user' => $user->load('company'),
+                'token' => $token,
+            ]);
+        }
+
+        $user = User::where('email', $socialUser->getEmail())->first();
+
+        if ($user) {
+            if ($user->role !== 'company') {
+                return response()->json([
+                    'message' => 'You are not authorized to login as company',
+                    'status' => 403,
+                ]);
+            }
+
+            $user->userAuth()->create([
+                'provider_type' => $provider,
+                'provider_user_id' => $socialUser->getId(),
+                'provider_email' => $socialUser->getEmail(),
+                'provider_name' => $socialUser->getName() ?? $socialUser->getNickname(),
+                'access_token' => $socialUser->token,
+                'refresh_token' => $socialUser->refreshToken,
+            ]);
+        } else {
+            $user = User::create([
+                'full_name' => $socialUser->getName() ?? $socialUser->getNickname() ?? 'Unknown User',
+                'email' => $socialUser->getEmail(),
+                'password' => Hash::make(Str::random(24)),
+                'role' => 'company',
+            ]);
+
+            $user->userAuth()->create([
+                'provider_type' => $provider,
+                'provider_user_id' => $socialUser->getId(),
+                'provider_email' => $socialUser->getEmail(),
+                'provider_name' => $socialUser->getName() ?? $socialUser->getNickname(),
+                'access_token' => $socialUser->token,
+                'refresh_token' => $socialUser->refreshToken,
+            ]);
+        }
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login successfully',
+            'status' => 200,
+            'user' => $user->load('company'),
+            'token' => $token,
         ]);
     }
 }

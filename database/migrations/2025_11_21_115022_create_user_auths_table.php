@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('provider_user_id');
             $table->string('provider_email');
             $table->string('provider_name');
-            $table->string('access_token');
-            $table->string('refresh_token')->nullable();
+            $table->text('access_token');
+            $table->text('refresh_token')->nullable();
             $table->timestamps();
             $table->timestamp('token_expires_at')->nullable();
         });
