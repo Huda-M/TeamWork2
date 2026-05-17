@@ -314,7 +314,7 @@ class ProgrammerController extends Controller
                 'user_id'=>$user->id,
                 'full_name'=>$user->full_name,
                 'skills'=>$programmer->skills,
-                'experience'=>optional($programmer->programmerLevel)->current_level ?? 1,
+                'experience'=>$programmer->total_score,
             ],
             'teams'=>$teams->map(function($team){
                 return [
@@ -327,7 +327,7 @@ class ProgrammerController extends Controller
                         return [
                             'user_id'=>$member->programmer->user_id,
                             'full_name'=>$member->programmer->user->full_name,
-                            'experience'=>optional($member->programmer->programmerLevel)->current_level ?? 1,
+                            'experience'=>$member->programmer->experience_level,
                         ];
                     })
                 ];
