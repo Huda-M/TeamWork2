@@ -17,11 +17,13 @@ class ProgrammerResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->user->full_name,
-            'skills' => $this->skills->pluck('name'),
-            'tracks' => $this->tracks->pluck('name'),
+            'skills' => $this->skills,
+            'programmer_skills' => collect($this->getRelation('skills'))->pluck('name'),
+            'experience_level'=> $this->experience_level,
+            'tracks' => $this->track,
             'image' => $this->cover_image,
             'bio' => $this->bio,
-            'total_score' => $this->total_score,
+            'stars' => $this->stars,
         ];
     }
 }

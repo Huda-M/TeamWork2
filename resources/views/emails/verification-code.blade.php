@@ -114,7 +114,7 @@
             </div>
             
             <div class="content">
-                <h2>Welcome to TeamWork!</h2>
+                <h2>Welcome to BridgeX!</h2>
                 
                 <p>Thank you for signing up. To complete your registration and verify your email address, please use the following verification code:</p>
                 
@@ -129,11 +129,11 @@
                 </div>
                 
                 <p style="margin-bottom: 0;">Best regards,<br>
-                <span class="team">TeamWork Team</span></p>
+                <span class="team">BridgeX Team</span></p>
             </div>
             
             <div class="footer">
-                <p>&copy; {{ date('Y') }} TeamWork. All rights reserved.</p>
+                <p>&copy; {{ date('Y') }} BridgeX. All rights reserved.</p>
             </div>
         </div>
     </div>

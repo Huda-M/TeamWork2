@@ -7,65 +7,82 @@ use App\Http\Requests\Company\Auth\CompleteProfileRequest;
 use App\Http\Requests\Company\Auth\UpdateProfileRequest;
 use App\Models\Company;
 use App\Models\User;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
-    public function me(){
+    public function me()
+    {
         return response()->json([
-            "message" => "Profile Fetched Successfully",
-            "status" => 200,
-            "company" => auth()->user()->company
+            'message' => 'Profile Fetched Successfully',
+            'status' => 200,
+            'company' => auth()->user()->load('company'),
         ]);
     }
 
-    public function completeProfile(CompleteProfileRequest $request){
-        $data = $request->validated();
-        $data['profile_completed'] = true;
-        $data['user_id'] = auth()->user()->id;
+    public function completeProfile(CompleteProfileRequest $request)
+    {
+        $company = null;
 
-        if($request->hasFile('logo')){
-            $data['logo'] = $request->file('logo')->store('logos', 'public');
-        }
-        
-        $company = Company::create($data);
+        DB::transaction(function () use ($request, &$company) {
+            $data = $request->validated();
+            $data['profile_completed'] = true;
+            $data['user_id'] = auth()->user()->id;
 
-        return response()->json([
-            "message" => "Profile completed successfully",
-            "status" => 200,
-            "company" => $company
-        ]);
-    }
-
-    public function updateProfile(UpdateProfileRequest $request){
-        $data = $request->validated();
-        $company = Company::where("user_id", auth()->user()->id)->first();
-
-        if($request->hasFile('logo')){
-            if($company->logo){
-                Storage::delete($company->logo);
+            if ($request->hasFile('logo')) {
+                $data['logo'] = $request->file('logo')->store('logos', 'public');
             }
-            $data['logo'] = $request->file('logo')->store('logos', 'public');
-        }
-        
-        $company->update($data);
+
+            $company = Company::create($data);
+        });
 
         return response()->json([
-            "message" => "Profile updated successfully",
-            "status" => 200,
-            "company" => $company
+            'message' => 'Profile completed successfully',
+            'status' => 200,
+            'company' => $company,
         ]);
     }
 
-     public function deleteProfile(){
-        $user = User::where("email", auth()->user()->email)->first();
-        $user->delete();
-        auth()->logout();
+    public function updateProfile(UpdateProfileRequest $request)
+    {
+        $company = Company::where('user_id', auth()->user()->id)->first();
+
+        DB::transaction(function () use ($request, &$company) {
+            $data = $request->validated();
+
+            if ($request->hasFile('logo')) {
+                if ($company->logo) {
+                    Storage::delete($company->logo);
+                }
+                $data['logo'] = $request->file('logo')->store('logos', 'public');
+            }
+
+            $company->update($data);
+        });
 
         return response()->json([
-            "message" => "Profile deleted successfully",
-            "status" => 200
+            'message' => 'Profile updated successfully',
+            'status' => 200,
+            'company' => $company,
+        ]);
+    }
+
+    public function deleteProfile()
+    {
+        DB::transaction(function () {
+            $user = User::where('email', auth()->user()->email)->first();
+            if ($user->company) {
+                $user->company->delete();
+            }
+            $user->tokens()->delete();
+            $user->delete();
+        });
+
+        return response()->json([
+            'message' => 'Profile deleted successfully',
+            'status' => 200,
         ]);
     }
 }

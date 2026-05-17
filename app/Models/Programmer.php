@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\DB;
 
 class Programmer extends Model
@@ -38,7 +38,7 @@ class Programmer extends Model
         'skills',
         'bio',
         'total_score',
-        
+
     ];
 
     protected $casts = [
@@ -63,15 +63,15 @@ class Programmer extends Model
     public function tracks(): BelongsToMany
     {
         return $this->belongsToMany(Track::class, 'programmer_track')
-                    ->withPivot('progress_percentage', 'started_at', 'completed_at')
-                    ->withTimestamps();
+            ->withPivot('progress_percentage', 'started_at', 'completed_at')
+            ->withTimestamps();
     }
 
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class, 'team_members')
-                    ->withPivot('role', 'joined_at', 'left_at')
-                    ->withTimestamps();
+            ->withPivot('role', 'joined_at', 'left_at')
+            ->withTimestamps();
     }
 
     public function tasks(): HasMany
@@ -139,43 +139,47 @@ class Programmer extends Model
     }
 
     // ========== إدارة المستوى والخبرة ==========
-    
+
     /**
      * تحديد المستوى (experience_level) بناءً على total_score
      */
     public function getExperienceLevelAttribute(): string
     {
-        if ($this->total_score >= 2000) return 'expert';
-        if ($this->total_score >= 1000) return 'advanced';
-        if ($this->total_score >= 500) return 'intermediate';
+        if ($this->total_score >= 2000) {
+            return 'expert';
+        }
+        if ($this->total_score >= 1000) {
+            return 'advanced';
+        }
+        if ($this->total_score >= 500) {
+            return 'intermediate';
+        }
+
         return 'beginner';
     }
 
     /**
      * إضافة نقاط (Stars) ورفع المستوى تلقائياً إذا تجاوز الحدود
-     * @param int $points
-     * @param string $reason
-     * @param array $metadata
      */
     public function addStars(int $points, string $reason, array $metadata = []): void
     {
         $oldLevel = $this->experience_level;
         $this->increment('total_score', $points);
-        
+
         ProgrammerScoreLog::create([
             'programmer_id' => $this->id,
             'points' => $points,
             'reason' => $reason,
             'metadata' => $metadata,
         ]);
-        
+
         $newLevel = $this->experience_level;
         if ($oldLevel !== $newLevel) {
             // حدث تغيير المستوى – يمكن إضافة إشعار هنا
             logger("Programmer {$this->id} leveled up from $oldLevel to $newLevel");
         }
     }
-    
+
     /**
      * حساب المستوى بناءً على إجمالي النجوم (points)
      * تستخدم لعرض المستوى كنص (Beginner, Junior, Senior...)
@@ -183,9 +187,16 @@ class Programmer extends Model
     public function calculateLevelFromStars(): string
     {
         $score = $this->total_score;
-        if ($score < 50) return 'beginner';
-        if ($score < 200) return 'junior';
-        if ($score < 450) return 'senior';
+        if ($score < 50) {
+            return 'beginner';
+        }
+        if ($score < 200) {
+            return 'junior';
+        }
+        if ($score < 450) {
+            return 'senior';
+        }
+
         return 'expert';
     }
 
@@ -200,12 +211,13 @@ class Programmer extends Model
                 return false;
             }
         }
+
         return true;
     }
 
     public function markProfileAsCompleted(): void
     {
-        if (!$this->profile_completed && $this->isProfileCompleted()) {
+        if (! $this->profile_completed && $this->isProfileCompleted()) {
             $this->update(['profile_completed' => true]);
         }
     }
@@ -231,17 +243,21 @@ class Programmer extends Model
             ->where('status', 'done')
             ->whereNotNull('actual_hours')
             ->get();
+
         return $completedTasks->isEmpty() ? 0 : $completedTasks->avg('actual_hours');
     }
 
     private function calculateSuccessRate(): float
     {
         $totalTasks = $this->tasks()->count();
-        if ($totalTasks === 0) return 0;
+        if ($totalTasks === 0) {
+            return 0;
+        }
         $completedOnTime = $this->tasks()
             ->where('status', 'done')
             ->where('actual_hours', '<=', \DB::raw('estimated_hours * 1.2'))
             ->count();
+
         return ($completedOnTime / $totalTasks) * 100;
     }
 

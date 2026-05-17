@@ -13,6 +13,7 @@ class JopOffer extends Model
         'salary_range',
         'job_type',
         'work_type',
+        'programmer_id',
     ];
     
     public function programmer()

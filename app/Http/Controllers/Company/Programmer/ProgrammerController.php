@@ -16,15 +16,22 @@ class ProgrammerController extends Controller
                 'message' => 'You are not authorized to access this page',
             ], 403);
         }
+
         $programmers = QueryBuilder::for(Programmer::class)
-            ->allowedFilters(['skills.name', 'tracks.name', 'total_score', 'experience_level'])
             ->with(['skills', 'tracks', 'user'])
+            ->allowedFilters(['skills.name', 'track', 'stars', 'experience_level'])
             ->paginate(10);
+
+        $resource = ProgrammerResource::collection($programmers)->response()->getData(true);
 
         return response()->json([
             'message' => 'Programmers fetched successfully',
             'status' => 200,
-            'programmers' => ProgrammerResource::collection($programmers),
+            'programmers' => $resource['data'],
+            'pagination' => [
+                'meta' => $resource['meta'] ?? null,
+                'links' => $resource['links'] ?? null,
+            ],
         ]);
     }
 

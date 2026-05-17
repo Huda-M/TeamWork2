@@ -24,7 +24,7 @@ class SendJopOfferRequest extends FormRequest
     {
         return [
             'title' => 'required|string',
-            'description' => 'required|text',
+            'description' => 'required|string',
             'salary_range' => 'required|string',
             'job_type' => 'required|in:full-time,part-time,freelance',
             'work_type' => 'required|in:on-site,remote,hybrid',

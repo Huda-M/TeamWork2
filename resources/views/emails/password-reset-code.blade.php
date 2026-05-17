@@ -116,7 +116,7 @@
             <div class="content">
                 <h2>Hello!</h2>
                 
-                <p>We have received a request to reset the password for your <strong>TeamWork</strong> account. Please use the following verification code:</p>
+                <p>We have received a request to reset the password for your <strong>BridgeX</strong> account. Please use the following verification code:</p>
                 
                 <div class="code-container">
                     <div class="code">{{ $code }}</div>
@@ -131,11 +131,11 @@
                 </div>
                 
                 <p style="margin-bottom: 0;">Best regards,<br>
-                <span class="team">TeamWork Team</span></p>
+                <span class="team">BridgeX Team</span></p>
             </div>
             
             <div class="footer">
-                <p>&copy; {{ date('Y') }} TeamWork. All rights reserved.</p>
+                <p>&copy; {{ date('Y') }} BridgeX. All rights reserved.</p>
             </div>
         </div>
     </div>

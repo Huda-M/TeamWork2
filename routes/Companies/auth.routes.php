@@ -15,7 +15,7 @@ Route::controller(AuthController::class)->prefix('company/auth')->middleware('au
 });
 
 Route::controller(ProfileController::class)->prefix('company/profile')->middleware('auth:sanctum')->group(function () {
-    Route::get('/', 'me');
+    Route::get('/me', 'me');
     Route::post('/complete', 'completeProfile');
     Route::post('/update', 'updateProfile');
     Route::delete('/delete', 'deleteProfile');

@@ -14,10 +14,10 @@ class JopOfferController extends Controller
     public function store(SendJopOfferRequest $request)
     {
         $data = $request->validated();
-        $data['company_name'] = auth()->user()->name;
+        $data['company_name'] = auth()->user()->company->company_name ?? auth()->user()->full_name;
         $jopOffer = JopOffer::create($data);
         $programmer = Programmer::where('id', $request->programmer_id)->first();
-        Mail::to($programmer->user->email)->send(new SendJopOfferMail($jopOffer));
+        Mail::to($programmer->user->email)->send(new SendJopOfferMail($jopOffer, auth()->user()->email));
 
         return response()->json([
             'message' => 'Jop Offer created successfully',
@@ -30,7 +30,7 @@ class JopOfferController extends Controller
 
         return response()->json([
             'message' => 'Jop Offers fetched successfully',
-            'jopOffers' => $jopOffers,
+            'jopOffers' => $jopOffers->load('programmer.user'),
         ], 200);
     }
 }
