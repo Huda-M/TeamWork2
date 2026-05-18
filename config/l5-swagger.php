@@ -46,8 +46,9 @@ return [
                  * Absolute paths to directory containing the swagger annotations are stored.
                  */
                 'annotations' => [
-     base_path('app/Http/Controllers'),
-     base_path('routes'),  // أضف هذا السطر
+    base_path('app/Http/Controllers'),
+    base_path('routes'),
+    base_path('app/Swagger'),   // <-- أضف هذا السطر
 ],
             ],
         ],
