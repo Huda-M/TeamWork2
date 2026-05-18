@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Swagger;
+use OpenApi\Annotations as OA;
 
 /**
  * @OA\Info(
