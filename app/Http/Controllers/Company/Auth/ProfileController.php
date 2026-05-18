@@ -7,7 +7,6 @@ use App\Http\Requests\Company\Auth\CompleteProfileRequest;
 use App\Http\Requests\Company\Auth\UpdateProfileRequest;
 use App\Models\Company;
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -74,9 +73,17 @@ class ProfileController extends Controller
         DB::transaction(function () {
             $user = User::where('email', auth()->user()->email)->first();
             if ($user->company) {
+                $user->company->update([
+                    'cr_number' => $user->company->cr_number.'::deleted_'.time(),
+                ]);
                 $user->company->delete();
             }
             $user->tokens()->delete();
+
+            $user->update([
+                'email' => $user->email.'::deleted_'.time(),
+            ]);
+
             $user->delete();
         });
 
