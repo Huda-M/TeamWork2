@@ -22,7 +22,7 @@ use OpenApi\Annotations as OA;
  *     description="Task Management API endpoints"
  * )
  */
-class TaskControllerEnhancements
+class TaskController
 {
     /**
      * الإضافة الأولى: Response Models 
