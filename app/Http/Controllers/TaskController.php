@@ -15,78 +15,167 @@ use Illuminate\Support\Facades\Log;
 use OpenApi\Annotations as OA;
 
 
-class TaskController extends Controller
+
+/**
+ * @OA\Tag(
+ *     name="Tasks",
+ *     description="Task Management API endpoints"
+ * )
+ */
+class TaskControllerEnhancements
 {
     /**
-     * @OA\Get(
-     *     path="/tasks/my",
-     *     operationId="getMyTasks",
-     *     tags={"Tasks"},
-     *     summary="جلب مهامي مع الفلترة",
-     *     description="جلب جميع المهام الموكلة للمبرمج الحالي مع إمكانية الفلترة حسب الحالة والفريق",
-     *     security={{"Bearer": {}}},
-     *     @OA\Parameter(
-     *         name="status",
-     *         in="query",
-     *         description="حالة المهمة",
-     *         required=false,
-     *         @OA\Schema(
-     *             type="string",
-     *             enum={"todo", "in_progress", "review", "done", "cancelled"}
-     *         )
-     *     ),
-     *     @OA\Parameter(
-     *         name="team_id",
-     *         in="query",
-     *         description="معرف الفريق",
-     *         required=false,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\Parameter(
-     *         name="page",
-     *         in="query",
-     *         description="رقم الصفحة",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=1)
-     *     ),
-     *     @OA\Parameter(
-     *         name="per_page",
-     *         in="query",
-     *         description="عدد النتائج",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=20)
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="قائمة المهام",
-     *         @OA\JsonContent(
+     * الإضافة الأولى: Response Models 
+     */
+    
+    // قبل دالة getMyTasks، أضف هذا التعليق:
+    /**
+     * @OA\Response(
+     *     response=200,
+     *     description="تم جلب قائمة المهام بنجاح",
+     *     @OA\JsonContent(
+     *         type="object",
+     *         @OA\Property(property="success", type="boolean", example=true),
+     *         @OA\Property(
+     *             property="data",
      *             type="object",
-     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="current_page", type="integer", example=1),
+     *             @OA\Property(property="total", type="integer"),
+     *             @OA\Property(property="per_page", type="integer", example=20),
      *             @OA\Property(
      *                 property="data",
-     *                 type="object",
-     *                 @OA\Property(property="current_page", type="integer"),
-     *                 @OA\Property(property="total", type="integer"),
-     *                 @OA\Property(property="per_page", type="integer"),
-     *                 @OA\Property(
-     *                     property="data",
-     *                     type="array",
-     *                     @OA\Items(
-     *                         type="object",
-     *                         @OA\Property(property="id", type="integer"),
-     *                         @OA\Property(property="title", type="string"),
-     *                         @OA\Property(property="status", type="string"),
-     *                         @OA\Property(property="priority", type="integer")
-     *                     )
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="object",
+     *                     @OA\Property(property="id", type="integer"),
+     *                     @OA\Property(property="title", type="string"),
+     *                     @OA\Property(property="description", type="string"),
+     *                     @OA\Property(property="status", type="string", enum={"todo", "in_progress", "review", "done", "cancelled"}),
+     *                     @OA\Property(property="priority", type="integer", example=1),
+     *                     @OA\Property(property="deadline", type="string", format="date-time"),
+     *                     @OA\Property(property="estimated_hours", type="number"),
+     *                     @OA\Property(property="actual_hours", type="number"),
+     *                     @OA\Property(property="created_at", type="string", format="date-time"),
+     *                     @OA\Property(property="completed_at", type="string", format="date-time", nullable=true)
      *                 )
-     *             ),
-     *             @OA\Property(property="message", type="string")
-     *         )
-     *     ),
-     *     @OA\Response(response=401, description="غير مصرح"),
-     *     @OA\Response(response=403, description="ممنوع")
+     *             )
+     *         ),
+     *         @OA\Property(property="message", type="string", example="My tasks retrieved successfully")
+     *     )
+     * )
+     * @OA\Response(
+     *     response=401,
+     *     description="Unauthenticated",
+     *     @OA\JsonContent(
+     *         @OA\Property(property="success", type="boolean", example=false),
+     *         @OA\Property(property="message", type="string")
+     *     )
      * )
      */
+
+
+    /**
+     * الإضافة الثانية: Error Response Model
+     */
+    
+    /**
+     * @OA\Response(
+     *     response=500,
+     *     description="Server Error",
+     *     @OA\JsonContent(
+     *         @OA\Property(property="success", type="boolean", example=false),
+     *         @OA\Property(property="message", type="string", example="Failed to retrieve your tasks")
+     *     )
+     * )
+     */
+
+
+    /**
+     * الإضافة الثالثة: Request Body Example للـ Store/Update
+     */
+    
+    /**
+     * @OA\RequestBody(
+     *     required=true,
+     *     @OA\JsonContent(
+     *         required={"title", "description", "priority", "deadline", "estimated_hours"},
+     *         @OA\Property(property="title", type="string", example="Fix login bug"),
+     *         @OA\Property(property="description", type="string", example="Fix the authentication issue"),
+     *         @OA\Property(property="priority", type="integer", example=1),
+     *         @OA\Property(property="deadline", type="string", format="date-time", example="2024-12-31T23:59:59Z"),
+     *         @OA\Property(property="estimated_hours", type="number", example=5.5),
+     *         @OA\Property(property="status", type="string", enum={"todo", "in_progress", "review", "done", "cancelled"}, example="todo")
+     *     )
+     * )
+     */
+
+
+    /**
+     * الإضافة الرابعة: Security requirement على كل endpoint
+     */
+    
+    /**
+     * @OA\SecurityScheme(
+     *     type="http",
+     *     description="Login with username and password to get the authentication token",
+     *     name="Token",
+     *     in="header",
+     *     scheme="bearer",
+     *     bearerFormat="JWT",
+     *     securityScheme="Bearer",
+     * )
+     */
+
+    /**
+     * الإضافة الخامسة: Parameter examples
+     */
+    
+    /**
+     * @OA\Parameter(
+     *     name="status",
+     *     in="query",
+     *     description="Filter by task status",
+     *     required=false,
+     *     @OA\Schema(
+     *         type="string",
+     *         enum={"todo", "in_progress", "review", "done", "cancelled"},
+     *         example="in_progress"
+     *     )
+     * )
+     * @OA\Parameter(
+     *     name="team_id",
+     *     in="query",
+     *     description="Filter by team ID",
+     *     required=false,
+     *     @OA\Schema(
+     *         type="integer",
+     *         example=1
+     *     )
+     * )
+     * @OA\Parameter(
+     *     name="page",
+     *     in="query",
+     *     description="Page number for pagination",
+     *     required=false,
+     *     @OA\Schema(
+     *         type="integer",
+     *         default=1,
+     *         example=1
+     *     )
+     * )
+     * @OA\Parameter(
+     *     name="per_page",
+     *     in="query",
+     *     description="Items per page",
+     *     required=false,
+     *     @OA\Schema(
+     *         type="integer",
+     *         default=20,
+     *         example=20
+     *     )
+     * )
+     */
+
     public function getMyTasks(Request $request)
     {
         try {
@@ -123,58 +212,6 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * @OA\Get(
-     *     path="/tasks/completed",
-     *     operationId="getCompletedTasks",
-     *     tags={"Tasks"},
-     *     summary="جلب المهام المنجزة",
-     *     description="جلب جميع المهام المكتملة للمبرمج الحالي مع إحصائيات",
-     *     security={{"Bearer": {}}},
-     *     @OA\Parameter(
-     *         name="from_date",
-     *         in="query",
-     *         description="بداية النطاق (YYYY-MM-DD)",
-     *         required=false,
-     *         @OA\Schema(type="string", format="date")
-     *     ),
-     *     @OA\Parameter(
-     *         name="to_date",
-     *         in="query",
-     *         description="نهاية النطاق (YYYY-MM-DD)",
-     *         required=false,
-     *         @OA\Schema(type="string", format="date")
-     *     ),
-     *     @OA\Parameter(
-     *         name="page",
-     *         in="query",
-     *         description="رقم الصفحة",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=1)
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="المهام المنجزة",
-     *         @OA\JsonContent(
-     *             type="object",
-     *             @OA\Property(property="success", type="boolean"),
-     *             @OA\Property(
-     *                 property="data",
-     *                 type="object",
-     *                 @OA\Property(property="num_of_tasks_done", type="integer"),
-     *                 @OA\Property(property="num_of_tasks_done_this_week", type="integer"),
-     *                 @OA\Property(
-     *                     property="completed_tasks",
-     *                     type="array",
-     *                     @OA\Items(type="object")
-     *                 )
-     *             )
-     *         )
-     *     ),
-     *     @OA\Response(response=401, description="غير مصرح"),
-     *     @OA\Response(response=403, description="ممنوع")
-     * )
-     */
     public function completedTasks(Request $request)
     {
         try {
@@ -235,61 +272,6 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * @OA\Get(
-     *     path="/tasks/in-progress",
-     *     operationId="getInProgressTasks",
-     *     tags={"Tasks"},
-     *     summary="جلب المهام قيد التنفيذ",
-     *     description="جلب جميع المهام في حالة التنفيذ أو المراجعة للمبرمج الحالي",
-     *     security={{"Bearer": {}}},
-     *     @OA\Parameter(
-     *         name="page",
-     *         in="query",
-     *         description="رقم الصفحة",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=1)
-     *     ),
-     *     @OA\Parameter(
-     *         name="per_page",
-     *         in="query",
-     *         description="عدد النتائج",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=20)
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="المهام قيد التنفيذ",
-     *         @OA\JsonContent(
-     *             type="object",
-     *             @OA\Property(property="success", type="boolean"),
-     *             @OA\Property(
-     *                 property="data",
-     *                 type="object",
-     *                 @OA\Property(
-     *                     property="in_progress_tasks",
-     *                     type="array",
-     *                     @OA\Items(
-     *                         type="object",
-     *                         @OA\Property(property="task_id", type="integer"),
-     *                         @OA\Property(property="task_title", type="string"),
-     *                         @OA\Property(property="project_name", type="string"),
-     *                         @OA\Property(property="due_date", type="string", format="date"),
-     *                         @OA\Property(property="priority", type="integer"),
-     *                         @OA\Property(property="status", type="string"),
-     *                         @OA\Property(property="days_remaining", type="integer"),
-     *                         @OA\Property(property="is_overdue", type="boolean"),
-     *                         @OA\Property(property="percentage_time_passed", type="integer")
-     *                     )
-     *                 ),
-     *                 @OA\Property(property="total", type="integer")
-     *             )
-     *         )
-     *     ),
-     *     @OA\Response(response=401, description="غير مصرح"),
-     *     @OA\Response(response=403, description="ممنوع")
-     * )
-     */
     public function inProgressTasks(Request $request)
     {
         try {
