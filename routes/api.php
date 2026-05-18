@@ -24,7 +24,10 @@ use App\Http\Controllers\CompanyProgrammerController;
  * @OA\Info(
  *     version="1.0.0",
  *     title="Team Work API",
- *     description="API Documentation for Team Work System"
+ *     description="API Documentation for Team Work System",
+ *     contact={
+ *         "email":"support@teamwork.com"
+ *     }
  * )
  * 
  * @OA\Server(
@@ -32,12 +35,16 @@ use App\Http\Controllers\CompanyProgrammerController;
  *     description="API Server"
  * )
  * 
- * @OA\SecurityScheme(
- *     type="http",
- *     securityScheme="Bearer",
- *     scheme="bearer",
- *     bearerFormat="JWT",
- *     description="Login with username and password to get the authentication token"
+ * @OA\Components(
+ *     @OA\SecurityScheme(
+ *         type="http",
+ *         description="Login with username and password to get the authentication token",
+ *         name="Token",
+ *         in="header",
+ *         scheme="bearer",
+ *         bearerFormat="JWT",
+ *         securityScheme="Bearer",
+ *     )
  * )
  */
 
