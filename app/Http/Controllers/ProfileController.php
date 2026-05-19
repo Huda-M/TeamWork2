@@ -18,7 +18,146 @@ use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
-   
+   public function myProfile()
+{
+    $user = Auth::user();
+    if (!$user || $user->role !== 'programmer') {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $programmer = $user->programmer;
+    if (!$programmer) {
+        return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'id'         => $programmer->id,
+            'user_name'  => $programmer->user_name,
+            'full_name'  => $user->full_name,
+            'email'      => $user->email,
+            'bio'        => $programmer->bio,
+            'track'      => $programmer->track,
+            'avatar_url' => $programmer->avatar_url,
+        ]
+    ]);
+}
+
+public function updateProfile(Request $request)
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // قواعد التحقق الأساسية
+        $rules = [
+            'full_name'    => 'sometimes|required|string|max:255',
+            'bio'          => 'nullable|string|max:1000',
+            'track'        => 'nullable|string|max:100',
+            'avatar'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'avatar_url'   => 'nullable|url|max:255',
+        ];
+
+        // معالجة user_name فقط إذا ورد في الطلب وتغيرت قيمته
+        if ($request->has('user_name')) {
+            $newUserName = $request->input('user_name');
+            if ($newUserName !== $programmer->user_name) {
+                $rules['user_name'] = [
+                    'required',
+                    'string',
+                    'max:255',
+                    Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+                ];
+            } else {
+                $rules['user_name'] = 'sometimes|required|string|max:255';
+            }
+        }
+
+        // لا نضيف email في القواعد نهائياً
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // 1. تحديث جدول users (الحقول الموجودة فعلاً)
+        if ($request->has('full_name')) {
+            $user->full_name = $request->input('full_name');
+            $user->save();
+        }
+
+        // 2. تحديث جدول programmers
+        $programmerUpdated = false;
+        if ($request->has('user_name')) {
+            $programmer->user_name = $request->input('user_name');
+            $programmerUpdated = true;
+        }
+        if ($request->has('bio')) {
+            $programmer->bio = $request->input('bio');
+            $programmerUpdated = true;
+        }
+        if ($request->has('track')) {
+            $programmer->track = $request->input('track');
+            $programmerUpdated = true;
+        }
+
+        // معالجة الصورة
+        if ($request->hasFile('avatar')) {
+            if ($programmer->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $programmer->avatar_url))) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $programmer->avatar_url));
+            }
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $programmer->avatar_url = Storage::url($path);
+            $programmerUpdated = true;
+        } elseif ($request->has('avatar_url') && $request->filled('avatar_url')) {
+            $programmer->avatar_url = $request->input('avatar_url');
+            $programmerUpdated = true;
+        }
+
+        if ($programmerUpdated) {
+            $programmer->save();
+        }
+
+        // إعادة تحميل البيانات لضمان الحداثة
+        $programmer->refresh();
+        $user->refresh();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'data' => [
+                'id'          => $programmer->id,
+                'user_name'   => $programmer->user_name,
+                'full_name'   => $user->full_name,
+                'email'       => $user->email,
+                'bio'         => $programmer->bio,
+                'track'       => $programmer->track,
+                'avatar_url'  => $programmer->avatar_url,
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Profile update error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'An error occurred while updating profile',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
+}
     // 2. عرض إحصائيات المبرمج
     public function myStats()
     {
