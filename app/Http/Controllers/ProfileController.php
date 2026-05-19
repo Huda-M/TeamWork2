@@ -312,11 +312,10 @@ class ProfileController extends Controller
             ]
         ]);
     }
-
-
-        public function updateProfile(Request $request)
+public function updateProfile(Request $request)
     {
         try {
+            // 1. التحقق من صلاحية المستخدم
             $user = Auth::user();
             if (!$user || $user->role !== 'programmer') {
                 return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
@@ -327,16 +326,16 @@ class ProfileController extends Controller
                 return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
             }
 
-            // قواعد التحقق الأساسية
+            // 2. قواعد التحقق الأساسية
             $rules = [
                 'full_name'    => 'sometimes|required|string|max:255',
                 'bio'          => 'nullable|string|max:1000',
                 'track'        => 'nullable|string|max:100',
-                'avatar'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'avatar_url'   => 'nullable|url|max:255',
+                'avatar'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // أقصى حجم 2MB
+                'avatar_url'   => 'nullable|url|max:255', // رابط خارجي أو رابط تخزين
             ];
 
-            // معالجة user_name فقط إذا ورد في الطلب وتغيرت قيمته
+            // تحقق من user_name إذا ورد وتغير
             if ($request->has('user_name')) {
                 $newUserName = $request->input('user_name');
                 if ($newUserName !== $programmer->user_name) {
@@ -361,13 +360,14 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            // 1. تحديث جدول users (الحقول الموجودة فعلاً)
+            // 3. تحديث جدول users (full_name, email لا يمكن تغييره هنا)
             if ($request->has('full_name')) {
                 $user->full_name = $request->input('full_name');
                 $user->save();
+                Log::info('User full_name updated to: ' . $user->full_name);
             }
 
-            // 2. تحديث جدول programmers
+            // 4. تحديث جدول programmers
             $programmerUpdated = false;
             if ($request->has('user_name')) {
                 $programmer->user_name = $request->input('user_name');
@@ -382,30 +382,84 @@ class ProfileController extends Controller
                 $programmerUpdated = true;
             }
 
-            // معالجة الصورة
+            // 5. معالجة الصورة - الأولوية للملف المرفوع (avatar)
+            $avatarChanged = false;
             if ($request->hasFile('avatar')) {
-                if ($programmer->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $programmer->avatar_url))) {
-                    Storage::disk('public')->delete(str_replace('/storage/', '', $programmer->avatar_url));
+                $file = $request->file('avatar');
+
+                // التحقق الإضافي من صحة الملف
+                if (!$file->isValid()) {
+                    Log::warning('Uploaded avatar file is not valid', [
+                        'error' => $file->getError(),
+                        'programmer_id' => $programmer->id
+                    ]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'The uploaded file is not valid. Please try again.'
+                    ], 400);
                 }
-                $path = $request->file('avatar')->store('avatars', 'public');
-                $programmer->avatar_url = Storage::url($path);
+
+                // حذف الصورة القديمة إذا كانت موجودة (وتخزين محلي)
+                if ($programmer->avatar_url && !filter_var($programmer->avatar_url, FILTER_VALIDATE_URL) === false && strpos($programmer->avatar_url, '/storage/') === 0) {
+                    $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                        Log::info('Old avatar deleted: ' . $oldPath);
+                    }
+                } elseif ($programmer->avatar_url && strpos($programmer->avatar_url, 'http') !== 0) {
+                    // في حال كان الرابط غير صالح، نحاول حذفه كمسار نسبي (احتياطي)
+                    if (Storage::disk('public')->exists($programmer->avatar_url)) {
+                        Storage::disk('public')->delete($programmer->avatar_url);
+                    }
+                }
+
+                // إنشاء اسم فريد للملف لمنع التكرار
+                $extension = $file->getClientOriginalExtension();
+                $fileName = 'avatar_' . $programmer->id . '_' . time() . '.' . $extension;
+                $path = $file->storeAs('avatars', $fileName, 'public');
+                
+                if ($path === false) {
+                    Log::error('Failed to store avatar file for programmer: ' . $programmer->id);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to save avatar image.'
+                    ], 500);
+                }
+
+                $programmer->avatar_url = Storage::url($path); // ينتج /storage/avatars/avatar_4_1234567890.jpg
                 $programmerUpdated = true;
-            } elseif ($request->has('avatar_url') && $request->filled('avatar_url')) {
-                $programmer->avatar_url = $request->input('avatar_url');
+                $avatarChanged = true;
+                Log::info('New avatar uploaded and stored: ' . $programmer->avatar_url);
+            }
+            // إذا لم يتم رفع ملف، لكن ورد رابط avatar_url، نستخدمه (بشرط ألا يكون هناك ملف)
+            elseif ($request->has('avatar_url') && $request->filled('avatar_url')) {
+                $newUrl = $request->input('avatar_url');
+                // لا نحذف الصورة القديمة إن كانت تخزين محلي، لأن الرابط الجديد قد يكون مختلفًا
+                $programmer->avatar_url = $newUrl;
                 $programmerUpdated = true;
+                $avatarChanged = true;
+                Log::info('Avatar URL manually set to: ' . $newUrl);
             }
 
+            // حفظ التغييرات في جدول programmers
             if ($programmerUpdated) {
                 $programmer->save();
+                Log::info('Programmer profile saved', ['programmer_id' => $programmer->id, 'fields_changed' => $programmer->getChanges()]);
             }
 
-            // إعادة تحميل البيانات لضمان الحداثة
+            // إعادة تحميل البيانات
             $programmer->refresh();
             $user->refresh();
 
+            // رسالة النجاح مع تفصيل إذا تغيرت الصورة
+            $message = 'Profile updated successfully';
+            if ($avatarChanged) {
+                $message .= ' and avatar has been updated.';
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Profile updated successfully',
+                'message' => $message,
                 'data' => [
                     'id'          => $programmer->id,
                     'user_name'   => $programmer->user_name,
@@ -416,12 +470,16 @@ class ProfileController extends Controller
                     'avatar_url'  => $programmer->avatar_url,
                 ]
             ]);
+
         } catch (\Exception $e) {
-            Log::error('Profile update error: ' . $e->getMessage());
+            Log::error('Profile update error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'An error occurred while updating profile',
-                'error'   => $e->getMessage()
+                'message' => 'An unexpected error occurred while updating profile. Please try again later.',
+                'error' => config('app.debug') ? $e->getMessage() : null
             ], 500);
         }
     }
