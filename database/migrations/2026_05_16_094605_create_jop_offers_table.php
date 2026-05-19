@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('title');
             $table->string('company_name');
             $table->foreignId('programmer_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->text('description');
             $table->string('salary_range');
             $table->enum('job_type',['full-time','part-time','freelance']);

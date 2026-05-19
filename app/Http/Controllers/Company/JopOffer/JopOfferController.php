@@ -14,6 +14,7 @@ class JopOfferController extends Controller
     public function store(SendJopOfferRequest $request)
     {
         $data = $request->validated();
+        $data['company_id'] = auth()->user()->company->id;
         $data['company_name'] = auth()->user()->company->company_name ?? auth()->user()->full_name;
         $jopOffer = JopOffer::create($data);
         $programmer = Programmer::where('id', $request->programmer_id)->first();
@@ -26,7 +27,7 @@ class JopOfferController extends Controller
 
     public function index()
     {
-        $jopOffers = JopOffer::where('company_id', auth()->user()->id)->paginate(10);
+        $jopOffers = JopOffer::where('company_id', auth()->user()->company->id)->paginate(10);
 
         return response()->json([
             'message' => 'Jop Offers fetched successfully',
