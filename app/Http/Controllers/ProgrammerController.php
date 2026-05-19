@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 
 class ProgrammerController extends Controller
@@ -406,7 +407,6 @@ class ProgrammerController extends Controller
      *     @OA\Response(response=422, description="Validation error")
      * )
      */
-   
 
 public function updateProfile(Request $request)
 {
@@ -423,11 +423,16 @@ public function updateProfile(Request $request)
 
         Log::info('Profile update request data:', $request->all());
 
-        // تعديل قواعد التحقق: استخدام جدول programmers للـ user_name
         $validator = Validator::make($request->all(), [
             'full_name'    => 'sometimes|required|string|max:255',
-            'user_name'    => 'sometimes|required|string|max:255|unique:programmers,user_name,' . $programmer->id, // تغيير إلى programmers
-            'email'        => 'sometimes|required|email|unique:users,email,' . $user->id,
+            'user_name'    => [
+                'sometimes',
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('programmers', 'user_name')->ignore($programmer->id),
+            ],
+            // تم إزالة email من القواعد
             'bio'          => 'nullable|string|max:1000',
             'track'        => 'nullable|string|max:100',
             'avatar'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
@@ -442,25 +447,21 @@ public function updateProfile(Request $request)
             ], 422);
         }
 
-        // تحديث جدول users (الحقول الموجودة فعلاً: full_name, email)
+        // تحديث جدول users (فقط full_name، بدون email)
         $userUpdated = false;
         if ($request->has('full_name')) {
             $user->full_name = $request->input('full_name');
             $userUpdated = true;
         }
-        if ($request->has('email')) {
-            $user->email = $request->input('email');
-            $userUpdated = true;
-        }
-        // إزالة محاولة تعيين user_name على $user
+        // تم إزالة تحديث email
         if ($userUpdated) {
             $user->save();
         }
 
-        // تحديث جدول programmers (بما فيه user_name)
+        // تحديث جدول programmers
         $programmerUpdated = false;
         if ($request->has('user_name')) {
-            $programmer->user_name = $request->input('user_name'); // إضافة هذا السطر
+            $programmer->user_name = $request->input('user_name');
             $programmerUpdated = true;
         }
         if ($request->has('bio')) {
@@ -472,7 +473,7 @@ public function updateProfile(Request $request)
             $programmerUpdated = true;
         }
 
-        // معالجة الصورة (نفس الكود)
+        // معالجة الصورة
         if ($request->hasFile('avatar')) {
             if ($programmer->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $programmer->avatar_url))) {
                 Storage::disk('public')->delete(str_replace('/storage/', '', $programmer->avatar_url));
@@ -489,7 +490,6 @@ public function updateProfile(Request $request)
             $programmer->save();
         }
 
-        // إعادة تحميل البيانات
         $programmer->refresh();
         $user->refresh();
 
@@ -498,9 +498,9 @@ public function updateProfile(Request $request)
             'message' => 'Profile updated successfully',
             'data' => [
                 'id'          => $programmer->id,
-                'user_name'   => $programmer->user_name, // الآن من جدول programmers
+                'user_name'   => $programmer->user_name,
                 'full_name'   => $user->full_name,
-                'email'       => $user->email,
+                'email'       => $user->email, // يبقى كما هو دون تغيير
                 'bio'         => $programmer->bio,
                 'track'       => $programmer->track,
                 'avatar_url'  => $programmer->avatar_url,
@@ -514,5 +514,30 @@ public function updateProfile(Request $request)
             'error' => $e->getMessage()
         ], 500);
     }
+}
+    public function myProfile()
+{
+    $user = Auth::user();
+    if (!$user || $user->role !== 'programmer') {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $programmer = $user->programmer;
+    if (!$programmer) {
+        return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'id'         => $programmer->id,
+            'user_name'  => $programmer->user_name,
+            'full_name'  => $user->full_name,
+            'email'      => $user->email,
+            'bio'        => $programmer->bio,
+            'track'      => $programmer->track,
+            'avatar_url' => $programmer->avatar_url,
+        ]
+    ]);
 }
 }
