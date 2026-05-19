@@ -407,9 +407,6 @@ class ProgrammerController extends Controller
      *     @OA\Response(response=422, description="Validation error")
      * )
      */
-
-
-
 public function myProfile()
 {
     $user = Auth::user();
@@ -426,7 +423,7 @@ public function myProfile()
         'success' => true,
         'data' => [
             'id'         => $programmer->id,
-            'user_name'  => $programmer->user_name,
+            'user_name'  => $programmer->user_name,      // من جدول programmers
             'full_name'  => $user->full_name,
             'email'      => $user->email,
             'bio'        => $programmer->bio,
@@ -451,7 +448,7 @@ public function updateProfile(Request $request)
 
         Log::info('Profile update request data:', $request->all());
 
-        // بناء القواعد الأساسية
+        // القواعد الأساسية
         $rules = [
             'full_name'    => 'sometimes|required|string|max:255',
             'bio'          => 'nullable|string|max:1000',
@@ -460,11 +457,10 @@ public function updateProfile(Request $request)
             'avatar_url'   => 'nullable|url|max:255',
         ];
 
-        // إضافة قاعدة user_name فقط إذا تم إرساله وتغيرت قيمته فعلاً
+        // معالجة user_name فقط إذا تغيرت قيمته
         if ($request->has('user_name')) {
             $newUserName = $request->input('user_name');
             if ($newUserName !== $programmer->user_name) {
-                // تحقق من uniqueness في جدول programmers
                 $rules['user_name'] = [
                     'required',
                     'string',
@@ -472,12 +468,11 @@ public function updateProfile(Request $request)
                     Rule::unique('programmers', 'user_name')->ignore($programmer->id)
                 ];
             } else {
-                // نفس القيمة القديمة، لا نحتاج unique
                 $rules['user_name'] = 'sometimes|required|string|max:255';
             }
         }
 
-        // لا نضيف email أبداً في القواعد ولا نحدثه
+        // لا نضيف email في القواعد أبداً
 
         $validator = Validator::make($request->all(), $rules);
 
@@ -489,13 +484,9 @@ public function updateProfile(Request $request)
             ], 422);
         }
 
-        // تحديث جدول users (فقط full_name)
-        $userUpdated = false;
+        // تحديث جدول users (فقط full_name، وليس email)
         if ($request->has('full_name')) {
             $user->full_name = $request->input('full_name');
-            $userUpdated = true;
-        }
-        if ($userUpdated) {
             $user->save();
         }
 
@@ -556,4 +547,5 @@ public function updateProfile(Request $request)
         ], 500);
     }
 }
+
 }
