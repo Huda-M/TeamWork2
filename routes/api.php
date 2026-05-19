@@ -184,7 +184,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::prefix('profile')->group(function () {
     Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
-    Route::put('/update', [ProfileController::class, 'updateProfile']);
+    Route::post('/update', [ProfileController::class, 'updateProfile']);
     Route::get('/my-stats', [ProfileController::class, 'myStats']);
     Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
     Route::get('/team-members/{projectId}/to-evaluate', [ProfileController::class, 'teamMembersToEvaluate']);
