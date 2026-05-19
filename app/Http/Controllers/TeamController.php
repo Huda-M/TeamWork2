@@ -8,6 +8,7 @@ use App\Models\TeamInvitation;
 use App\Models\TeamJoinRequest;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Models\Project;
 use App\Services\TeamMatchingService;
 use App\Services\AITeamRecommendationService;
 use Illuminate\Http\Request;
@@ -534,7 +535,7 @@ public function store(Request $request)
             ], 404);
         }
 
-        // التحقق من صحة البيانات (تم تغيير exists:users,user_name إلى exists:users,username)
+        // التحقق من صحة البيانات (التحقق من وجود user_name في جدول programmers)
         $validated = $request->validate([
             'name'             => 'required|string|max:255',
             'description'      => 'required|string|min:10',
@@ -545,7 +546,7 @@ public function store(Request $request)
             'required_tracks'  => 'required|array|min:1',
             'required_tracks.*'=> 'string|max:50',
             'invitations'      => 'nullable|array',
-            'invitations.*'    => 'string|exists:users,username',  // ✅ تم التصحيح هنا
+            'invitations.*'    => 'string|exists:programmers,user_name', // ✅ التحقق من جدول programmers
         ]);
 
         if (!$validated['is_public'] && empty($validated['invitations'])) {
@@ -589,19 +590,22 @@ public function store(Request $request)
         $invitationsSent = [];
         if (!$validated['is_public'] && !empty($validated['invitations'])) {
             foreach ($validated['invitations'] as $username) {
-                if ($username === $user->username) {  // ✅ هنا أيضاً استخدمنا username
+                // تجنب دعوة المنشئ لنفسه باستخدام user_name من جدول programmers
+                if ($username === $programmer->user_name) {
                     continue;
                 }
 
-                $invitedUser = User::where('username', $username)->first();  // ✅ تم التصحيح
-                if (!$invitedUser || $invitedUser->role !== 'programmer') {
-                    Log::warning("Invalid invitation: user '$username' is not a programmer.");
+                // البحث عن المبرمج المدعو من جدول programmers
+                $invitedProgrammer = Programmer::where('user_name', $username)->first();
+                if (!$invitedProgrammer) {
+                    Log::warning("Programmer not found for username: '$username'");
                     continue;
                 }
 
-                $invitedProgrammer = $invitedUser->programmer;
-                if (!$invitedProgrammer || !$invitedUser->profile_completed) {
-                    Log::warning("Programmer profile incomplete or missing for '$username'.");
+                // التحقق من اكتمال البروفايل (يمكنك تعديل الشرط حسب وجود الحقل)
+                $invitedUser = $invitedProgrammer->user;
+                if (!$invitedUser || !$invitedUser->profile_completed) {
+                    Log::warning("Profile incomplete for programmer '$username'.");
                     continue;
                 }
 
