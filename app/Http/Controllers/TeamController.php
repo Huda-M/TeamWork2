@@ -535,7 +535,6 @@ public function store(Request $request)
             ], 404);
         }
 
-        // التحقق من صحة البيانات (التحقق من وجود user_name في جدول programmers)
         $validated = $request->validate([
             'name'             => 'required|string|max:255',
             'description'      => 'required|string|min:10',
@@ -546,7 +545,7 @@ public function store(Request $request)
             'required_tracks'  => 'required|array|min:1',
             'required_tracks.*'=> 'string|max:50',
             'invitations'      => 'nullable|array',
-            'invitations.*'    => 'string|exists:programmers,user_name', // ✅ التحقق من جدول programmers
+            'invitations.*'    => 'string|exists:programmers,user_name',
         ]);
 
         if (!$validated['is_public'] && empty($validated['invitations'])) {
@@ -556,14 +555,23 @@ public function store(Request $request)
             ], 422);
         }
 
-        // إنشاء مشروع
+        // إنشاء مشروع بالأعمدة الجديدة
         $project = Project::create([
-            'name'            => $validated['name'],
-            'description'     => $validated['description'],
-            'github_url'      => $validated['github_url'],
-            'categories'      => json_encode($validated['categories']),
-            'required_tracks' => json_encode($validated['required_tracks']),
-            'created_by'      => $programmer->id,
+            'title'             => $validated['name'],
+            'description'       => $validated['description'],
+            'github_url'        => $validated['github_url'],
+            'categories'        => json_encode($validated['categories']),
+            'required_tracks'   => json_encode($validated['required_tracks']),
+            'category_name'     => $validated['categories'][0] ?? null, // للإبقاء على التوافق
+            'status'            => 'pending',
+            'difficulty'        => 'intermediate', // يمكن إضافته للطلب لاحقاً
+            'estimated_duration_days' => 30,
+            'max_team_size'     => 5,
+            'num_of_team'       => 1,
+            'user_id'           => $programmer->user_id,
+            'team_size'         => 5,
+            'min_team_size'     => 2,
+            'max_teams'         => 1,
         ]);
 
         // إنشاء فريق
@@ -586,42 +594,25 @@ public function store(Request $request)
             'joined_by'     => $programmer->id,
         ]);
 
-        // معالجة الدعوات
+        // معالجة الدعوات (نفس الكود السابق)
         $invitationsSent = [];
         if (!$validated['is_public'] && !empty($validated['invitations'])) {
             foreach ($validated['invitations'] as $username) {
-                // تجنب دعوة المنشئ لنفسه باستخدام user_name من جدول programmers
-                if ($username === $programmer->user_name) {
-                    continue;
-                }
+                if ($username === $programmer->user_name) continue;
 
-                // البحث عن المبرمج المدعو من جدول programmers
                 $invitedProgrammer = Programmer::where('user_name', $username)->first();
-                if (!$invitedProgrammer) {
-                    Log::warning("Programmer not found for username: '$username'");
+                if (!$invitedProgrammer || !$invitedProgrammer->user->profile_completed) {
+                    Log::warning("Invalid or incomplete programmer: $username");
                     continue;
                 }
-
-                // التحقق من اكتمال البروفايل (يمكنك تعديل الشرط حسب وجود الحقل)
-                $invitedUser = $invitedProgrammer->user;
-                if (!$invitedUser || !$invitedUser->profile_completed) {
-                    Log::warning("Profile incomplete for programmer '$username'.");
-                    continue;
-                }
-
                 if ($invitedProgrammer->is_in_team) {
-                    Log::warning("Programmer '$username' is already in another team.");
+                    Log::warning("Already in team: $username");
                     continue;
                 }
-
                 $existing = TeamInvitation::where('team_id', $team->id)
                     ->where('programmer_id', $invitedProgrammer->id)
-                    ->where('status', 'pending')
-                    ->first();
-                if ($existing) {
-                    Log::warning("Pending invitation already exists for '$username'.");
-                    continue;
-                }
+                    ->where('status', 'pending')->first();
+                if ($existing) continue;
 
                 $invitation = TeamInvitation::create([
                     'team_id'      => $team->id,
@@ -646,21 +637,8 @@ public function store(Request $request)
             'success' => true,
             'message' => 'Team created successfully',
             'data' => [
-                'project' => [
-                    'id'          => $project->id,
-                    'name'        => $project->name,
-                    'description' => $project->description,
-                    'github_url'  => $project->github_url,
-                    'categories'  => json_decode($project->categories, true),
-                    'required_tracks' => json_decode($project->required_tracks, true),
-                ],
-                'team' => [
-                    'id'          => $team->id,
-                    'name'        => $team->name,
-                    'is_public'   => $team->is_public,
-                    'status'      => $team->status,
-                    'join_code'   => $team->join_code,
-                ],
+                'project' => $project->fresh(),
+                'team' => $team,
                 'invitations_sent' => $invitationsSent,
             ]
         ], 201);
@@ -675,7 +653,7 @@ public function store(Request $request)
         ], 500);
     }
 }
-/**
+    /**
      * @OA\Post(
      *     path="/api/teams/{id}/invite",
      *     operationId="inviteByUsername",
