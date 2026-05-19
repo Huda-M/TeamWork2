@@ -413,26 +413,20 @@ public function updateProfile(Request $request)
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only programmers can update their profile'
-            ], 403);
+            return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
         }
 
         $programmer = $user->programmer;
         if (!$programmer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Programmer profile not found'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // تسجيل البيانات القادمة للمساعدة في التصحيح (يمكنك إزالتها بعد التأكد)
         Log::info('Profile update request data:', $request->all());
 
+        // تعديل قواعد التحقق: استخدام جدول programmers للـ user_name
         $validator = Validator::make($request->all(), [
             'full_name'    => 'sometimes|required|string|max:255',
-            'user_name'    => 'sometimes|required|string|max:255|unique:users,user_name,' . $user->id,
+            'user_name'    => 'sometimes|required|string|max:255|unique:programmers,user_name,' . $programmer->id, // تغيير إلى programmers
             'email'        => 'sometimes|required|email|unique:users,email,' . $user->id,
             'bio'          => 'nullable|string|max:1000',
             'track'        => 'nullable|string|max:100',
@@ -448,26 +442,27 @@ public function updateProfile(Request $request)
             ], 422);
         }
 
-        // تحديث جدول users (إذا وُجدت القيم في الطلب)
+        // تحديث جدول users (الحقول الموجودة فعلاً: full_name, email)
         $userUpdated = false;
         if ($request->has('full_name')) {
             $user->full_name = $request->input('full_name');
-            $userUpdated = true;
-        }
-        if ($request->has('user_name')) {
-            $user->user_name = $request->input('user_name');
             $userUpdated = true;
         }
         if ($request->has('email')) {
             $user->email = $request->input('email');
             $userUpdated = true;
         }
+        // إزالة محاولة تعيين user_name على $user
         if ($userUpdated) {
             $user->save();
         }
 
-        // تحديث جدول programmers
+        // تحديث جدول programmers (بما فيه user_name)
         $programmerUpdated = false;
+        if ($request->has('user_name')) {
+            $programmer->user_name = $request->input('user_name'); // إضافة هذا السطر
+            $programmerUpdated = true;
+        }
         if ($request->has('bio')) {
             $programmer->bio = $request->input('bio');
             $programmerUpdated = true;
@@ -477,9 +472,8 @@ public function updateProfile(Request $request)
             $programmerUpdated = true;
         }
 
-        // معالجة الصورة المرفوعة أو رابط الصورة
+        // معالجة الصورة (نفس الكود)
         if ($request->hasFile('avatar')) {
-            // حذف الصورة القديمة إن وجدت
             if ($programmer->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $programmer->avatar_url))) {
                 Storage::disk('public')->delete(str_replace('/storage/', '', $programmer->avatar_url));
             }
@@ -495,7 +489,7 @@ public function updateProfile(Request $request)
             $programmer->save();
         }
 
-        // إعادة تحميل العلاقة user للتأكد من أحدث البيانات
+        // إعادة تحميل البيانات
         $programmer->refresh();
         $user->refresh();
 
@@ -504,7 +498,7 @@ public function updateProfile(Request $request)
             'message' => 'Profile updated successfully',
             'data' => [
                 'id'          => $programmer->id,
-                'user_name'   => $user->user_name,
+                'user_name'   => $programmer->user_name, // الآن من جدول programmers
                 'full_name'   => $user->full_name,
                 'email'       => $user->email,
                 'bio'         => $programmer->bio,
