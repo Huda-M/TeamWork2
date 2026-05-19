@@ -1,5 +1,39 @@
 <?php
 
+/**
+ * @OA\OpenApi(
+ *     @OA\Info(
+ *         version="1.0.0",
+ *         title="TeamWork API",
+ *         description="API Documentation for Team Work System",
+ *         @OA\Contact(
+ *             email="support@teamwork.com"
+ *         ),
+ *         @OA\License(
+ *             name="Apache 2.0",
+ *             url="https://www.apache.org/licenses/LICENSE-2.0.html"
+ *         )
+ *     ),
+ *     @OA\Server(
+ *         url="https://teamwork2-main-opmxfq.free.laravel.cloud",
+ *         description="Production Server"
+ *     ),
+ *     @OA\Server(
+ *         url="http://localhost:8000",
+ *         description="Development Server"
+ *     )
+ * )
+ * 
+ * @OA\SecurityScheme(
+ *     type="http",
+ *     description="Login with username and password to get the authentication token",
+ *     name="Token",
+ *     in="header",
+ *     scheme="bearer",
+ *     bearerFormat="JWT",
+ *     securityScheme="Bearer"
+ * )
+ */
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisteredUserController;
