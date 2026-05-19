@@ -408,6 +408,34 @@ class ProgrammerController extends Controller
      * )
      */
 
+
+
+public function myProfile()
+{
+    $user = Auth::user();
+    if (!$user || $user->role !== 'programmer') {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $programmer = $user->programmer;
+    if (!$programmer) {
+        return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'id'         => $programmer->id,
+            'user_name'  => $programmer->user_name,
+            'full_name'  => $user->full_name,
+            'email'      => $user->email,
+            'bio'        => $programmer->bio,
+            'track'      => $programmer->track,
+            'avatar_url' => $programmer->avatar_url,
+        ]
+    ]);
+}
+
 public function updateProfile(Request $request)
 {
     try {
@@ -423,7 +451,7 @@ public function updateProfile(Request $request)
 
         Log::info('Profile update request data:', $request->all());
 
-        // بناء قواعد التحقق الأساسية
+        // بناء القواعد الأساسية
         $rules = [
             'full_name'    => 'sometimes|required|string|max:255',
             'bio'          => 'nullable|string|max:1000',
@@ -432,17 +460,24 @@ public function updateProfile(Request $request)
             'avatar_url'   => 'nullable|url|max:255',
         ];
 
-        // إضافة قاعدة التحقق لـ user_name فقط إذا تم إرساله وقيمته مختلفة عن القيمة القديمة
+        // إضافة قاعدة user_name فقط إذا تم إرساله وتغيرت قيمته فعلاً
         if ($request->has('user_name')) {
             $newUserName = $request->input('user_name');
             if ($newUserName !== $programmer->user_name) {
-                // إذا كان مختلفاً، أضف قاعدة unique
-                $rules['user_name'] = 'required|string|max:255|unique:programmers,user_name';
+                // تحقق من uniqueness في جدول programmers
+                $rules['user_name'] = [
+                    'required',
+                    'string',
+                    'max:255',
+                    Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+                ];
             } else {
-                // إذا كان نفس القيمة، لا حاجة للتحقق من uniqueness، فقط قواعد الشكل
+                // نفس القيمة القديمة، لا نحتاج unique
                 $rules['user_name'] = 'sometimes|required|string|max:255';
             }
         }
+
+        // لا نضيف email أبداً في القواعد ولا نحدثه
 
         $validator = Validator::make($request->all(), $rules);
 
@@ -455,8 +490,12 @@ public function updateProfile(Request $request)
         }
 
         // تحديث جدول users (فقط full_name)
+        $userUpdated = false;
         if ($request->has('full_name')) {
             $user->full_name = $request->input('full_name');
+            $userUpdated = true;
+        }
+        if ($userUpdated) {
             $user->save();
         }
 
@@ -516,30 +555,5 @@ public function updateProfile(Request $request)
             'error' => $e->getMessage()
         ], 500);
     }
-}
-    public function myProfile()
-{
-    $user = Auth::user();
-    if (!$user || $user->role !== 'programmer') {
-        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-    }
-
-    $programmer = $user->programmer;
-    if (!$programmer) {
-        return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-    }
-
-    return response()->json([
-        'success' => true,
-        'data' => [
-            'id'         => $programmer->id,
-            'user_name'  => $programmer->user_name,
-            'full_name'  => $user->full_name,
-            'email'      => $user->email,
-            'bio'        => $programmer->bio,
-            'track'      => $programmer->track,
-            'avatar_url' => $programmer->avatar_url,
-        ]
-    ]);
 }
 }
