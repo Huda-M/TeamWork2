@@ -349,40 +349,171 @@ public function softDeleteTeam($id)
     return response()->json(['success' => true, 'message' => 'Team soft deleted']);
 }
 /**
-     * @OA\Post(
-     *     path="/api/teams",
-     *     operationId="createTeam",
-     *     tags={"Teams"},
-     *     summary="Create a new team",
-     *     description="Only programmers can create teams. The creator becomes the leader. Invitations can be sent to other programmers.",
-     *     security={{"Bearer": {}}},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             required={"name"},
-     *             @OA\Property(property="name", type="string", example="Frontend Squad"),
-     *             @OA\Property(property="description", type="string", example="React experts"),
-     *             @OA\Property(property="is_public", type="boolean", example=false),
-     *             @OA\Property(property="github_url", type="string", format="url", example="https://github.com/org/repo"),
-     *             @OA\Property(property="category", type="array", @OA\Items(type="string"), example={"Frontend","UI/UX"}),
-     *             @OA\Property(property="required_role", type="array", @OA\Items(type="string"), example={"frontend","designer"}),
-     *             @OA\Property(property="invitations", type="array", @OA\Items(type="integer"), description="Array of programmer IDs to invite", example={7,12})
-     *         )
-     *     ),
-     *     @OA\Response(
-     *         response=201,
-     *         description="Team created successfully",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="success", type="boolean"),
-     *             @OA\Property(property="message", type="string"),
-     *             @OA\Property(property="data", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=403, description="Only programmers can create teams"),
-     *     @OA\Response(response=422, description="Validation error"),
-     *     @OA\Response(response=500, description="Server error")
-     * )
-     */
+ * @OA\Post(
+ *     path="/api/teams",
+ *     operationId="createTeam",
+ *     tags={"Teams"},
+ *     summary="Create a new team",
+ *     description="Create a new team with full configuration including type (public/private), team details, categories, required skills, and optional invitations for private teams.",
+ *     security={{"Bearer": {}}},
+ *     @OA\RequestBody(
+ *         required=true,
+ *         @OA\JsonContent(
+ *             required={"name", "description", "is_public", "github_url", "categories", "skills"},
+ *             @OA\Property(
+ *                 property="name",
+ *                 type="string",
+ *                 maxLength=255,
+ *                 example="Frontend Squad",
+ *                 description="Team name"
+ *             ),
+ *             @OA\Property(
+ *                 property="description",
+ *                 type="string",
+ *                 minLength=10,
+ *                 example="A team focused on React and Vue.js development",
+ *                 description="Team description (minimum 10 characters)"
+ *             ),
+ *             @OA\Property(
+ *                 property="is_public",
+ *                 type="boolean",
+ *                 example=true,
+ *                 description="Team visibility: true for public, false for private"
+ *             ),
+ *             @OA\Property(
+ *                 property="github_url",
+ *                 type="string",
+ *                 format="url",
+ *                 example="https://github.com/org/team-repo",
+ *                 description="GitHub repository URL"
+ *             ),
+ *             @OA\Property(
+ *                 property="categories",
+ *                 type="array",
+ *                 minItems=1,
+ *                 example={"Frontend", "UI/UX"},
+ *                 description="Team categories (can select multiple)",
+ *                 @OA\Items(
+ *                     type="string",
+ *                     maxLength=100
+ *                 )
+ *             ),
+ *             @OA\Property(
+ *                 property="skills",
+ *                 type="array",
+ *                 minItems=1,
+ *                 example={1, 2, 5},
+ *                 description="Required skills (array of skill IDs)",
+ *                 @OA\Items(
+ *                     type="integer"
+ *                 )
+ *             ),
+ *             @OA\Property(
+ *                 property="max_members",
+ *                 type="integer",
+ *                 minimum=2,
+ *                 maximum=20,
+ *                 example=5,
+ *                 description="Maximum team members (optional, default: 5)"
+ *             ),
+ *             @OA\Property(
+ *                 property="experience_level",
+ *                 type="string",
+ *                 enum={"beginner", "intermediate", "advanced", "expert"},
+ *                 example="intermediate",
+ *                 description="Required experience level (optional)"
+ *             ),
+ *             @OA\Property(
+ *                 property="invitations",
+ *                 type="array",
+ *                 example={7, 12, 15},
+ *                 description="Programmer IDs to invite (only for private teams, required if is_public=false)",
+ *                 @OA\Items(
+ *                     type="integer"
+ *                 )
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=201,
+ *         description="Team created successfully",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(property="message", type="string", example="Team created successfully"),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(
+ *                     property="team",
+ *                     type="object",
+ *                     @OA\Property(property="id", type="integer"),
+ *                     @OA\Property(property="name", type="string"),
+ *                     @OA\Property(property="description", type="string"),
+ *                     @OA\Property(property="is_public", type="boolean"),
+ *                     @OA\Property(property="github_url", type="string"),
+ *                     @OA\Property(property="status", type="string"),
+ *                     @OA\Property(property="max_members", type="integer"),
+ *                     @OA\Property(property="experience_level", type="string"),
+ *                     @OA\Property(
+ *                         property="categories",
+ *                         type="array",
+ *                         @OA\Items(type="string")
+ *                     ),
+ *                     @OA\Property(
+ *                         property="created_by",
+ *                         type="object",
+ *                         @OA\Property(property="id", type="integer"),
+ *                         @OA\Property(property="name", type="string"),
+ *                         @OA\Property(property="role", type="string", example="leader")
+ *                     )
+ *                 ),
+ *                 @OA\Property(
+ *                     property="skills",
+ *                     type="array",
+ *                     description="Required skills names",
+ *                     @OA\Items(type="string")
+ *                 ),
+ *                 @OA\Property(
+ *                     property="invitations_sent",
+ *                     type="array",
+ *                     description="List of sent invitations (for private teams)",
+ *                     @OA\Items(
+ *                         type="object",
+ *                         @OA\Property(property="programmer_id", type="integer"),
+ *                         @OA\Property(property="invitation_id", type="integer")
+ *                     )
+ *                 ),
+ *                 @OA\Property(property="members_count", type="integer", example=1)
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=403,
+ *         description="Only programmers can create teams",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=false),
+ *             @OA\Property(property="message", type="string")
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=422,
+ *         description="Validation error",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=false),
+ *             @OA\Property(property="message", type="string"),
+ *             @OA\Property(property="errors", type="object")
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=500,
+ *         description="Server error",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=false),
+ *             @OA\Property(property="message", type="string")
+ *         )
+ *     )
+ * )
+ */
 
 
 public function store(Request $request)
