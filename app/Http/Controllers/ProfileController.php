@@ -12,11 +12,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
    
-    // 2. عرض إحصائيات المبرمج (اسم، ليفل، تراك، عدد التيمات، عدد التاسكات)
+    // 2. عرض إحصائيات المبرمج
     public function myStats()
     {
         $user = Auth::user();
@@ -40,7 +43,7 @@ class ProfileController extends Controller
             ->whereIn('status', ['todo', 'in_progress', 'review'])
             ->count();
         
-        // حساب الليفل النصي (beginner, junior, senior, expert)
+        // حساب الليفل النصي
         $levelText = $programmer->calculateLevel();
         
         return response()->json([
@@ -60,7 +63,7 @@ class ProfileController extends Controller
         ]);
     }
     
-    // 3. عرض التقييمات التي تلقيتها (team evaluation)
+    // 3. عرض التقييمات التي تلقيتها
     public function myEvaluations()
     {
         $user = Auth::user();
@@ -94,7 +97,7 @@ class ProfileController extends Controller
         ]);
     }
     
-    // 4. عرض أعضاء الفريق لتقييمهم (المستخدم يقيم زملاءه)
+    // 4. عرض أعضاء الفريق لتقييمهم
     public function teamMembersToEvaluate($projectId)
     {
         $user = Auth::user();
@@ -115,7 +118,7 @@ class ProfileController extends Controller
         
         $members = $team->activeMembers()
             ->with('programmer.user')
-            ->where('programmer_id', '!=', $programmer->id) // استبعاد نفسه
+            ->where('programmer_id', '!=', $programmer->id)
             ->get()
             ->map(function($member) {
                 return [
@@ -203,7 +206,7 @@ class ProfileController extends Controller
             'submitted_at' => now(),
         ]);
         
-        // إضافة نجوم للمقيم (5 نجوم لكل تقييم)
+        // إضافة نجوم للمقيم
         $evaluated->addStars(5);
         
         return response()->json([
@@ -283,6 +286,119 @@ class ProfileController extends Controller
                 'members' => $members,
             ]
         ]);
+    }
+
+    // UPDATE PROFILE METHOD - الـ method الناقص
+    public function updateProfile(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user || $user->role !== 'programmer') {
+                return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
+            }
+
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+            }
+
+            // قواعد التحقق الأساسية
+            $rules = [
+                'full_name'    => 'sometimes|required|string|max:255',
+                'bio'          => 'nullable|string|max:1000',
+                'track'        => 'nullable|string|max:100',
+                'avatar'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+                'avatar_url'   => 'nullable|url|max:255',
+            ];
+
+            // معالجة user_name فقط إذا ورد في الطلب وتغيرت قيمته
+            if ($request->has('user_name')) {
+                $newUserName = $request->input('user_name');
+                if ($newUserName !== $programmer->user_name) {
+                    $rules['user_name'] = [
+                        'required',
+                        'string',
+                        'max:255',
+                        Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+                    ];
+                } else {
+                    $rules['user_name'] = 'sometimes|required|string|max:255';
+                }
+            }
+
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // 1. تحديث جدول users (الحقول الموجودة فعلاً)
+            if ($request->has('full_name')) {
+                $user->full_name = $request->input('full_name');
+                $user->save();
+            }
+
+            // 2. تحديث جدول programmers
+            $programmerUpdated = false;
+            if ($request->has('user_name')) {
+                $programmer->user_name = $request->input('user_name');
+                $programmerUpdated = true;
+            }
+            if ($request->has('bio')) {
+                $programmer->bio = $request->input('bio');
+                $programmerUpdated = true;
+            }
+            if ($request->has('track')) {
+                $programmer->track = $request->input('track');
+                $programmerUpdated = true;
+            }
+
+            // معالجة الصورة
+            if ($request->hasFile('avatar')) {
+                if ($programmer->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $programmer->avatar_url))) {
+                    Storage::disk('public')->delete(str_replace('/storage/', '', $programmer->avatar_url));
+                }
+                $path = $request->file('avatar')->store('avatars', 'public');
+                $programmer->avatar_url = Storage::url($path);
+                $programmerUpdated = true;
+            } elseif ($request->has('avatar_url') && $request->filled('avatar_url')) {
+                $programmer->avatar_url = $request->input('avatar_url');
+                $programmerUpdated = true;
+            }
+
+            if ($programmerUpdated) {
+                $programmer->save();
+            }
+
+            // إعادة تحميل البيانات لضمان الحداثة
+            $programmer->refresh();
+            $user->refresh();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile updated successfully',
+                'data' => [
+                    'id'          => $programmer->id,
+                    'user_name'   => $programmer->user_name,
+                    'full_name'   => $user->full_name,
+                    'email'       => $user->email,
+                    'bio'         => $programmer->bio,
+                    'track'       => $programmer->track,
+                    'avatar_url'  => $programmer->avatar_url,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Profile update error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while updating profile',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
     }
     
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
