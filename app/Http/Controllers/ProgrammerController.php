@@ -341,4 +341,158 @@ class ProgrammerController extends Controller
             'data' => $payload
         ]);
     }
+    /**
+     * @OA\Get(
+     *     path="/api/profile",
+     *     operationId="getMyProfile",
+     *     tags={"Profile"},
+     *     summary="Get current programmer profile",
+     *     description="Returns the profile data of the authenticated programmer.",
+     *     security={{"Bearer": {}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile data retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="user_name", type="string"),
+     *                 @OA\Property(property="full_name", type="string"),
+     *                 @OA\Property(property="email", type="string"),
+     *                 @OA\Property(property="bio", type="string"),
+     *                 @OA\Property(property="track", type="string"),
+     *                 @OA\Property(property="avatar_url", type="string"),
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden - not a programmer"),
+     *     @OA\Response(response=404, description="Profile not found")
+     * )
+     */
+    public function getProfile()
+    {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only programmers can access their profile'
+            ], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'          => $programmer->id,
+                'user_name'   => $user->user_name,
+                'full_name'   => $user->full_name,
+                'email'       => $user->email,
+                'bio'         => $programmer->bio,
+                'track'       => $programmer->track,
+                'avatar_url'  => $programmer->avatar_url,
+            ]
+        ]);
+    }
+
+    /**
+     * @OA\Put(
+     *     path="/api/profile/update",
+     *     operationId="updateMyProfile",
+     *     tags={"Profile"},
+     *     summary="Update current programmer profile",
+     *     description="Allows a programmer to update their profile information (full name, bio, track, avatar_url, etc.).",
+     *     security={{"Bearer": {}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="full_name", type="string", example="Ahmed Mohamed"),
+     *             @OA\Property(property="bio", type="string", example="Senior Developer with 5 years experience"),
+     *             @OA\Property(property="track", type="string", example="Web Development"),
+     *             @OA\Property(property="avatar_url", type="string", format="url", example="https://example.com/avatar.jpg"),
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile updated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only programmers can update their profile'
+            ], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'full_name'    => 'sometimes|string|max:255',
+            'bio'          => 'nullable|string|max:1000',
+            'track'        => 'nullable|string|max:100',
+            'avatar_url'   => 'nullable|url|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // تحديث البيانات في جدول users
+        if ($request->has('full_name')) {
+            $user->full_name = $request->full_name;
+            $user->save();
+        }
+
+        // تحديث البيانات في جدول programmers
+        $updatableFields = ['bio', 'track', 'avatar_url'];
+        foreach ($updatableFields as $field) {
+            if ($request->has($field)) {
+                $programmer->$field = $request->$field;
+            }
+        }
+        $programmer->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'data' => [
+                'id'          => $programmer->id,
+                'user_name'   => $user->user_name,
+                'full_name'   => $user->full_name,
+                'email'       => $user->email,
+                'bio'         => $programmer->bio,
+                'track'       => $programmer->track,
+                'avatar_url'  => $programmer->avatar_url,
+            ]
+        ]);
+    }
 }
