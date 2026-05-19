@@ -14,167 +14,49 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Annotations as OA;
 
-
-
 /**
- * @OA\Tag(
- *     name="Tasks",
- *     description="Task Management API endpoints"
+ * @OA\Info(
+ *     version="1.0.0",
+ *     title="TeamWork API",
+ *     description="API Documentation"
+ * )
+ *
+ * @OA\SecurityScheme(
+ *     securityScheme="bearerAuth",
+ *     type="http",
+ *     scheme="bearer"
  * )
  */
-class TaskController
+class TaskController extends Controller
 {
     /**
-     * الإضافة الأولى: Response Models 
-     */
-    
-    // قبل دالة getMyTasks، أضف هذا التعليق:
-    /**
-     * @OA\Response(
-     *     response=200,
-     *     description="تم جلب قائمة المهام بنجاح",
-     *     @OA\JsonContent(
-     *         type="object",
-     *         @OA\Property(property="success", type="boolean", example=true),
-     *         @OA\Property(
-     *             property="data",
-     *             type="object",
-     *             @OA\Property(property="current_page", type="integer", example=1),
-     *             @OA\Property(property="total", type="integer"),
-     *             @OA\Property(property="per_page", type="integer", example=20),
-     *             @OA\Property(
-     *                 property="data",
-     *                 type="array",
-     *                 @OA\Items(
-     *                     type="object",
-     *                     @OA\Property(property="id", type="integer"),
-     *                     @OA\Property(property="title", type="string"),
-     *                     @OA\Property(property="description", type="string"),
-     *                     @OA\Property(property="status", type="string", enum={"todo", "in_progress", "review", "done", "cancelled"}),
-     *                     @OA\Property(property="priority", type="integer", example=1),
-     *                     @OA\Property(property="deadline", type="string", format="date-time"),
-     *                     @OA\Property(property="estimated_hours", type="number"),
-     *                     @OA\Property(property="actual_hours", type="number"),
-     *                     @OA\Property(property="created_at", type="string", format="date-time"),
-     *                     @OA\Property(property="completed_at", type="string", format="date-time", nullable=true)
-     *                 )
-     *             )
-     *         ),
-     *         @OA\Property(property="message", type="string", example="My tasks retrieved successfully")
-     *     )
-     * )
-     * @OA\Response(
-     *     response=401,
-     *     description="Unauthenticated",
-     *     @OA\JsonContent(
-     *         @OA\Property(property="success", type="boolean", example=false),
-     *         @OA\Property(property="message", type="string")
-     *     )
-     * )
-     */
-
-
-    /**
-     * الإضافة الثانية: Error Response Model
-     */
-    
-    /**
-     * @OA\Response(
-     *     response=500,
-     *     description="Server Error",
-     *     @OA\JsonContent(
-     *         @OA\Property(property="success", type="boolean", example=false),
-     *         @OA\Property(property="message", type="string", example="Failed to retrieve your tasks")
-     *     )
-     * )
-     */
-
-
-    /**
-     * الإضافة الثالثة: Request Body Example للـ Store/Update
-     */
-    
-    /**
-     * @OA\RequestBody(
-     *     required=true,
-     *     @OA\JsonContent(
-     *         required={"title", "description", "priority", "deadline", "estimated_hours"},
-     *         @OA\Property(property="title", type="string", example="Fix login bug"),
-     *         @OA\Property(property="description", type="string", example="Fix the authentication issue"),
-     *         @OA\Property(property="priority", type="integer", example=1),
-     *         @OA\Property(property="deadline", type="string", format="date-time", example="2024-12-31T23:59:59Z"),
-     *         @OA\Property(property="estimated_hours", type="number", example=5.5),
-     *         @OA\Property(property="status", type="string", enum={"todo", "in_progress", "review", "done", "cancelled"}, example="todo")
-     *     )
-     * )
-     */
-
-
-    /**
-     * الإضافة الرابعة: Security requirement على كل endpoint
-     */
-    
-    /**
-     * @OA\SecurityScheme(
-     *     type="http",
-     *     description="Login with username and password to get the authentication token",
-     *     name="Token",
-     *     in="header",
-     *     scheme="bearer",
-     *     bearerFormat="JWT",
-     *     securityScheme="Bearer",
-     * )
-     */
-
-    /**
-     * الإضافة الخامسة: Parameter examples
-     */
-    
-    /**
-     * @OA\Parameter(
-     *     name="status",
-     *     in="query",
-     *     description="Filter by task status",
-     *     required=false,
-     *     @OA\Schema(
-     *         type="string",
-     *         enum={"todo", "in_progress", "review", "done", "cancelled"},
-     *         example="in_progress"
-     *     )
-     * )
-     * @OA\Parameter(
-     *     name="team_id",
-     *     in="query",
-     *     description="Filter by team ID",
-     *     required=false,
-     *     @OA\Schema(
-     *         type="integer",
-     *         example=1
-     *     )
-     * )
-     * @OA\Parameter(
-     *     name="page",
-     *     in="query",
-     *     description="Page number for pagination",
-     *     required=false,
-     *     @OA\Schema(
-     *         type="integer",
-     *         default=1,
-     *         example=1
-     *     )
-     * )
-     * @OA\Parameter(
-     *     name="per_page",
-     *     in="query",
-     *     description="Items per page",
-     *     required=false,
-     *     @OA\Schema(
-     *         type="integer",
-     *         default=20,
-     *         example=20
-     *     )
-     * )
-     */
+ * @OA\Get(
+ *     path="/api/tasks/my",
+ *     tags={"Tasks"},
+ *     summary="Get my tasks",
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Parameter(
+ *         name="status",
+ *         in="query",
+ *         required=false,
+ *         @OA\Schema(type="string")
+ *     ),
+ *     @OA\Parameter(
+ *         name="team_id",
+ *         in="query",
+ *         required=false,
+ *         @OA\Schema(type="integer")
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="Success"
+ *     ),
+ *     @OA\Response(
+ *         response=401,
+ *         description="Unauthorized"
+ *     )
+ * )
+ */
 
     public function getMyTasks(Request $request)
     {
@@ -212,6 +94,22 @@ class TaskController
         }
     }
 
+    /**
+ * @OA\Get(
+ *     path="/api/tasks/completed",
+ *     tags={"Tasks"},
+ *     summary="Get completed tasks",
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(
+ *         response=200,
+ *         description="Success"
+ *     ),
+ *     @OA\Response(
+ *         response=403,
+ *         description="Forbidden"
+ *     )
+ * )
+ */
     public function completedTasks(Request $request)
     {
         try {
@@ -271,7 +169,18 @@ class TaskController
             return response()->json(['success' => false, 'message' => 'Failed to fetch completed tasks'], 500);
         }
     }
-
+/**
+ * @OA\Get(
+ *     path="/api/tasks/in-progress",
+ *     tags={"Tasks"},
+ *     summary="Get in-progress tasks",
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(
+ *         response=200,
+ *         description="Success"
+ *     )
+ * )
+ */
     public function inProgressTasks(Request $request)
     {
         try {
@@ -328,7 +237,34 @@ class TaskController
             return response()->json(['success' => false, 'message' => 'Failed to fetch in-progress tasks'], 500);
         }
     }
-
+/**
+ * @OA\Get(
+ *     path="/api/teams/{team}/tasks",
+ *     tags={"Tasks"},
+ *     summary="Get team tasks",
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Parameter(
+ *         name="team",
+ *         in="path",
+ *         required=true,
+ *         @OA\Schema(type="integer")
+ *     ),
+ *     @OA\Parameter(
+ *         name="status",
+ *         in="query",
+ *         required=false,
+ *         @OA\Schema(type="string")
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="Success"
+ *     ),
+ *     @OA\Response(
+ *         response=403,
+ *         description="Forbidden"
+ *     )
+ * )
+ */
     public function getTeamTasks(Team $team, Request $request)
     {
         try {
@@ -381,7 +317,28 @@ class TaskController
             ], 500);
         }
     }
-
+/**
+ * @OA\Get(
+ *     path="/api/tasks/{task}",
+ *     tags={"Tasks"},
+ *     summary="Get single task",
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Parameter(
+ *         name="task",
+ *         in="path",
+ *         required=true,
+ *         @OA\Schema(type="integer")
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="Success"
+ *     ),
+ *     @OA\Response(
+ *         response=403,
+ *         description="Forbidden"
+ *     )
+ * )
+ */
     public function show(Task $task)
     {
         try {
