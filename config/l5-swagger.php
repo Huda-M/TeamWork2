@@ -46,8 +46,8 @@ return [
                  * Absolute paths to directory containing the swagger annotations are stored.
                  */
                 'annotations' => [
-                    base_path('app/Http/Controllers'),
-                ],
+    base_path('app'),
+],
             ],
         ],
     ],
@@ -159,7 +159,7 @@ return [
          * Constants which can be used in annotations
          */
         'constants' => [
-            'L5_SWAGGER_CONST_HOST' => env('L5_SWAGGER_CONST_HOST', 'http://my-default-host.com'),
+            'L5_SWAGGER_CONST_HOST' => env('L5_SWAGGER_CONST_HOST', 'https://teamwork2-main-opmxfq.free.laravel.cloud'),
         ],
     ],
 ];
