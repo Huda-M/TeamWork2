@@ -514,8 +514,6 @@ public function softDeleteTeam($id)
  *     )
  * )
  */
-
-
 public function store(Request $request)
 {
     DB::beginTransaction();
@@ -536,7 +534,7 @@ public function store(Request $request)
             ], 404);
         }
 
-        // 1. التحقق من صحة البيانات المدخلة
+        // التحقق من صحة البيانات (تم تغيير exists:users,user_name إلى exists:users,username)
         $validated = $request->validate([
             'name'             => 'required|string|max:255',
             'description'      => 'required|string|min:10',
@@ -545,12 +543,11 @@ public function store(Request $request)
             'categories'       => 'required|array|min:1',
             'categories.*'     => 'string|max:100',
             'required_tracks'  => 'required|array|min:1',
-            'required_tracks.*'=> 'string|max:50',   // نصوص حرة يكتبها المستخدم
+            'required_tracks.*'=> 'string|max:50',
             'invitations'      => 'nullable|array',
-            'invitations.*'    => 'string|exists:users,user_name',
+            'invitations.*'    => 'string|exists:users,username',  // ✅ تم التصحيح هنا
         ]);
 
-        // 2. إذا كان الفريق خاصاً، فلا بد من وجود دعوات على الأقل
         if (!$validated['is_public'] && empty($validated['invitations'])) {
             return response()->json([
                 'success' => false,
@@ -558,8 +555,8 @@ public function store(Request $request)
             ], 422);
         }
 
-        // 3. إنشاء مشروع جديد (Project)
-        $project = \App\Models\Project::create([
+        // إنشاء مشروع
+        $project = Project::create([
             'name'            => $validated['name'],
             'description'     => $validated['description'],
             'github_url'      => $validated['github_url'],
@@ -568,9 +565,9 @@ public function store(Request $request)
             'created_by'      => $programmer->id,
         ]);
 
-        // 4. إنشاء فريق (Team) مرتبط بالمشروع
-        $team = \App\Models\Team::create([
-            'name'            => $validated['name'],   // نفس اسم المشروع
+        // إنشاء فريق
+        $team = Team::create([
+            'name'            => $validated['name'],
             'project_id'      => $project->id,
             'is_public'       => $validated['is_public'],
             'status'          => 'active',
@@ -579,8 +576,8 @@ public function store(Request $request)
             'join_code'       => $validated['is_public'] ? null : strtoupper(substr(md5(uniqid()), 0, 8)),
         ]);
 
-        // 5. إضافة المنشئ كقائد (leader) في جدول team_members
-        \App\Models\TeamMember::create([
+        // إضافة المنشئ كقائد
+        TeamMember::create([
             'team_id'       => $team->id,
             'programmer_id' => $programmer->id,
             'role'          => 'leader',
@@ -588,16 +585,15 @@ public function store(Request $request)
             'joined_by'     => $programmer->id,
         ]);
 
-        // 6. معالجة الدعوات (للفريق الخاص فقط)
+        // معالجة الدعوات
         $invitationsSent = [];
         if (!$validated['is_public'] && !empty($validated['invitations'])) {
             foreach ($validated['invitations'] as $username) {
-                // لا نرسل دعوة للمنشئ نفسه
-                if ($username === $user->user_name) {
+                if ($username === $user->username) {  // ✅ هنا أيضاً استخدمنا username
                     continue;
                 }
 
-                $invitedUser = \App\Models\User::where('user_name', $username)->first();
+                $invitedUser = User::where('username', $username)->first();  // ✅ تم التصحيح
                 if (!$invitedUser || $invitedUser->role !== 'programmer') {
                     Log::warning("Invalid invitation: user '$username' is not a programmer.");
                     continue;
@@ -614,7 +610,7 @@ public function store(Request $request)
                     continue;
                 }
 
-                $existing = \App\Models\TeamInvitation::where('team_id', $team->id)
+                $existing = TeamInvitation::where('team_id', $team->id)
                     ->where('programmer_id', $invitedProgrammer->id)
                     ->where('status', 'pending')
                     ->first();
@@ -623,7 +619,7 @@ public function store(Request $request)
                     continue;
                 }
 
-                $invitation = \App\Models\TeamInvitation::create([
+                $invitation = TeamInvitation::create([
                     'team_id'      => $team->id,
                     'programmer_id'=> $invitedProgrammer->id,
                     'invited_by'   => $programmer->id,
@@ -642,7 +638,6 @@ public function store(Request $request)
 
         DB::commit();
 
-        // 7. إرجاع استجابة نجاح مع البيانات المخزنة
         return response()->json([
             'success' => true,
             'message' => 'Team created successfully',
@@ -661,7 +656,6 @@ public function store(Request $request)
                     'is_public'   => $team->is_public,
                     'status'      => $team->status,
                     'join_code'   => $team->join_code,
-                    'created_by'  => $programmer->id,
                 ],
                 'invitations_sent' => $invitationsSent,
             ]
