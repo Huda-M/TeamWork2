@@ -423,7 +423,7 @@ public function myProfile()
         'success' => true,
         'data' => [
             'id'         => $programmer->id,
-            'user_name'  => $programmer->user_name,      // من جدول programmers
+            'user_name'  => $programmer->user_name,
             'full_name'  => $user->full_name,
             'email'      => $user->email,
             'bio'        => $programmer->bio,
@@ -446,9 +446,7 @@ public function updateProfile(Request $request)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        Log::info('Profile update request data:', $request->all());
-
-        // القواعد الأساسية
+        // قواعد التحقق الأساسية
         $rules = [
             'full_name'    => 'sometimes|required|string|max:255',
             'bio'          => 'nullable|string|max:1000',
@@ -457,7 +455,7 @@ public function updateProfile(Request $request)
             'avatar_url'   => 'nullable|url|max:255',
         ];
 
-        // معالجة user_name فقط إذا تغيرت قيمته
+        // معالجة user_name فقط إذا ورد في الطلب وتغيرت قيمته
         if ($request->has('user_name')) {
             $newUserName = $request->input('user_name');
             if ($newUserName !== $programmer->user_name) {
@@ -472,7 +470,7 @@ public function updateProfile(Request $request)
             }
         }
 
-        // لا نضيف email في القواعد أبداً
+        // لا نضيف email في القواعد نهائياً
 
         $validator = Validator::make($request->all(), $rules);
 
@@ -484,13 +482,13 @@ public function updateProfile(Request $request)
             ], 422);
         }
 
-        // تحديث جدول users (فقط full_name، وليس email)
+        // 1. تحديث جدول users (الحقول الموجودة فعلاً)
         if ($request->has('full_name')) {
             $user->full_name = $request->input('full_name');
             $user->save();
         }
 
-        // تحديث جدول programmers
+        // 2. تحديث جدول programmers
         $programmerUpdated = false;
         if ($request->has('user_name')) {
             $programmer->user_name = $request->input('user_name');
@@ -522,6 +520,7 @@ public function updateProfile(Request $request)
             $programmer->save();
         }
 
+        // إعادة تحميل البيانات لضمان الحداثة
         $programmer->refresh();
         $user->refresh();
 
@@ -543,9 +542,10 @@ public function updateProfile(Request $request)
         return response()->json([
             'success' => false,
             'message' => 'An error occurred while updating profile',
-            'error' => $e->getMessage()
+            'error'   => $e->getMessage()
         ], 500);
     }
+}
 }
 
 }
