@@ -184,6 +184,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 Route::prefix('profile')->group(function () {
+    Route::get('/', [ProgrammerController::class, 'myProfile']);          
     Route::put('/update', [ProgrammerController::class, 'updateProfile']);
     Route::get('/my-stats', [ProfileController::class, 'myStats']);
     Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
