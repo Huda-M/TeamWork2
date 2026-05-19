@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "echo \"No frontend build required for API-only backend.\"",
+    "build": "echo \"No frontend build required for API-only backend.\""
+  },
+  "devDependencies": {
+    "laravel-echo": "^2.3.4",
+    "pusher-js": "^8.5.0"
+  }
+}

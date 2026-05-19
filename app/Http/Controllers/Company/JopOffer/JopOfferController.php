@@ -26,7 +26,7 @@ class JopOfferController extends Controller
 
     public function index()
     {
-        $jopOffers = JopOffer::all();
+        $jopOffers = JopOffer::where('company_id', auth()->user()->id)->paginate(10);
 
         return response()->json([
             'message' => 'Jop Offers fetched successfully',

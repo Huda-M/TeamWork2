@@ -23,8 +23,7 @@ class AuthController extends Controller
         if (! Auth::attempt($validate)) {
             return response()->json([
                 'message' => 'Email or password is invalid',
-                'status' => 401,
-            ]);
+            ],401);
         }
 
         $user = User::where('email', $request->email)->first();
