@@ -101,6 +101,7 @@ Route::middleware('start.session')->group(function () {
 
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/profile', [ProgrammerController::class, 'myProfile']);
     Route::prefix('company')->group(function () {
         Route::get('/profile', [CompanyController::class, 'showProfile']);
         Route::put('/profile', [CompanyController::class, 'updateProfile']);
