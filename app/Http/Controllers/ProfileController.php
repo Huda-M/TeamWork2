@@ -313,8 +313,8 @@ class ProfileController extends Controller
         ]);
     }
 
-    // UPDATE PROFILE METHOD - الـ method الناقص
-    public function updateProfile(Request $request)
+
+        public function updateProfile(Request $request)
     {
         try {
             $user = Auth::user();
@@ -425,7 +425,6 @@ class ProfileController extends Controller
             ], 500);
         }
     }
-    
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
     public function projectDetails($projectId)
     {
