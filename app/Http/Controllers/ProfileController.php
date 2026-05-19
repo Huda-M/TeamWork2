@@ -15,52 +15,7 @@ use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
-    // 1. تعديل بيانات المبرمج (البروفايل)
-    public function updateProfile(Request $request)
-    {
-        $user = Auth::user();
-        $programmer = $user->programmer;
-        
-        if (!$programmer) {
-            return response()->json(['success' => false, 'message' => 'Programmer not found'], 404);
-        }
-        
-        $validated = $request->validate([
-            'user_name' => 'sometimes|string|unique:programmers,user_name,'.$programmer->id,
-            'phone' => 'nullable|string',
-            'bio' => 'nullable|string',
-            'avatar' => 'nullable|image|max:2048',
-            'track' => 'nullable|string',
-            'experience_level' => 'nullable|in:beginner,junior,senior,expert',
-        ]);
-        
-        if ($request->hasFile('avatar')) {
-            // حذف الصورة القديمة
-            if ($programmer->avatar) {
-                Storage::disk('public')->delete($programmer->avatar);
-            }
-            $path = $request->file('avatar')->store('avatars', 'public');
-            $validated['avatar'] = $path;
-        }
-        
-        $programmer->update($validated);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'data' => [
-                'id' => $programmer->id,
-                'user_name' => $programmer->user_name,
-                'email' => $user->email,
-                'full_name' => $user->full_name,
-                'track' => $programmer->track,
-                'bio' => $programmer->bio,
-                'avatar_url' => $programmer->avatar ? asset('storage/'.$programmer->avatar) : null,
-                'experience_level' => $programmer->experience_level,
-            ]
-        ]);
-    }
-    
+   
     // 2. عرض إحصائيات المبرمج (اسم، ليفل، تراك، عدد التيمات، عدد التاسكات)
     public function myStats()
     {
