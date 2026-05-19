@@ -423,21 +423,28 @@ public function updateProfile(Request $request)
 
         Log::info('Profile update request data:', $request->all());
 
-        $validator = Validator::make($request->all(), [
+        // بناء قواعد التحقق الأساسية
+        $rules = [
             'full_name'    => 'sometimes|required|string|max:255',
-            'user_name'    => [
-                'sometimes',
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('programmers', 'user_name')->ignore($programmer->id),
-            ],
-            // تم إزالة email من القواعد
             'bio'          => 'nullable|string|max:1000',
             'track'        => 'nullable|string|max:100',
             'avatar'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'avatar_url'   => 'nullable|url|max:255',
-        ]);
+        ];
+
+        // إضافة قاعدة التحقق لـ user_name فقط إذا تم إرساله وقيمته مختلفة عن القيمة القديمة
+        if ($request->has('user_name')) {
+            $newUserName = $request->input('user_name');
+            if ($newUserName !== $programmer->user_name) {
+                // إذا كان مختلفاً، أضف قاعدة unique
+                $rules['user_name'] = 'required|string|max:255|unique:programmers,user_name';
+            } else {
+                // إذا كان نفس القيمة، لا حاجة للتحقق من uniqueness، فقط قواعد الشكل
+                $rules['user_name'] = 'sometimes|required|string|max:255';
+            }
+        }
+
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -447,14 +454,9 @@ public function updateProfile(Request $request)
             ], 422);
         }
 
-        // تحديث جدول users (فقط full_name، بدون email)
-        $userUpdated = false;
+        // تحديث جدول users (فقط full_name)
         if ($request->has('full_name')) {
             $user->full_name = $request->input('full_name');
-            $userUpdated = true;
-        }
-        // تم إزالة تحديث email
-        if ($userUpdated) {
             $user->save();
         }
 
@@ -500,7 +502,7 @@ public function updateProfile(Request $request)
                 'id'          => $programmer->id,
                 'user_name'   => $programmer->user_name,
                 'full_name'   => $user->full_name,
-                'email'       => $user->email, // يبقى كما هو دون تغيير
+                'email'       => $user->email,
                 'bio'         => $programmer->bio,
                 'track'       => $programmer->track,
                 'avatar_url'  => $programmer->avatar_url,
