@@ -14,6 +14,7 @@ class JopOffer extends Model
         'job_type',
         'work_type',
         'programmer_id',
+        'company_id',
     ];
     
     public function programmer()
