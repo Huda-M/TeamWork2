@@ -81,11 +81,12 @@ class ReportController extends Controller
             DB::beginTransaction();
 
             $report = Report::create([
-                'target_user_id' => $validated['target_user_id'],
-                'reporter_user_id' => $reporter->id,
-                'description' => $validated['description'],
-                'admin_action' => 'pending',
-            ]);
+    'target_user_id'   => $validated['target_user_id'],
+    'reporter_user_id' => $reporter->id,
+    'description'      => $validated['description'],
+    'admin_action'     => 'pending',
+    'status'           => 'pending',
+]);
 
             Log::info('New report created', [
                 'report_id' => $report->id,
