@@ -168,7 +168,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
     Route::get('/projects/{projectId}/tasks', [ProjectController::class, 'projectTasks']);
     Route::get('/users/{userId}/projects', [ProjectController::class, 'getUserProjects']);
-    Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted'])->middleware('role:admin');
+    Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
 
     // Tasks
     Route::prefix('tasks')->group(function () {
