@@ -83,9 +83,7 @@ class ReportController extends Controller
             $report = Report::create([
                 'target_user_id' => $validated['target_user_id'],
                 'reporter_user_id' => $reporter->id,
-                'report_type' => $validated['report_type'],
                 'description' => $validated['description'],
-                'evidence' => $validated['evidence'] ?? null,
                 'admin_action' => 'pending',
             ]);
 
