@@ -375,13 +375,6 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
         }
     }
-    /**
- * إنشاء مهمة جديدة في فريق معين.
- *
- * @param StoreTaskRequest $request
- * @param Team $team
- * @return \Illuminate\Http\JsonResponse
- */
 public function store(StoreTaskRequest $request, Team $team)
 {
     try {
@@ -410,7 +403,7 @@ public function store(StoreTaskRequest $request, Team $team)
 
         $task = $team->tasks()->create([
             'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
-            'project_id' => $team->project_id,
+            // ❌ تم حذف 'project_id' لأنه غير موجود في جدول tasks
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'todo',
