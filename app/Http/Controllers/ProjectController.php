@@ -185,7 +185,6 @@ class ProjectController extends Controller
         ], 500);
     }
 }
-
 public function markAsCompleted($projectId)
 {
     try {
@@ -209,42 +208,38 @@ public function markAsCompleted($projectId)
         }
 
         $programmer = $user->programmer;
-        if (!$programmer) {
-            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-        }
-
-        if (!$team->isLeader($programmer->id)) {
+        if (!$programmer || !$team->isLeader($programmer->id)) {
             return response()->json(['success' => false, 'message' => 'Only the team leader can mark the project as completed'], 403);
         }
 
-        // التعديل الجوهري: استخدام save() بدلاً من update() للتأكد من تنفيذ التحديث
-        $project->status = 'completed';
-        $saved = $project->save();
+        // ✅ حل بديل باستخدام DB Query Builder (يتجاوز Eloquent)
+        $updated = \Illuminate\Support\Facades\DB::table('projects')
+            ->where('id', $projectId)
+            ->update(['status' => 'completed']);
 
-        if (!$saved) {
+        if ($updated) {
+            // تحديث model instance للتأكيد
+            $project->status = 'completed';
+            
+            \Illuminate\Support\Facades\Log::info('Project marked as completed (DB)', [
+                'project_id' => $projectId,
+                'updated_by' => $user->id,
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Project marked as completed',
+                'new_status' => 'completed'
+            ]);
+        } else {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save project status'
+                'message' => 'No rows updated. Check if project exists or status already completed.'
             ], 500);
         }
 
-        // تأكيد القراءة مرة أخرى من قاعدة البيانات
-        $project->refresh();
-
-        Log::info('Project marked as completed', [
-            'project_id' => $project->id,
-            'new_status' => $project->status,
-            'marked_by' => $user->id,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Project marked as completed',
-            'new_status' => $project->status // لإظهار القيمة الجديدة
-        ]);
-
     } catch (\Exception $e) {
-        Log::error('Error marking project completed: ' . $e->getMessage(), [
+        \Illuminate\Support\Facades\Log::error('Error in markAsCompleted: ' . $e->getMessage(), [
             'project_id' => $projectId,
             'trace' => $e->getTraceAsString()
         ]);
