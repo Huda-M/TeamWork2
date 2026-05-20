@@ -190,21 +190,42 @@ public function markAsCompleted($projectId)
 {
     try {
         $user = Auth::user();
-        // السماح فقط للأدمن العام
-        if ($user->role !== 'admin') {
-            return response()->json(['success' => false, 'message' => 'Only admin can mark project as completed'], 403);
+        
+        // 1. جلب المشروع مع الفرق المرتبطة
+        $project = Project::with('teams.activeMembers')->findOrFail($projectId);
+        
+        // 2. العثور على الفريق الأول المرتبط بالمشروع (يفترض وجود فريق واحد)
+        $team = $project->teams->first();
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No team found for this project'
+            ], 404);
         }
-
-        $project = Project::findOrFail($projectId);
+        
+        // 3. التحقق من أن المستخدم الحالي هو leader في هذا الفريق
+        $programmer = $user->programmer;
+        if (!$programmer || !$team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the team leader can mark the project as completed'
+            ], 403);
+        }
+        
+        // 4. تحديث حالة المشروع
         $project->update(['status' => 'completed']);
-
+        
         return response()->json([
             'success' => true,
             'message' => 'Project marked as completed'
         ]);
+        
     } catch (\Exception $e) {
         Log::error('Error marking project completed: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to mark project'], 500);
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to mark project'
+        ], 500);
     }
 }
 
