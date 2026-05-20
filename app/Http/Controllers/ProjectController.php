@@ -50,8 +50,7 @@ class ProjectController extends Controller
             ], 500);
         }
     }
-    // في ProjectController.php
-public function zeroProjects()
+ public function zeroProject($projectId)
 {
     try {
         $user = Auth::user();
@@ -59,55 +58,72 @@ public function zeroProjects()
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
 
-        // المشاريع التي ليس لها أي فريق (zero teams) أو لديها فرق ولكن ليس لديها أي مهام
-        $projects = Project::whereDoesntHave('teams')
-            ->orWhereHas('teams', function($q) {
-                $q->doesntHave('tasks');
-            })
-            ->with(['teams.activeMembers.programmer.user', 'teams.tasks'])
-            ->get();
+        // جلب المشروع مع الفرق والأعضاء والمهام
+        $project = Project::with([
+            'teams.activeMembers.programmer.user',
+            'teams.tasks'
+        ])->find($projectId);
 
-        $result = $projects->map(function($project) {
-            $teams = $project->teams;
-            $totalMembers = $teams->sum(fn($team) => $team->activeMembers->count());
-            $totalTasks = $teams->sum(fn($team) => $team->tasks->count());
-            $pendingTasks = $teams->sum(fn($team) => $team->tasks->whereNotIn('status', ['done', 'cancelled'])->count());
-            $activeMembersCount = $teams->sum(fn($team) => $team->activeMembers->count());
+        if (!$project) {
+            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+        }
 
-            // جمع صور وأسماء الأعضاء (لو أردت عرضهم)
-            $members = $teams->flatMap(function($team) {
-                return $team->activeMembers->map(function($member) {
-                    return [
-                        'name' => $member->programmer->user->full_name,
-                        'track' => $member->programmer->track,
-                        'avatar_url' => $member->programmer->avatar_url,
-                    ];
-                });
-            })->unique('name')->values();
+        // التحقق من شرط "zero": لا يوجد فرق OR الفرق الموجودة ليس لديها مهام
+        $hasTeams = $project->teams->isNotEmpty();
+        $hasTasks = $project->teams->flatMap->tasks->isNotEmpty();
 
-            return [
-                'project_id' => $project->id,
-                'project_title' => $project->title,
-                'description' => $project->description,
-                'total_members' => $totalMembers,
-                'total_tasks' => $totalTasks,
-                'pending_tasks' => $pendingTasks,
-                'active_members_count' => $activeMembersCount,
-                'members' => $members,  // اسم، تراك، صورة
-            ];
-        });
+        if ($hasTeams && $hasTasks) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This project already has teams with tasks, cannot be considered as zero project'
+            ], 400);
+        }
+
+        // جمع جميع الأعضاء من كل فريق في المشروع
+        $members = collect();
+        foreach ($project->teams as $team) {
+            foreach ($team->activeMembers as $member) {
+                $programmer = $member->programmer;
+                // مهام هذا المبرمج في هذا الفريق/المشروع
+                $programmerTasks = $team->tasks->where('programmer_id', $programmer->id);
+                $doneCount = $programmerTasks->where('status', 'done')->count();
+                $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
+
+                $members->push([
+                    'name'          => $programmer->user->full_name,
+                    'avatar_url'    => $programmer->avatar_url,
+                    'track'         => $programmer->track ?? 'general',
+                    'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
+                ]);
+            }
+        }
+
+        // إزالة التكرار إن وجد
+        $members = $members->unique('name')->values();
+
+        $responseData = [
+            'project_id'    => $project->id,
+            'project_title' => $project->title,
+            'description'   => $project->description,
+            'total_members' => $members->count(),
+            'pending_tasks' => $project->teams->flatMap->tasks->whereNotIn('status', ['done', 'cancelled'])->count(),
+            'members'       => $members,
+        ];
 
         return response()->json([
             'success' => true,
-            'data' => $result,
-            'message' => 'Zero projects fetched successfully'
+            'data'    => $responseData,
+            'message' => 'Zero project details fetched successfully'
         ]);
+
     } catch (\Exception $e) {
-        Log::error('Error fetching zero projects: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to fetch zero projects'], 500);
+        Log::error('Error fetching zero project: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch zero project details'
+        ], 500);
     }
 }
-
     public function store(StoreTaskRequest $request, Team $team)
 {
     try {
