@@ -13,17 +13,18 @@ class StoreTaskRequest extends FormRequest
 
 public function rules(): array
 {
+
     return [
         'title' => 'required|string|max:255',
         'description' => 'nullable|string',
         'programmer_id' => 'nullable|exists:programmers,id',
-        'estimated_hours' => 'nullable|numeric|min:0',
         'deadline' => 'nullable|date',
         'priority' => 'nullable|integer|min:1|max:10',
-        'complexity' => 'nullable|string|in:low,medium,high',
         'git_link' => 'nullable|url',
         'tags' => 'nullable|array',
+        'status' => 'nullable|string|in:todo,in_progress,done,cancelled', // اختياري بقيم محددة
     ];
+
 }
 
 
