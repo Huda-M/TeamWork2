@@ -196,14 +196,10 @@ class ProgrammerController extends Controller
             $percentage = $total > 0 ? round(($completed / $total) * 100, 2) : 0;
 
             $projectsStats[] = [
-                'project_id' => $project->id,
-                'project_title' => $project->title,
-                'category' => $project->category_name,
-                'status' => $project->status,
-                'total_tasks' => $total,
-                'completed_tasks' => $completed,
-                'completion_percentage' => $percentage,
-            ];
+    'project_id' => $project->id,
+    'project_title' => $project->title,
+    'completion_percentage' => $percentage,
+];
         }
 
         return response()->json([
