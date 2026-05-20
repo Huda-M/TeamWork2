@@ -400,15 +400,16 @@ public function store(StoreTaskRequest $request, Team $team)
         $validated = $request->validated();
 
         $task = $team->tasks()->create([
-            'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'status' => $validated['status'] ?? 'todo',    // ✅ القيمة الافتراضية todo
-            'deadline' => $validated['deadline'] ?? null,
-            'priority' => $validated['priority'] ?? 5,
-            'git_link' => $validated['git_link'] ?? null,
-            'tags' => $validated['tags'] ?? null,
-        ]);
+    'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
+    'title' => $validated['title'],
+    'description' => $validated['description'] ?? null,
+    'status' => $validated['status'] ?? 'todo',
+    'estimated_hours' => 0,  // 👈 أضف هذا السطر (قيمة افتراضية)
+    'deadline' => $validated['deadline'] ?? null,
+    'priority' => $validated['priority'] ?? 5,
+    'git_link' => $validated['git_link'] ?? null,
+    'tags' => $validated['tags'] ?? null,
+]);
 
         Log::info('Task created', [
             'task_id' => $task->id,
