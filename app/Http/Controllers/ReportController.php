@@ -86,6 +86,7 @@ class ReportController extends Controller
     'description'      => $validated['description'],
     'admin_action'     => 'warning',
     'status'           => 'generated',
+    'report_type'      => 'other',
 ]);
 
             Log::info('New report created', [
