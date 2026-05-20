@@ -595,42 +595,43 @@ public function store(Request $request)
             'joined_by'     => $programmer->id,
         ]);
 
-        // معالجة الدعوات (نفس الكود السابق)
-        $invitationsSent = [];
-        if (!$validated['is_public'] && !empty($validated['invitations'])) {
-            foreach ($validated['invitations'] as $username) {
-                if ($username === $programmer->user_name) continue;
+       // معالجة الدعوات (بعد إزالة القيود)
+$invitationsSent = [];
+if (!$validated['is_public'] && !empty($validated['invitations'])) {
+    foreach ($validated['invitations'] as $username) {
+        if ($username === $programmer->user_name) continue;
 
-                $invitedProgrammer = Programmer::where('user_name', $username)->first();
-                if (!$invitedProgrammer || !$invitedProgrammer->user->profile_completed) {
-                    Log::warning("Invalid or incomplete programmer: $username");
-                    continue;
-                }
-                if ($invitedProgrammer->is_in_team) {
-                    Log::warning("Already in team: $username");
-                    continue;
-                }
-                $existing = TeamInvitation::where('team_id', $team->id)
-                    ->where('programmer_id', $invitedProgrammer->id)
-                    ->where('status', 'pending')->first();
-                if ($existing) continue;
-
-                $invitation = TeamInvitation::create([
-                    'team_id'      => $team->id,
-                    'programmer_id'=> $invitedProgrammer->id,
-                    'invited_by'   => $programmer->id,
-                    'message'      => "You've been invited to join team '{$team->name}'",
-                    'status'       => 'pending',
-                    'expires_at'   => now()->addDays(7),
-                ]);
-
-                $invitationsSent[] = [
-                    'username'      => $username,
-                    'programmer_id' => $invitedProgrammer->id,
-                    'invitation_id' => $invitation->id,
-                ];
-            }
+        $invitedProgrammer = Programmer::where('user_name', $username)->first();
+        
+        // ✅ فقط نتحقق من وجود المستخدم
+        if (!$invitedProgrammer) {
+            Log::warning("Programmer not found: $username");
+            continue;
         }
+        
+        // منع الدعوات المكررة المعلقة
+        $existing = TeamInvitation::where('team_id', $team->id)
+            ->where('programmer_id', $invitedProgrammer->id)
+            ->where('status', 'pending')
+            ->first();
+        if ($existing) continue;
+
+        $invitation = TeamInvitation::create([
+            'team_id'      => $team->id,
+            'programmer_id'=> $invitedProgrammer->id,
+            'invited_by'   => $programmer->id,
+            'message'      => "You've been invited to join team '{$team->name}'",
+            'status'       => 'pending',
+            'expires_at'   => now()->addDays(7),
+        ]);
+
+        $invitationsSent[] = [
+            'username'      => $username,
+            'programmer_id' => $invitedProgrammer->id,
+            'invitation_id' => $invitation->id,
+        ];
+    }
+}
 
         DB::commit();
 
