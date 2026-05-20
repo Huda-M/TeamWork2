@@ -101,6 +101,7 @@ Route::middleware('start.session')->group(function () {
 
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/team/{teamId}/full-details', [TeamController::class, 'getFullTeamDetails']);
     Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::prefix('company')->group(function () {
         Route::get('/profile', [CompanyController::class, 'showProfile']);
