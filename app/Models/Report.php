@@ -16,6 +16,7 @@ class Report extends Model
         'admin_action',
         'description',
         'status',
+        'evidence',
         ];
         public function targetUser():BelongsTo{
             return $this->belongsTo(User::class,'target_user_id');
