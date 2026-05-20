@@ -345,6 +345,31 @@ class ReportController extends Controller
             ], 500);
         }
     }
+    public function getUserReportInfo($id)
+{
+    try {
+        $user = User::findOrFail($id);
+        
+        // منع الإبلاغ عن الذات أو عن الأدمن (اختياري)
+        if ($user->id === auth()->id()) {
+            return response()->json(['success' => false, 'message' => 'لا يمكنك الإبلاغ عن نفسك'], 400);
+        }
+        if ($user->role === 'admin') {
+            return response()->json(['success' => false, 'message' => 'لا يمكن الإبلاغ عن المشرفين'], 400);
+        }
+        
+        $data = [
+            'id' => $user->id,
+            'name' => $user->full_name,
+            'track' => $user->role === 'programmer' ? ($user->programmer->track ?? 'غير محدد') : null,
+            'avatar_url' => $user->role === 'programmer' ? ($user->programmer->avatar_url ?? null) : null,
+        ];
+        
+        return response()->json(['success' => true, 'data' => $data]);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'message' => 'المستخدم غير موجود'], 404);
+    }
+}
 
     public function checkUserStatus()
     {
