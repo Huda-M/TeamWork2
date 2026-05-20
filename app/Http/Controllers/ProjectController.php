@@ -193,13 +193,9 @@ public function markAsCompleted($projectId)
             return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
         }
 
-        $project = Project::with('teams.activeMembers')->find($projectId);
+        $project = Project::with('teams')->find($projectId);
         if (!$project) {
             return response()->json(['success' => false, 'message' => 'Project not found'], 404);
-        }
-
-        if ($project->status === 'completed') {
-            return response()->json(['success' => true, 'message' => 'Project is already completed']);
         }
 
         $team = $project->teams->first();
@@ -212,41 +208,18 @@ public function markAsCompleted($projectId)
             return response()->json(['success' => false, 'message' => 'Only the team leader can mark the project as completed'], 403);
         }
 
-        // ✅ حل بديل باستخدام DB Query Builder (يتجاوز Eloquent)
-        $updated = \Illuminate\Support\Facades\DB::table('projects')
-            ->where('id', $projectId)
-            ->update(['status' => 'completed']);
+        // تحديث حالة الفريق إلى 'completed' بدلاً من ذلك
+        $team->update(['status' => 'completed']);
 
-        if ($updated) {
-            // تحديث model instance للتأكيد
-            $project->status = 'completed';
-            
-            \Illuminate\Support\Facades\Log::info('Project marked as completed (DB)', [
-                'project_id' => $projectId,
-                'updated_by' => $user->id,
-            ]);
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Project marked as completed',
-                'new_status' => 'completed'
-            ]);
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => 'No rows updated. Check if project exists or status already completed.'
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Project marked as completed (team status updated)',
+            'project_status' => $project->status // هذا سيعيد 'completed' الآن تلقائياً
+        ]);
 
     } catch (\Exception $e) {
-        \Illuminate\Support\Facades\Log::error('Error in markAsCompleted: ' . $e->getMessage(), [
-            'project_id' => $projectId,
-            'trace' => $e->getTraceAsString()
-        ]);
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to mark project: ' . $e->getMessage()
-        ], 500);
+        Log::error('Error marking project completed: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to mark project: ' . $e->getMessage()], 500);
     }
 }
 public function myProjectDetails($projectId, Request $request)
