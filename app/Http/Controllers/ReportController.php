@@ -104,14 +104,13 @@ class ReportController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating report: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to submit report'
-            ], 500);
-        }
-    }
+    DB::rollBack();
+    return response()->json([
+        'success' => false,
+        'message' => 'Failed to submit report',
+        'error'   => $e->getMessage(),
+    ], 500);
+}
 
     public function show(Report $report)
     {
