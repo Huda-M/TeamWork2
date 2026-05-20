@@ -186,15 +186,41 @@ class ProjectController extends Controller
     }
 }
 
+/**
+ * وضع علامة "مكتمل" على المشروع (يسمح فقط لقائد الفريق)
+ *
+ * @param int $projectId
+ * @return \Illuminate\Http\JsonResponse
+ */
 public function markAsCompleted($projectId)
 {
     try {
         $user = Auth::user();
-        
-        // 1. جلب المشروع مع الفرق المرتبطة
-        $project = Project::with('teams.activeMembers')->findOrFail($projectId);
-        
-        // 2. العثور على الفريق الأول المرتبط بالمشروع (يفترض وجود فريق واحد)
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        // 1. جلب المشروع مع الفرق والأعضاء
+        $project = Project::with('teams.activeMembers')->find($projectId);
+        if (!$project) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Project not found'
+            ], 404);
+        }
+
+        // 2. التأكد من أن المشروع ليس مكتملاً بالفعل
+        if ($project->status === 'completed') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Project is already completed'
+            ]);
+        }
+
+        // 3. العثور على أول فريق مرتبط بالمشروع (نفترض وجود فريق واحد)
         $team = $project->teams->first();
         if (!$team) {
             return response()->json([
@@ -202,33 +228,55 @@ public function markAsCompleted($projectId)
                 'message' => 'No team found for this project'
             ], 404);
         }
-        
-        // 3. التحقق من أن المستخدم الحالي هو leader في هذا الفريق
+
+        // 4. التحقق من أن المستخدم الحالي هو قائد الفريق
         $programmer = $user->programmer;
-        if (!$programmer || !$team->isLeader($programmer->id)) {
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        if (!$team->isLeader($programmer->id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only the team leader can mark the project as completed'
             ], 403);
         }
-        
-        // 4. تحديث حالة المشروع
-        $project->update(['status' => 'completed']);
-        
+
+        // 5. تحديث حالة المشروع (تأكد من أن 'status' موجود في $fillable في نموذج Project)
+        $updated = $project->update(['status' => 'completed']);
+        if (!$updated) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update project status'
+            ], 500);
+        }
+
+        // 6. (اختياري) تسجيل الحدث في السجلات
+        \Illuminate\Support\Facades\Log::info('Project marked as completed', [
+            'project_id' => $project->id,
+            'marked_by' => $user->id,
+            'team_id' => $team->id
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Project marked as completed'
         ]);
-        
+
     } catch (\Exception $e) {
-        Log::error('Error marking project completed: ' . $e->getMessage());
+        \Illuminate\Support\Facades\Log::error('Error marking project completed: ' . $e->getMessage(), [
+            'project_id' => $projectId,
+            'trace' => $e->getTraceAsString()
+        ]);
         return response()->json([
             'success' => false,
-            'message' => 'Failed to mark project'
+            'message' => 'Failed to mark project: ' . $e->getMessage()  // أضفنا تفاصيل الخطأ للمساعدة في التصحيح
         ], 500);
     }
 }
-
 public function myProjectDetails($projectId, Request $request)
 {
     try {
