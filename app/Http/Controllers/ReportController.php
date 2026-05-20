@@ -84,9 +84,8 @@ class ReportController extends Controller
     'target_user_id'   => $validated['target_user_id'],
     'reporter_user_id' => $reporter->id,
     'description'      => $validated['description'],
-    'admin_action'     => 'pending',
-    'status'           => 'pending',
-    'report_type'      => 'other', 
+    'admin_action'     => 'warning',
+    'status'           => 'generated',
 ]);
 
             Log::info('New report created', [
