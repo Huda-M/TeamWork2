@@ -64,6 +64,13 @@ class Programmer extends Model
                     ->withPivot('progress_percentage', 'started_at', 'completed_at')
                     ->withTimestamps();
     }
+    public function isLeader($programmerId)
+{
+    return $this->activeMembers()
+        ->where('programmer_id', $programmerId)
+        ->where('role', 'leader')
+        ->exists();
+}
 
     public function teams(): BelongsToMany
     {
