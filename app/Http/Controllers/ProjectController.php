@@ -248,7 +248,6 @@ public function myProjectDetails($projectId, Request $request)
                 'id' => $project->id,
                 'title' => $project->title,
                 'description' => $project->description,
-                'category' => $project->category_name,
                 'status' => $project->status,
                 'my_track' => $myTrack,
                 'github_link' => $githubLink,
@@ -258,6 +257,7 @@ public function myProjectDetails($projectId, Request $request)
 
         // إذا كان المشروع مكتملاً (completed)
         if ($project->status === 'completed') {
+            $responseData['project']['category'] = $project->category_name;
             // المدة المتوقعة للمشروع (بالأيام)
             $durationDays = $project->estimated_duration_days;
             // تاريخ الانتهاء الفعلي (آخر تحديث للمشروع أو آخر مهمة)
