@@ -211,7 +211,7 @@ class TeamController extends Controller
      *     @OA\Response(response=500, description="Server error")
      * )
      */
-    public function getTeamDetails($id)
+public function getTeamDetails($id)
 {
     try {
         $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
@@ -220,13 +220,14 @@ class TeamController extends Controller
             'success' => true,
             'data' => [
                 'team_name' => $team->name,
-                'project_title' => $team->project->title,
+                'github_link' => $team->project->github_url ?? null,  // رابط الـ GitHub بدلاً من project_title
                 'project_description' => $team->project->description,
                 'members' => $team->activeMembers->map(function($member) {
                     return [
                         'programmer_id' => $member->programmer_id,
                         'name' => $member->programmer->user->full_name,
-                        'role' => $member->role, // 'leader' or 'member'
+                        'track' => $member->programmer->track ?? 'general', // التراك بدلاً من role
+                        'avatar_url' => $member->programmer->avatar_url,   // إضافة الصورة
                     ];
                 })
             ]
