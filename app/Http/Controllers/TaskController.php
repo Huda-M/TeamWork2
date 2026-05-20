@@ -381,7 +381,6 @@ public function store(StoreTaskRequest $request, Team $team)
         $user = $request->user();
         $programmer = $user->programmer;
 
-        // التحقق من أن المستخدم قائد الفريق
         if (!$team->isLeader($programmer->id)) {
             return response()->json([
                 'success' => false,
@@ -389,7 +388,6 @@ public function store(StoreTaskRequest $request, Team $team)
             ], 403);
         }
 
-        // التحقق من أن المبرمج المعين موجود في الفريق (إذا تم تحديده)
         if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
             return response()->json([
                 'success' => false,
@@ -403,14 +401,11 @@ public function store(StoreTaskRequest $request, Team $team)
 
         $task = $team->tasks()->create([
             'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
-            // ❌ تم حذف 'project_id' لأنه غير موجود في جدول tasks
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'status' => $validated['status'] ?? 'todo',
-            'estimated_hours' => $validated['estimated_hours'] ?? null,
+            'status' => $validated['status'] ?? 'todo',    // ✅ القيمة الافتراضية todo
             'deadline' => $validated['deadline'] ?? null,
             'priority' => $validated['priority'] ?? 5,
-            'complexity' => $validated['complexity'] ?? 'medium',
             'git_link' => $validated['git_link'] ?? null,
             'tags' => $validated['tags'] ?? null,
         ]);
