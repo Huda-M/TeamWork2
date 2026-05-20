@@ -99,7 +99,7 @@ Route::middleware('start.session')->group(function () {
     Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
 });
 
-
+Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('company')->group(function () {
         Route::get('/profile', [CompanyController::class, 'showProfile']);
