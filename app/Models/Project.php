@@ -89,17 +89,17 @@ class Project extends Model
      * حالة المشروع (تعتمد على وجود فرق نشطة).
      */
     public function getStatusAttribute()
-    {
-        $hasActiveTeams = $this->teams()->where('teams.status', 'active')->exists();
-        if ($hasActiveTeams) {
-            return 'ongoing';
-        }
-        $hasAnyTeam = $this->teams()->exists();
-        if ($hasAnyTeam) {
-            return 'completed';
-        }
-        return 'pending';
+{
+    $hasActiveTeams = $this->teams()->where('teams.status', 'active')->exists();
+    if ($hasActiveTeams) {
+        return 'ongoing';
     }
+    $hasAnyTeam = $this->teams()->exists();
+    if ($hasAnyTeam) {
+        return 'completed';
+    }
+    return 'pending';
+}
 
     /**
      * تاريخ الانتهاء المتوقع.
