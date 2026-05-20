@@ -31,8 +31,7 @@ class AuthController extends Controller
         if ($user->role !== 'company') {
             return response()->json([
                 'message' => 'You are not authorized to login as company',
-                'status' => 403,
-            ]);
+            ],403);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -79,8 +78,7 @@ class AuthController extends Controller
         if (! Hash::check($data['old_password'], $user->password)) {
             return response()->json([
                 'message' => 'Old password is incorrect',
-                'status' => 401,
-            ]);
+            ],401);
         }
         $user->update($data);
 

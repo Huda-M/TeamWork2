@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ProgrammerResource;
 use App\Models\Programmer;
 use Spatie\QueryBuilder\QueryBuilder;
+use App\Http\Resources\ProgrammerDetailsResource;
 
 class ProgrammerController extends Controller
 {
@@ -43,12 +44,12 @@ class ProgrammerController extends Controller
             ], 403);
         }
 
-        $programmer = Programmer::with(['skills', 'tracks', 'user.projects'])->find($id);
+        $programmer = Programmer::with(['skills', 'tracks', 'teams.project', 'user'])->find($id);
 
         return response()->json([
             'message' => 'Programmer fetched successfully',
             'status' => 200,
-            'programmer' => $programmer,
+            'programmer' => new ProgrammerDetailsResource($programmer),
         ]);
     }
 }
