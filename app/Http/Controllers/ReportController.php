@@ -110,7 +110,7 @@ class ReportController extends Controller
         'error'   => $e->getMessage(),
     ], 500);
 }
-
+    }
     public function show(Report $report)
     {
         try {
