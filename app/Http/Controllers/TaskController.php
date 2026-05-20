@@ -375,4 +375,74 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
         }
     }
+    /**
+ * إنشاء مهمة جديدة في فريق معين.
+ *
+ * @param StoreTaskRequest $request
+ * @param Team $team
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function store(StoreTaskRequest $request, Team $team)
+{
+    try {
+        $user = $request->user();
+        $programmer = $user->programmer;
+
+        // التحقق من أن المستخدم قائد الفريق
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader can create tasks'
+            ], 403);
+        }
+
+        // التحقق من أن المبرمج المعين موجود في الفريق (إذا تم تحديده)
+        if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The assigned programmer is not a member of this team'
+            ], 400);
+        }
+
+        DB::beginTransaction();
+
+        $validated = $request->validated();
+
+        $task = $team->tasks()->create([
+            'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
+            'project_id' => $team->project_id,
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'status' => $validated['status'] ?? 'todo',
+            'estimated_hours' => $validated['estimated_hours'] ?? null,
+            'deadline' => $validated['deadline'] ?? null,
+            'priority' => $validated['priority'] ?? 5,
+            'complexity' => $validated['complexity'] ?? 'medium',
+            'git_link' => $validated['git_link'] ?? null,
+            'tags' => $validated['tags'] ?? null,
+        ]);
+
+        Log::info('Task created', [
+            'task_id' => $task->id,
+            'team_id' => $team->id,
+            'created_by' => $programmer->id
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'data' => $task->load('programmer.user'),
+            'message' => 'Task created successfully'
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error creating task: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create task: ' . $e->getMessage()
+        ], 500);
+    }
+}
 }
