@@ -137,6 +137,7 @@ Route::prefix('v1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/zero-project/{projectId}', [ProjectController::class, 'zeroProject']);
     Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
     // User profile & general
@@ -191,7 +192,6 @@ Route::prefix('profile')->group(function () {
     Route::get('/team-members/{projectId}/to-evaluate', [ProfileController::class, 'teamMembersToEvaluate']);
     Route::post('/evaluate/{projectId}/{evaluatedId}', [ProfileController::class, 'submitEvaluation']);
     Route::delete('/soft-delete', [ProfileController::class, 'softDeleteAccount']);
-    Route::get('/zero-project/{projectId}', [ProfileController::class, 'zeroProject']);
     Route::get('/project-details/{projectId}', [ProfileController::class, 'projectDetails']);
 });
 
