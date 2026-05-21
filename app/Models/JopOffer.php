@@ -16,9 +16,14 @@ class JopOffer extends Model
         'programmer_id',
         'company_id',
     ];
-    
+
     public function programmer()
     {
         return $this->belongsTo(Programmer::class);
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 }

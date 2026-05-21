@@ -81,4 +81,9 @@ class Company extends Model
     {
         return $value ? asset('storage/'.$value) : null;
     }
+
+    public function jopOffers(): HasMany
+    {
+        return $this->hasMany(JopOffer::class);
+    }
 }
