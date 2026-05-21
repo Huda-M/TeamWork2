@@ -333,7 +333,7 @@ public function updateProfile(Request $request)
             ], 404);
         }
 
-        // قواعد التحقق (تم إزالة user_name)
+        // قواعد التحقق (تسمح بتغيير user_name)
         $rules = [
             'full_name' => 'sometimes|required|string|max:255',
             'bio'       => 'nullable|string|max:1000',
@@ -341,7 +341,22 @@ public function updateProfile(Request $request)
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        // تحقق email فقط (بشرط عدم التكرار)
+        // التحقق من user_name (فقط إذا تغير)
+        if ($request->has('user_name')) {
+            $newUserName = $request->input('user_name');
+            if ($newUserName !== $programmer->user_name) {
+                $rules['user_name'] = [
+                    'required',
+                    'string',
+                    'max:255',
+                    Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+                ];
+            } else {
+                $rules['user_name'] = 'sometimes|required|string|max:255';
+            }
+        }
+
+        // التحقق من email
         if ($request->has('email')) {
             $rules['email'] = [
                 'sometimes',
@@ -375,8 +390,12 @@ public function updateProfile(Request $request)
             $user->save();
         }
 
-        // تحديث جدول programmers (بدون user_name)
+        // تحديث جدول programmers (مع user_name)
         $programmerUpdated = false;
+        if ($request->has('user_name')) {
+            $programmer->user_name = $request->input('user_name');
+            $programmerUpdated = true;
+        }
         if ($request->has('bio')) {
             $programmer->bio = $request->input('bio');
             $programmerUpdated = true;
@@ -422,7 +441,7 @@ public function updateProfile(Request $request)
             'message' => 'Profile updated successfully',
             'data'    => [
                 'id'          => $programmer->id,
-                'user_name'   => $programmer->user_name, // يبقى كما هو دون تغيير
+                'user_name'   => $programmer->user_name,
                 'full_name'   => $user->full_name,
                 'email'       => $user->email,
                 'bio'         => $programmer->bio,
