@@ -339,42 +339,59 @@ class TaskController extends Controller
  *     )
  * )
  */
-    public function show(Task $task)
-    {
-        try {
-            $user = auth()->user();
-            $programmer = $user->programmer;
+public function show(Task $task)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
 
-            if (!$task->team->isMember($programmer->id) && $user->role !== 'admin') {
-                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-            }
-
-            $task->load([
-                'programmer.user',
-                'creator.user',
-                'team.project'
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'id' => $task->id,
-                    'title' => $task->title,
-                    'description' => $task->description,
-                    'priority' => $task->priority,
-                    'status' => $task->status,
-                    'deadline' => $task->deadline,
-                    'estimated_hours' => $task->estimated_hours,
-                    'actual_hours' => $task->actual_hours,
-                    'created_at' => $task->created_at,
-                    'completed_at' => $task->completed_at,
-                ]
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error showing task: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
+        if (!$task->team->isMember($programmer->id) && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
+
+        $task->load([
+            'programmer.user',      // المبرمج المسند إليه
+            'creator.user',         // منشئ المهمة (يجب أن يكون لديك علاقة creator في نموذج Task)
+            'team.project'
+        ]);
+
+        // تحويل priority من رقم إلى نص
+        $priorityText = 'low';
+        if ($task->priority >= 7) {
+            $priorityText = 'high';
+        } elseif ($task->priority >= 4) {
+            $priorityText = 'medium';
+        }
+
+        $responseData = [
+            'id' => $task->id,
+            'title' => $task->title,
+            'description' => $task->description,
+            'status' => $task->status,
+            'priority' => $priorityText,   // نص بدلاً من رقم
+            'deadline' => $task->deadline,
+            'project_name' => $task->team->project->title ?? null,
+            'creator' => $task->creator ? [
+                'name' => $task->creator->user->full_name ?? null,
+                'avatar_url' => $task->creator->avatar_url ?? null,
+            ] : null,
+            'attachments' => $task->attachments, // لو موجود
+        ];
+
+        // إذا كان المبرمج الحالي هو المسند إليه، يمكن إضافة حقل إضافي
+        if ($task->programmer_id == $programmer->id) {
+            $responseData['assigned_to_me'] = true;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $responseData
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error showing task: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
     }
+}
 public function store(StoreTaskRequest $request, Team $team)
 {
     try {
