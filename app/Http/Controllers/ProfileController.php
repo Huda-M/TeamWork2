@@ -342,56 +342,57 @@ public function updateProfile(Request $request)
 
         /*
         |--------------------------------------------------------------------------
-        | user_name validation
-        |--------------------------------------------------------------------------
-        | لو اليوزر بيعدل نفس اليوزر نيم الحالي → اسمح
-        | لو بيغيره → اتأكد إنه unique
+        | user_name validation: يسمح بنفس الاسم، ويمنع التكرار مع مستخدمين آخرين
         |--------------------------------------------------------------------------
         */
-
-        if ($request->filled('user_name')) {
-
+        if ($request->has('user_name')) {
             $newUserName = trim($request->user_name);
+            $currentUserName = $programmer->user_name;
 
-            $existingProgrammer = \App\Models\Programmer::where('user_name', $newUserName)
-                ->first();
+            // إذا كان الاسم الجديد مختلفًا عن القديم، نتأكد من عدم وجوده لدى آخرين
+            if ($newUserName !== $currentUserName) {
+                $exists = \App\Models\Programmer::where('user_name', $newUserName)
+                    ->where('id', '!=', $programmer->id)
+                    ->exists();
 
-            if ($existingProgrammer && $existingProgrammer->id != $programmer->id) {
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => [
-                        'user_name' => ['The user name has already been taken.']
-                    ]
-                ], 422);
+                if ($exists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Validation failed',
+                        'errors' => [
+                            'user_name' => ['The user name has already been taken.']
+                        ]
+                    ], 422);
+                }
             }
-
+            // نضيف قاعدة التحقق الإلزامية فقط إذا أرسل الحقل (ولكننا تجاوزنا فريدياً يدوياً)
             $rules['user_name'] = 'required|string|max:255';
         }
 
         /*
         |--------------------------------------------------------------------------
-        | email validation
+        | email validation (نفس المبدأ)
         |--------------------------------------------------------------------------
         */
+        if ($request->has('email')) {
+            $newEmail = trim($request->email);
+            $currentEmail = $user->email;
 
-        if ($request->filled('email')) {
+            if ($newEmail !== $currentEmail) {
+                $exists = \App\Models\User::where('email', $newEmail)
+                    ->where('id', '!=', $user->id)
+                    ->exists();
 
-            $existingUser = \App\Models\User::where('email', $request->email)
-                ->first();
-
-            if ($existingUser && $existingUser->id != $user->id) {
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => [
-                        'email' => ['The email has already been taken.']
-                    ]
-                ], 422);
+                if ($exists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Validation failed',
+                        'errors' => [
+                            'email' => ['The email has already been taken.']
+                        ]
+                    ], 422);
+                }
             }
-
             $rules['email'] = 'required|email';
         }
 
@@ -410,19 +411,16 @@ public function updateProfile(Request $request)
         | Update users table
         |--------------------------------------------------------------------------
         */
-
         $userUpdated = false;
-
         if ($request->has('full_name')) {
             $user->full_name = $request->full_name;
             $userUpdated = true;
         }
-
         if ($request->has('email')) {
+            // تم التحقق من تفرد البريد أعلاه
             $user->email = $request->email;
             $userUpdated = true;
         }
-
         if ($userUpdated) {
             $user->save();
         }
@@ -432,19 +430,15 @@ public function updateProfile(Request $request)
         | Update programmers table
         |--------------------------------------------------------------------------
         */
-
         $programmerUpdated = false;
-
         if ($request->has('user_name')) {
             $programmer->user_name = $request->user_name;
             $programmerUpdated = true;
         }
-
         if ($request->has('bio')) {
             $programmer->bio = $request->bio;
             $programmerUpdated = true;
         }
-
         if ($request->has('track')) {
             $programmer->track = $request->track;
             $programmerUpdated = true;
@@ -455,37 +449,21 @@ public function updateProfile(Request $request)
         | Handle avatar upload
         |--------------------------------------------------------------------------
         */
-
         if ($request->hasFile('avatar')) {
-
             $file = $request->file('avatar');
-
             if ($file->isValid()) {
-
                 // حذف الصورة القديمة
-                if (
-                    $programmer->avatar_url &&
-                    str_contains($programmer->avatar_url, '/storage/')
-                ) {
-
+                if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
                     $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
-
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
                     }
                 }
-
-                // رفع الصورة الجديدة
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
-
                 $path = $file->storeAs('avatars', $fileName, 'public');
-
                 $programmer->avatar_url = Storage::url($path);
-
                 $programmerUpdated = true;
-
             } else {
-
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid image file'
@@ -515,9 +493,7 @@ public function updateProfile(Request $request)
         ]);
 
     } catch (\Exception $e) {
-
         Log::error('Profile update error: ' . $e->getMessage());
-
         return response()->json([
             'success' => false,
             'message' => 'An error occurred while updating profile',
