@@ -350,42 +350,47 @@ public function show(Task $task)
         }
 
         $task->load([
-            'programmer.user',      // المبرمج المسند إليه
-            'creator.user',         // منشئ المهمة (يجب أن يكون لديك علاقة creator في نموذج Task)
-            'team.project'
+            'programmer.user',      // المبرمج المسند إليه المهمة
+            'creator.user',         // منشئ المهمة (created_by)
+            'team.project',         // الفريق والمشروع
+            'attachments'           // المرفقات
         ]);
 
-        // تحويل priority من رقم إلى نص
-        $priorityText = 'low';
-        if ($task->priority >= 7) {
-            $priorityText = 'high';
-        } elseif ($task->priority >= 4) {
-            $priorityText = 'medium';
-        }
-
-        $responseData = [
-            'id' => $task->id,
-            'title' => $task->title,
-            'description' => $task->description,
-            'status' => $task->status,
-            'priority' => $priorityText,   // نص بدلاً من رقم
-            'deadline' => $task->deadline,
-            'project_name' => $task->team->project->title ?? null,
-            'creator' => $task->creator ? [
-                'name' => $task->creator->user->full_name ?? null,
-                'avatar_url' => $task->creator->avatar_url ?? null,
-            ] : null,
-            'attachments' => $task->attachments, // لو موجود
-        ];
-
-        // إذا كان المبرمج الحالي هو المسند إليه، يمكن إضافة حقل إضافي
-        if ($task->programmer_id == $programmer->id) {
-            $responseData['assigned_to_me'] = true;
-        }
+        // تحويل priority إلى نص (إذا كان العمود لا يزال integer)
+        $priorityMap = [1 => 'low', 2 => 'medium', 3 => 'high'];
+        $priorityName = $priorityMap[$task->priority] ?? 'medium';
 
         return response()->json([
             'success' => true,
-            'data' => $responseData
+            'data' => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'status' => $task->status,
+                'priority' => $priorityName,  // low, medium, high
+                'deadline' => $task->deadline?->toDateString(),
+                'project_name' => $task->team->project->title ?? null,
+                'created_by' => [
+                    'id' => $task->creator?->id,
+                    'name' => $task->creator?->user?->full_name,
+                    'avatar_url' => $task->creator?->avatar_url,
+                ],
+                'assigned_to' => [
+                    'id' => $task->programmer?->id,
+                    'name' => $task->programmer?->user?->full_name,
+                    'avatar_url' => $task->programmer?->avatar_url,
+                ],
+                'attachments' => $task->attachments->map(function($attachment) {
+                    return [
+                        'id' => $attachment->id,
+                        'file_name' => $attachment->file_name,
+                        'file_path' => $attachment->file_path,
+                        'file_size' => $attachment->file_size,
+                        'uploaded_by' => $attachment->uploadedBy?->user?->full_name,
+                        'uploaded_at' => $attachment->created_at,
+                    ];
+                }),
+            ]
         ]);
     } catch (\Exception $e) {
         Log::error('Error showing task: ' . $e->getMessage());
@@ -454,17 +459,20 @@ public function store(StoreTaskRequest $request, Team $team)
     /**
  * تحديث حالة المهمة إلى "done" (مكتملة)
  */
-public function markAsCompleted(Task $task)
+/**
+ * وضع علامة "مكتمل" على المهمة
+ */
+public function markAsDone(Request $request, Task $task)
 {
     try {
         $user = auth()->user();
         $programmer = $user->programmer;
 
-        // التحقق من أن المستخدم هو المسند إليه المهمة أو قائد الفريق
-        if ($task->programmer_id != $programmer->id && !$task->team->isLeader($programmer->id)) {
+        // فقط المبرمج المسند إليه المهمة أو قائد الفريق يمكنه إنهاء المهمة
+        if ($task->programmer_id !== $programmer->id && !$task->team->isLeader($programmer->id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the assigned programmer or team leader can mark task as completed'
+                'message' => 'Only the assigned programmer or team leader can mark task as done'
             ], 403);
         }
 
@@ -475,25 +483,90 @@ public function markAsCompleted(Task $task)
             ], 400);
         }
 
-        $task->status = 'done';
-        $task->completed_at = now();
-        $task->save();
+        DB::beginTransaction();
 
-        // تحديث إحصائيات المبرمج (اختياري)
-        // يمكنك إضافة نقاط للمبرمج هنا
+        $task->update([
+            'status' => 'done',
+            'completed_at' => now(),
+            'progress_percentage' => 100,
+        ]);
+
+        Log::info('Task marked as done', [
+            'task_id' => $task->id,
+            'marked_by' => $programmer->id
+        ]);
+
+        DB::commit();
 
         return response()->json([
             'success' => true,
-            'message' => 'Task marked as completed',
-            'data' => [
-                'task_id' => $task->id,
-                'status' => $task->status,
-                'completed_at' => $task->completed_at
-            ]
+            'message' => 'Task marked as completed successfully'
         ]);
+
     } catch (\Exception $e) {
-        Log::error('Error completing task: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to complete task'], 500);
+        DB::rollBack();
+        Log::error('Error marking task as done: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to mark task as done'
+        ], 500);
+    }
+}
+    /**
+ * رفع مرفق لمهمة معينة
+ */
+public function uploadAttachment(Request $request, Task $task)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
+
+        // التحقق من أن المستخدم عضو في الفريق
+        if (!$task->team->isMember($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not a member of this team'
+            ], 403);
+        }
+
+        $request->validate([
+            'attachment' => 'required|file|max:10240', // max 10MB
+        ]);
+
+        $file = $request->file('attachment');
+        $fileName = $file->getClientOriginalName();
+        $fileSize = $file->getSize();
+        $fileType = $file->getMimeType();
+
+        // تخزين الملف
+        $path = $file->store('task_attachments/' . $task->id, 'public');
+
+        $attachment = $task->attachments()->create([
+            'file_name' => $fileName,
+            'file_path' => $path,
+            'file_type' => $fileType,
+            'file_size' => $fileSize,
+            'uploaded_by' => $programmer->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attachment uploaded successfully',
+            'data' => [
+                'id' => $attachment->id,
+                'file_name' => $attachment->file_name,
+                'file_path' => Storage::url($attachment->file_path),
+                'file_size' => $attachment->file_size,
+                'uploaded_at' => $attachment->created_at,
+            ]
+        ], 201);
+
+    } catch (\Exception $e) {
+        Log::error('Error uploading attachment: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to upload attachment'
+        ], 500);
     }
 }
 }
