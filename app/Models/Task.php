@@ -82,6 +82,16 @@ public function attachments(): HasMany
 {
     return $this->hasMany(TaskAttachment::class);
 }
+    // في app/Models/Task.php
+public function getPriorityNameAttribute()
+{
+    return match($this->priority) {
+        1 => 'low',
+        2 => 'medium',
+        3 => 'high',
+        default => 'medium',
+    };
+}
 
     /**
      * Get the programmer assigned to the task
