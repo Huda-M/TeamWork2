@@ -1456,6 +1456,47 @@ public function getFullTeamDetails($teamId, Request $request)
             ], 500);
         }
     }
+    /**
+ * عرض أعضاء الفريق فقط (مع الاسم، التراك، الصورة)
+ * 
+ * @param int $teamId
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function getTeamMembersList($teamId)
+{
+    try {
+        $team = Team::with('activeMembers.programmer.user')->find($teamId);
+        
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Team not found'
+            ], 404);
+        }
+        
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'programmer_id' => $prog->id,
+                'name' => $prog->user->full_name,
+                'track' => $prog->track ?? 'general',
+                'avatar_url' => $prog->avatar_url,
+            ];
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => $members
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('Error fetching team members list: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch team members'
+        ], 500);
+    }
+}
 }
 
    
