@@ -101,6 +101,7 @@ Route::middleware('start.session')->group(function () {
 
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/teams/{teamId}/members-with-ratings', [TeamController::class, 'getTeamMembersWithRatings']);
     Route::get('/teams/{teamId}/members-list', [TeamController::class, 'getTeamMembersList']);
     Route::patch('/tasks/{task}/complete', [TaskController::class, 'markAsCompleted']);
     Route::get('/team/{teamId}/full-details', [TeamController::class, 'getFullTeamDetails']);
