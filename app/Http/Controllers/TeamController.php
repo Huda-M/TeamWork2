@@ -1497,6 +1497,49 @@ public function getTeamMembersList($teamId)
         ], 500);
     }
 }
+    public function getTeamMembersWithRatings($teamId)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($teamId);
+        
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            // حساب متوسط التقييمات (من 1 إلى 10) وتحويله إلى نجوم من 5
+            $avgScore = Evaluation::where('evaluated_id', $prog->id)
+                ->where('team_id', $team->id) // تقييمات هذا الفريق فقط
+                ->avg('average_score') ?? 0;
+            $stars = round($avgScore / 2, 1); // تحويل 1-10 إلى 0.5-5
+            
+            // جلب أحدث feedback (اختياري)
+            $latestFeedback = Evaluation::where('evaluated_id', $prog->id)
+                ->where('team_id', $team->id)
+                ->whereNotNull('feedback')
+                ->orderBy('created_at', 'desc')
+                ->value('feedback');
+            
+            return [
+                'programmer_id' => $prog->id,
+                'name' => $prog->user->full_name,
+                'avatar_url' => $prog->avatar_url,
+                'track' => $prog->track ?? 'general',
+                'average_rating' => $stars, // من 5
+                'latest_feedback' => $latestFeedback,
+            ];
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project_name' => $team->project->title,
+                'project_description' => $team->project->description,
+                'members' => $members,
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error in getTeamMembersWithRatings: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch data'], 500);
+    }
+}
 }
 
    
