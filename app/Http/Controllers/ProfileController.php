@@ -312,7 +312,6 @@ class ProfileController extends Controller
             ]
         ]);
     }
-
 public function updateProfile(Request $request)
 {
     try {
@@ -334,30 +333,15 @@ public function updateProfile(Request $request)
             ], 404);
         }
 
-        // قواعد التحقق
+        // قواعد التحقق (تم إزالة user_name)
         $rules = [
             'full_name' => 'sometimes|required|string|max:255',
             'bio'       => 'nullable|string|max:1000',
             'track'     => 'nullable|string|max:100',
-            'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',   // فقط رفع ملف
+            'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        // التحقق من uniqueness فقط إذا تغير user_name
-        if ($request->has('user_name')) {
-            $newUserName = $request->input('user_name');
-            if ($newUserName !== $programmer->user_name) {
-                $rules['user_name'] = [
-                    'required',
-                    'string',
-                    'max:255',
-                    Rule::unique('programmers', 'user_name')->ignore($programmer->id)
-                ];
-            } else {
-                $rules['user_name'] = 'sometimes|required|string|max:255';
-            }
-        }
-
-        // إذا أرسل email، تحقق من uniqueness في جدول users
+        // تحقق email فقط (بشرط عدم التكرار)
         if ($request->has('email')) {
             $rules['email'] = [
                 'sometimes',
@@ -391,12 +375,8 @@ public function updateProfile(Request $request)
             $user->save();
         }
 
-        // تحديث جدول programmers
+        // تحديث جدول programmers (بدون user_name)
         $programmerUpdated = false;
-        if ($request->has('user_name')) {
-            $programmer->user_name = $request->input('user_name');
-            $programmerUpdated = true;
-        }
         if ($request->has('bio')) {
             $programmer->bio = $request->input('bio');
             $programmerUpdated = true;
@@ -406,11 +386,11 @@ public function updateProfile(Request $request)
             $programmerUpdated = true;
         }
 
-        // معالجة الصورة (ملف مرفوع فقط، لا دعم للرابط)
+        // معالجة الصورة
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                // حذف الصورة القديمة إن وجدت
+                // حذف الصورة القديمة
                 if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
                     $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
                     if (Storage::disk('public')->exists($oldPath)) {
@@ -434,7 +414,6 @@ public function updateProfile(Request $request)
             $programmer->save();
         }
 
-        // إعادة تحميل البيانات للتأكد من حداثتها
         $programmer->refresh();
         $user->refresh();
 
@@ -443,7 +422,7 @@ public function updateProfile(Request $request)
             'message' => 'Profile updated successfully',
             'data'    => [
                 'id'          => $programmer->id,
-                'user_name'   => $programmer->user_name,
+                'user_name'   => $programmer->user_name, // يبقى كما هو دون تغيير
                 'full_name'   => $user->full_name,
                 'email'       => $user->email,
                 'bio'         => $programmer->bio,
