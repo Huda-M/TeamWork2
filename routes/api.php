@@ -140,6 +140,8 @@ Route::prefix('v1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/{task}/attachments', [TaskController::class, 'uploadAttachment']);
+    Route::post('/{task}/mark-as-done', [TaskController::class, 'markAsDone']);
     Route::get('/zero-project/{projectId}', [ProjectController::class, 'zeroProject']);
     Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
