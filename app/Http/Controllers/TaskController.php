@@ -451,4 +451,49 @@ public function store(StoreTaskRequest $request, Team $team)
         ], 500);
     }
 }
+    /**
+ * تحديث حالة المهمة إلى "done" (مكتملة)
+ */
+public function markAsCompleted(Task $task)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
+
+        // التحقق من أن المستخدم هو المسند إليه المهمة أو قائد الفريق
+        if ($task->programmer_id != $programmer->id && !$task->team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the assigned programmer or team leader can mark task as completed'
+            ], 403);
+        }
+
+        if ($task->status === 'done') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task is already completed'
+            ], 400);
+        }
+
+        $task->status = 'done';
+        $task->completed_at = now();
+        $task->save();
+
+        // تحديث إحصائيات المبرمج (اختياري)
+        // يمكنك إضافة نقاط للمبرمج هنا
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task marked as completed',
+            'data' => [
+                'task_id' => $task->id,
+                'status' => $task->status,
+                'completed_at' => $task->completed_at
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error completing task: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to complete task'], 500);
+    }
+}
 }
