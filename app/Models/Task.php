@@ -73,8 +73,7 @@ class Task extends Model
     {
         return $this->belongsTo(Team::class);
     }
-
-    public function creator(): BelongsTo
+public function creator()
 {
     return $this->belongsTo(Programmer::class, 'created_by');
 }
