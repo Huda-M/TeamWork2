@@ -361,20 +361,19 @@ public function dashboard()
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // ---- 1. بيانات الملف الشخصي ----
+        // ---- 1. بيانات الملف الشخصي (بدون user_name) ----
         $profileData = [
             'name'       => $user->full_name,
-            'user_name'  => $programmer->user_name,
             'track'      => $programmer->track ?? 'general',
             'avatar_url' => $programmer->avatar_url,
-            'level'      => $this->getProgrammerLevel($programmer), // سننشئها الآن
+            'level'      => $this->getProgrammerLevel($programmer),
         ];
 
         // ---- 2. إحصائيات المهام ----
         $completedTasks = $programmer->tasks()->where('status', 'done')->count();
         $inProgressTasks = $programmer->tasks()->whereIn('status', ['todo', 'in_progress', 'review'])->count();
 
-        // ---- 3. عدد الفرق النشطة (التي لم يغادرها) ----
+        // ---- 3. عدد الفرق النشطة ----
         $teamsCount = $programmer->teams()
             ->wherePivotNull('left_at')
             ->count();
