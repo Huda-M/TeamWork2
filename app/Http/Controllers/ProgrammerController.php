@@ -342,5 +342,85 @@ class ProgrammerController extends Controller
             'data' => $payload
         ]);
     }
+
+    /**
+ * عرض لوحة المعلومات الخاصة بالمبرمج (ملخص كامل)
+ * 
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function dashboard()
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // ---- 1. بيانات الملف الشخصي ----
+        $profileData = [
+            'name'       => $user->full_name,
+            'user_name'  => $programmer->user_name,
+            'track'      => $programmer->track ?? 'general',
+            'avatar_url' => $programmer->avatar_url,
+            'level'      => $this->getProgrammerLevel($programmer), // سننشئها الآن
+        ];
+
+        // ---- 2. إحصائيات المهام ----
+        $completedTasks = $programmer->tasks()->where('status', 'done')->count();
+        $inProgressTasks = $programmer->tasks()->whereIn('status', ['todo', 'in_progress', 'review'])->count();
+
+        // ---- 3. عدد الفرق النشطة (التي لم يغادرها) ----
+        $teamsCount = $programmer->teams()
+            ->wherePivotNull('left_at')
+            ->count();
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'profile'          => $profileData,
+                'tasks_statistics' => [
+                    'completed_tasks'  => $completedTasks,
+                    'in_progress_tasks' => $inProgressTasks,
+                ],
+                'teams_count' => $teamsCount,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Dashboard error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load dashboard'
+        ], 500);
+    }
+}
+
+/**
+ * تحديد المستوى النصي للمبرمج بناءً على experience_level أو total_score
+ * 
+ * @param \App\Models\Programmer $programmer
+ * @return string
+ */
+private function getProgrammerLevel($programmer)
+{
+    // إذا كان experience_level موجوداً في الجدول ومُعبأ، استخدمه
+    if (!empty($programmer->experience_level)) {
+        return $programmer->experience_level;
+    }
+    
+    // وإلا احسب من total_score
+    $score = $programmer->total_score ?? 0;
+    if ($score >= 1000) return 'expert';
+    if ($score >= 700)  return 'advanced';
+    if ($score >= 500)  return 'senior';
+    if ($score >= 200)  return 'intermediate';
+    if ($score >= 50)   return 'junior';
+    return 'beginner';
+}
     
 }
