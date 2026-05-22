@@ -1569,6 +1569,81 @@ public function getTeamMembersList($teamId)
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
 }
+    /**
+ * عرض أعضاء الفريق مع تقييماتهم للمبرمج الحالي (النجوم والفيدباك)
+ *
+ * @param int $teamId
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function getTeamMembersWithMyRatings($teamId)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $currentProgrammer = $user->programmer;
+        if (!$currentProgrammer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب الفريق مع المشروع والأعضاء
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->find($teamId);
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'Team not found'], 404);
+        }
+
+        // التحقق من أن المستخدم الحالي عضو في هذا الفريق
+        if (!$team->isMember($currentProgrammer->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        // تجهيز بيانات الأعضاء مع تقييماتهم للمستخدم الحالي
+        $members = $team->activeMembers->map(function ($member) use ($currentProgrammer) {
+            $prog = $member->programmer;
+            
+            // جلب تقييم هذا العضو للمبرمج الحالي (إذا وجد)
+            $evaluation = \App\Models\Evaluation::where('evaluator_id', $prog->id)
+                ->where('evaluated_id', $currentProgrammer->id)
+                ->first();
+            
+            $starsGiven = null;
+            $feedbackGiven = null;
+            
+            if ($evaluation) {
+                // تحويل average_score (من 1-10) إلى نجوم من 1-5
+                $starsGiven = round($evaluation->average_score / 2, 1);
+                $feedbackGiven = $evaluation->feedback;
+            }
+            
+            return [
+                'programmer_id' => $prog->id,
+                'name'          => $prog->user->full_name,
+                'track'         => $prog->track ?? 'general',
+                'avatar_url'    => $prog->avatar_url,
+                'stars_given_to_me' => $starsGiven,   // عدد النجوم الذي قيمني به هذا العضو
+                'feedback_from_them' => $feedbackGiven, // الفيدباك الذي كتبه عني
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_name'           => $team->name,
+                'project_description' => $team->project->description,
+                'members'             => $members,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error in getTeamMembersWithMyRatings: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch team members with ratings'
+        ], 500);
+    }
+}
 }
 
    
