@@ -101,37 +101,29 @@ class AuthController extends Controller
         try {
             $socialUser = Socialite::driver($provider)->stateless()->user();
         } catch (\Exception $e) {
-            return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Failed to authenticate'));
+            return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Authentication failed'));
         }
+
+        $isNew = false;
 
         $userAuth = UserAuth::where('provider_type', $provider)
             ->where('provider_user_id', $socialUser->getId())
             ->first();
 
-        $isNew = false;
+        $user = $userAuth ? $userAuth->user : null;
 
-        if ($userAuth) {
-            $user = $userAuth->user;
+        if ($userAuth && ! $user) {
+            $userAuth->delete();
+            $userAuth = null;
+        }
 
-            if ($user->role !== 'company') {
-                return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Not authorized to login as company'));
-            }
-        } else {
+        if (! $userAuth) {
             $user = User::where('email', $socialUser->getEmail())->first();
 
             if ($user) {
                 if ($user->role !== 'company') {
                     return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Not authorized to login as company'));
                 }
-
-                $user->userAuth()->create([
-                    'provider_type' => $provider,
-                    'provider_user_id' => $socialUser->getId(),
-                    'provider_email' => $socialUser->getEmail(),
-                    'provider_name' => $socialUser->getName() ?? $socialUser->getNickname(),
-                    'access_token' => $socialUser->token,
-                    'refresh_token' => $socialUser->refreshToken,
-                ]);
             } else {
                 $user = User::create([
                     'full_name' => $socialUser->getName() ?? $socialUser->getNickname() ?? 'Unknown User',
@@ -140,17 +132,21 @@ class AuthController extends Controller
                     'role' => 'company',
                 ]);
 
-                $user->userAuth()->create([
-                    'provider_type' => $provider,
-                    'provider_user_id' => $socialUser->getId(),
-                    'provider_email' => $socialUser->getEmail(),
-                    'provider_name' => $socialUser->getName() ?? $socialUser->getNickname(),
-                    'access_token' => $socialUser->token,
-                    'refresh_token' => $socialUser->refreshToken,
-                ]);
-
                 $isNew = true;
             }
+
+            $userAuth = $user->userAuth()->create([
+                'provider_type' => $provider,
+                'provider_user_id' => $socialUser->getId(),
+                'provider_email' => $socialUser->getEmail(),
+                'provider_name' => $socialUser->getName() ?? $socialUser->getNickname(),
+                'access_token' => $socialUser->token,
+                'refresh_token' => $socialUser->refreshToken,
+            ]);
+        }
+
+        if (! $user || $user->role !== 'company') {
+            return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Not authorized to login as company'));
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
