@@ -1544,6 +1544,31 @@ public function getTeamMembersList($teamId)
         return response()->json(['success' => false, 'message' => 'Failed to fetch data'], 500);
     }
 }
+    public function getTeamBasicDetails($id)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_name' => $team->name,
+                'project_description' => $team->project->description,
+                'members' => $team->activeMembers->map(function($member) {
+                    return [
+                        'programmer_id' => $member->programmer_id,
+                        'name' => $member->programmer->user->full_name,
+                        'track' => $member->programmer->track ?? 'general',
+                        'avatar_url' => $member->programmer->avatar_url,
+                    ];
+                })
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching team basic details: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+    }
+}
 }
 
    
