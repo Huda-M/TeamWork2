@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Annotations as OA;
 use App\Notifications\SendInvitationNotification;
-
+use App\Http\Requests\EvaluateTeamRequest;
+use App\Models\Evaluation;
 
 class TeamController extends Controller
 {
@@ -1644,6 +1645,131 @@ public function getTeamMembersWithMyRatings($teamId)
         ], 500);
     }
 }
-}
+    
 
-   
+/**
+ * تقييم جميع أعضاء الفريق (بعد اكتمال المشروع)
+ *
+ * @param int $teamId
+ * @param EvaluateTeamRequest $request
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function evaluateTeamMembers($teamId, EvaluateTeamRequest $request)
+{
+    try {
+        $user = auth()->user();
+        $evaluator = $user->programmer;
+
+        // جلب الفريق مع المشروع والأعضاء
+        $team = Team::with(['project', 'activeMembers'])->find($teamId);
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'Team not found'], 404);
+        }
+
+        // التحقق من أن المستخدم الحالي عضو في هذا الفريق
+        if (!$team->isMember($evaluator->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        // التحقق من أن المشروع مكتمل
+        $project = $team->project;
+        if (!$project || $project->status !== 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'You can only evaluate team members after the project is completed'
+            ], 400);
+        }
+
+        $validated = $request->validated();
+        $evaluationsData = $validated['evaluations'];
+        $errors = [];
+        $successCount = 0;
+
+        DB::beginTransaction();
+
+        foreach ($evaluationsData as $eval) {
+            $evaluatedId = $eval['evaluated_id'];
+            $rating = $eval['rating'];      // 1-5
+            $feedback = $eval['feedback'] ?? null;
+
+            // منع التقييم الذاتي
+            if ($evaluatedId == $evaluator->id) {
+                $errors[] = "You cannot evaluate yourself (ID: $evaluatedId)";
+                continue;
+            }
+
+            // التحقق من أن المقيم عضو في الفريق
+            if (!$team->isMember($evaluatedId)) {
+                $errors[] = "Programmer ID $evaluatedId is not a member of this team";
+                continue;
+            }
+
+            // التحقق من عدم وجود تقييم سابق من هذا المقيم لنفس المقيم في نفس المشروع
+            $existing = Evaluation::where('project_id', $project->id)
+                ->where('team_id', $team->id)
+                ->where('evaluator_id', $evaluator->id)
+                ->where('evaluated_id', $evaluatedId)
+                ->first();
+
+            if ($existing) {
+                $errors[] = "You have already evaluated programmer ID $evaluatedId";
+                continue;
+            }
+
+            // تحويل الـ rating (1-5) إلى average_score (1-10)
+            $averageScore = $rating * 2;  // 5 نجوم = 10 نقاط
+
+            // إنشاء التقييم
+            Evaluation::create([
+                'project_id' => $project->id,
+                'team_id' => $team->id,
+                'evaluator_id' => $evaluator->id,
+                'evaluated_id' => $evaluatedId,
+                'technical_skills' => $rating,
+                'communication' => $rating,
+                'teamwork' => $rating,
+                'problem_solving' => $rating,
+                'reliability' => $rating,
+                'code_quality' => $rating,
+                'average_score' => $averageScore,
+                'strengths' => null,
+                'areas_for_improvement' => null,
+                'feedback' => $feedback,
+                'is_anonymous' => false,
+                'is_completed' => true,
+                'submitted_at' => now(),
+            ]);
+
+            // إضافة نقاط للمُقيَّم (اختياري)
+            $evaluatedProgrammer = Programmer::find($evaluatedId);
+            if ($evaluatedProgrammer && method_exists($evaluatedProgrammer, 'addStars')) {
+                $points = $rating * 10; // مثال: 5 نجوم = 50 نقطة
+                $evaluatedProgrammer->addStars($points, 'Received peer evaluation', [
+                    'project_id' => $project->id,
+                    'rating' => $rating
+                ]);
+            }
+
+            $successCount++;
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Successfully submitted $successCount evaluation(s).",
+            'errors' => $errors, // أخطاء جزئية إن وجدت
+            'total_submitted' => $successCount,
+            'total_requested' => count($evaluationsData)
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error evaluating team members: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to submit evaluations: ' . $e->getMessage()
+        ], 500);
+    }
+}
+}
