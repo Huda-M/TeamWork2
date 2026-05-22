@@ -101,6 +101,7 @@ Route::middleware('start.session')->group(function () {
 
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/teams/{teamId}/my-ratings', [TeamController::class, 'getTeamMembersWithMyRatings']);
     Route::get('/teams/{id}/basic-details', [TeamController::class, 'getTeamBasicDetails']);
     Route::get('/my/level-progression', [ProgrammerController::class, 'levelProgression']);
     Route::get('/my/dashboard', [ProgrammerController::class, 'dashboard']);
