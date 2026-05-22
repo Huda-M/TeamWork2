@@ -316,21 +316,13 @@ public function updateProfile(Request $request)
 {
     try {
         $user = Auth::user();
-
         if (!$user || $user->role !== 'programmer') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only programmers can update their profile'
-            ], 403);
+            return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
         }
 
         $programmer = $user->programmer;
-
         if (!$programmer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Programmer profile not found'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
         $rules = [
@@ -340,84 +332,37 @@ public function updateProfile(Request $request)
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        /*
-        |--------------------------------------------------------------------------
-        | user_name validation: يسمح بنفس الاسم، ويمنع التكرار مع مستخدمين آخرين
-        |--------------------------------------------------------------------------
-        */
-        if ($request->has('user_name')) {
-            $newUserName = trim($request->user_name);
-            $currentUserName = $programmer->user_name;
-
-            // إذا كان الاسم الجديد مختلفًا عن القديم، نتأكد من عدم وجوده لدى آخرين
-            if ($newUserName !== $currentUserName) {
-                $exists = \App\Models\Programmer::where('user_name', $newUserName)
-                    ->where('id', '!=', $programmer->id)
-                    ->exists();
-
-                if ($exists) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Validation failed',
-                        'errors' => [
-                            'user_name' => ['The user name has already been taken.']
-                        ]
-                    ], 422);
-                }
-            }
-            // نضيف قاعدة التحقق الإلزامية فقط إذا أرسل الحقل (ولكننا تجاوزنا فريدياً يدوياً)
-            $rules['user_name'] = 'required|string|max:255';
+        // user_name validation (فقط إذا أرسله المستخدم)
+        if ($request->filled('user_name')) {
+            $rules['user_name'] = [
+                'required',
+                'string',
+                'max:255',
+                \Illuminate\Validation\Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+            ];
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | email validation (نفس المبدأ)
-        |--------------------------------------------------------------------------
-        */
-        if ($request->has('email')) {
-            $newEmail = trim($request->email);
-            $currentEmail = $user->email;
-
-            if ($newEmail !== $currentEmail) {
-                $exists = \App\Models\User::where('email', $newEmail)
-                    ->where('id', '!=', $user->id)
-                    ->exists();
-
-                if ($exists) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Validation failed',
-                        'errors' => [
-                            'email' => ['The email has already been taken.']
-                        ]
-                    ], 422);
-                }
-            }
-            $rules['email'] = 'required|email';
+        // email validation (فقط إذا أرسله المستخدم)
+        if ($request->filled('email')) {
+            $rules['email'] = [
+                'required',
+                'email',
+                \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)
+            ];
         }
 
         $validator = Validator::make($request->all(), $rules);
-
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors'  => $validator->errors()
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Update users table
-        |--------------------------------------------------------------------------
-        */
+        // Update users table
         $userUpdated = false;
         if ($request->has('full_name')) {
             $user->full_name = $request->full_name;
             $userUpdated = true;
         }
         if ($request->has('email')) {
-            // تم التحقق من تفرد البريد أعلاه
             $user->email = $request->email;
             $userUpdated = true;
         }
@@ -425,11 +370,7 @@ public function updateProfile(Request $request)
             $user->save();
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Update programmers table
-        |--------------------------------------------------------------------------
-        */
+        // Update programmers table
         $programmerUpdated = false;
         if ($request->has('user_name')) {
             $programmer->user_name = $request->user_name;
@@ -444,11 +385,7 @@ public function updateProfile(Request $request)
             $programmerUpdated = true;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Handle avatar upload
-        |--------------------------------------------------------------------------
-        */
+        // Handle avatar upload
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
             if ($file->isValid()) {
@@ -464,10 +401,7 @@ public function updateProfile(Request $request)
                 $programmer->avatar_url = Storage::url($path);
                 $programmerUpdated = true;
             } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid image file'
-                ], 400);
+                return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
             }
         }
 
