@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Annotations as OA;
+use App\Notifications\SendInvitationNotification;
 
 
 class TeamController extends Controller
@@ -617,13 +618,16 @@ if (!$validated['is_public'] && !empty($validated['invitations'])) {
         if ($existing) continue;
 
         $invitation = TeamInvitation::create([
-            'team_id'      => $team->id,
-            'programmer_id'=> $invitedProgrammer->id,
-            'invited_by'   => $programmer->id,
-            'message'      => "You've been invited to join team '{$team->name}'",
-            'status'       => 'pending',
-            'expires_at'   => now()->addDays(7),
-        ]);
+    'team_id'      => $team->id,
+    'programmer_id'=> $invitedProgrammer->id,
+    'invited_by'   => $programmer->id,
+    'message'      => "You've been invited to join team '{$team->name}'",
+    'status'       => 'pending',
+    'expires_at'   => now()->addDays(7),
+]);
+
+// إرسال الإشعار
+$invitedProgrammer->user->notify(new SendInvitationNotification($invitation));
 
         $invitationsSent[] = [
             'username'      => $username,
