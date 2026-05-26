@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class Team extends Model
 {
-    use HasFactory;
+    use HasFactory , SoftDeletes;
 
     protected $fillable = [
         'name',
