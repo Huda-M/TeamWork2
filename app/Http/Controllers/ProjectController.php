@@ -651,7 +651,7 @@ public function myProjectDetails($projectId, Request $request)
         }
     }
 
-    public function myProjects(Request $request) // تأكد من إضافة Request
+    public function myProjects(Request $request)
 {
     $user = Auth::user();
     if (!$user || $user->role !== 'programmer') {
@@ -663,9 +663,12 @@ public function myProjectDetails($projectId, Request $request)
         return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
     }
 
+    // إعدادات pagination (افتراضي 10 مشاريع لكل صفحة)
+    $perPage = (int) $request->get('per_page', 10);
+    $page = (int) $request->get('page', 1);
     $statusFilter = $request->query('status'); // 'ongoing' أو 'completed'
 
-    // جلب كل مشاريع المبرمج عبر الفرق
+    // جلب كل مشاريع المبرمج عبر الفرق (بدون pagination في الاستعلام)
     $allProjects = Project::whereHas('teams.activeMembers', function($q) use ($programmer) {
         $q->where('programmer_id', $programmer->id);
     })->with(['teams.tasks'])->get();
@@ -691,7 +694,7 @@ public function myProjectDetails($projectId, Request $request)
             'my_specialization' => $programmer->track ?? 'general',
         ];
 
-        if ($project->status === 'ongoing') {   // المقارنة مع 'ongoing'
+        if ($project->status === 'ongoing') {
             $ongoingProjects[] = $projectData;
         } else {
             $projectData['completion_date'] = $project->updated_at->toDateString();
@@ -699,25 +702,19 @@ public function myProjectDetails($projectId, Request $request)
         }
     }
 
-    // تطبيق الفلتر بناءً على الـ status المطلوب
+    // الرد حسب الفلتر مع تطبيق pagination
     if ($statusFilter === 'ongoing') {
-        return response()->json([
-            'success' => true,
-            'data' => $ongoingProjects,
-        ]);
-    } elseif ($statusFilter === 'completed') {
-        return response()->json([
-            'success' => true,
-            'data' => $completedProjects,
-        ]);
-    } else {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'ongoing_projects' => $ongoingProjects,
-                'completed_projects' => $completedProjects,
-            ],
-        ]);
+        $paginated = $this->paginateCollection(collect($ongoingProjects), $perPage, $page);
+        return response()->json(['success' => true, 'data' => $paginated]);
+    } 
+    elseif ($statusFilter === 'completed') {
+        $paginated = $this->paginateCollection(collect($completedProjects), $perPage, $page);
+        return response()->json(['success' => true, 'data' => $paginated]);
+    } 
+    else {
+        $allProjectsList = array_merge($ongoingProjects, $completedProjects);
+        $paginated = $this->paginateCollection(collect($allProjectsList), $perPage, $page);
+        return response()->json(['success' => true, 'data' => $paginated]);
     }
 }
 
@@ -765,5 +762,17 @@ public function myProjectDetails($projectId, Request $request)
             'message' => 'Failed to fetch project tasks'
         ], 500);
     }
+}
+    private function paginateCollection($collection, $perPage, $page)
+{
+    $items = $collection->slice(($page - 1) * $perPage, $perPage)->values();
+    
+    return new \Illuminate\Pagination\LengthAwarePaginator(
+        $items,
+        $collection->count(),
+        $perPage,
+        $page,
+        ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
+    );
 }
 }
