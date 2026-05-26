@@ -344,12 +344,23 @@ public function softDeleteTeam($id)
 {
     $user = Auth::user();
     $team = Team::findOrFail($id);
-    $isLeader = $team->isLeader($user->programmer->id);
+    
+    // التحقق من الصلاحية: يجب أن يكون قائد الفريق أو أدمن
+    $isLeader = false;
+    if ($user->programmer) {
+        $isLeader = $team->isLeader($user->programmer->id);
+    }
+    
     if (!$isLeader && $user->role !== 'admin') {
         return response()->json(['message' => 'Unauthorized'], 403);
     }
+    
+    // تنفيذ الحذف الناعم
     $team->delete(); // soft delete (بفضل SoftDeletes في الموديل)
+    
+    // تسجيل وقت مغادرة جميع الأعضاء النشطين
     $team->activeMembers()->update(['left_at' => now()]);
+    
     return response()->json(['success' => true, 'message' => 'Team soft deleted']);
 }
 /**
