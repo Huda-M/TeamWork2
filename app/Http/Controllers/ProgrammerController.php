@@ -11,6 +11,11 @@ use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use OpenApi\Annotations as OA;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 
 class ProgrammerController extends Controller
@@ -191,14 +196,10 @@ class ProgrammerController extends Controller
             $percentage = $total > 0 ? round(($completed / $total) * 100, 2) : 0;
 
             $projectsStats[] = [
-                'project_id' => $project->id,
-                'project_title' => $project->title,
-                'category' => $project->category_name,
-                'status' => $project->status,
-                'total_tasks' => $total,
-                'completed_tasks' => $completed,
-                'completion_percentage' => $percentage,
-            ];
+    'project_id' => $project->id,
+    'project_title' => $project->title,
+    'completion_percentage' => $percentage,
+];
         }
 
         return response()->json([
@@ -341,4 +342,211 @@ class ProgrammerController extends Controller
             'data' => $payload
         ]);
     }
+
+    /**
+ * عرض لوحة المعلومات الخاصة بالمبرمج (ملخص كامل)
+ * 
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function dashboard()
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // ---- 1. بيانات الملف الشخصي (بدون user_name) ----
+        $profileData = [
+            'name'       => $user->full_name,
+            'track'      => $programmer->track ?? 'general',
+            'avatar_url' => $programmer->avatar_url,
+            'level'      => $this->getProgrammerLevel($programmer),
+        ];
+
+        // ---- 2. إحصائيات المهام ----
+        $completedTasks = $programmer->tasks()->where('status', 'done')->count();
+        $inProgressTasks = $programmer->tasks()->whereIn('status', ['todo', 'in_progress', 'review'])->count();
+
+        // ---- 3. عدد الفرق النشطة ----
+        $teamsCount = $programmer->teams()
+            ->wherePivotNull('left_at')
+            ->count();
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'profile'          => $profileData,
+                'tasks_statistics' => [
+                    'completed_tasks'  => $completedTasks,
+                    'in_progress_tasks' => $inProgressTasks,
+                ],
+                'teams_count' => $teamsCount,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Dashboard error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load dashboard'
+        ], 500);
+    }
+}
+
+/**
+ * تحديد المستوى النصي للمبرمج بناءً على experience_level أو total_score
+ * 
+ * @param \App\Models\Programmer $programmer
+ * @return string
+ */
+private function getProgrammerLevel($programmer)
+{
+    // إذا كان experience_level موجوداً في الجدول ومُعبأ، استخدمه
+    if (!empty($programmer->experience_level)) {
+        return $programmer->experience_level;
+    }
+    
+    // وإلا احسب من total_score
+    $score = $programmer->total_score ?? 0;
+    if ($score >= 1000) return 'expert';
+    if ($score >= 700)  return 'advanced';
+    if ($score >= 500)  return 'senior';
+    if ($score >= 200)  return 'intermediate';
+    if ($score >= 50)   return 'junior';
+    return 'beginner';
+}
+
+public function levelProgression()
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        $score = $programmer->total_score ?? 0;
+
+        // تعريف المستويات الأساسية والفرعية (نقاط البدء لكل مستوى فرعي)
+        $levels = [
+            'beginner' => [
+                'bronze' => 0,
+                'silver' => 50,
+                'gold'   => 100,
+            ],
+            'junior' => [
+                'bronze' => 200,
+                'silver' => 250,
+                'gold'   => 300,
+            ],
+            'intermediate' => [
+                'bronze' => 400,
+                'silver' => 460,
+                'gold'   => 520,
+            ],
+            'senior' => [
+                'bronze' => 600,
+                'silver' => 680,
+                'gold'   => 760,
+            ],
+            'advanced' => [
+                'bronze' => 800,
+                'silver' => 890,
+                'gold'   => 980,
+            ],
+            'expert' => [
+                'bronze' => 1000,
+                'silver' => 1100,
+                'gold'   => 1200,
+            ],
+        ];
+
+        // 1. تحديد المستوى الحالي (الأساسي والفرعي)
+        $currentBaseLevel = null;
+        $currentSubLevel = null;
+        $currentThreshold = 0;
+        $nextThreshold = null;
+        $nextBaseLevel = null;
+        $nextSubLevel = null;
+
+        // البحث عن المستوى الذي ينتمي إليه score
+        foreach ($levels as $base => $subs) {
+            foreach ($subs as $sub => $threshold) {
+                if ($score >= $threshold) {
+                    $currentBaseLevel = $base;
+                    $currentSubLevel = $sub;
+                    $currentThreshold = $threshold;
+                } else {
+                    // هذا هو المستوى التالي (أول threshold أكبر من score)
+                    if ($nextThreshold === null) {
+                        $nextThreshold = $threshold;
+                        $nextBaseLevel = $base;
+                        $nextSubLevel = $sub;
+                    }
+                    break 2; // نخرج من الحلقتين لأننا وجدنا التالي
+                }
+            }
+        }
+
+        // إذا كان المستوى الحالي هو أعلى مستوى (Gold في Expert) فلن يوجد next
+        $isMaxLevel = ($currentBaseLevel === 'expert' && $currentSubLevel === 'gold');
+        
+        // حساب نسبة التقدم داخل المستوى الحالي
+        $progressPercentage = 0;
+        if (!$isMaxLevel && $nextThreshold !== null) {
+            $range = $nextThreshold - $currentThreshold;
+            $progress = $score - $currentThreshold;
+            $progressPercentage = round(($progress / $range) * 100, 2);
+            $progressPercentage = min($progressPercentage, 99.99);
+        } else {
+            $progressPercentage = 100;
+        }
+
+        // تكوين الاسم الكامل (مثل Beginner Silver)
+        $fullLevelName = ucfirst($currentBaseLevel) . ' ' . ucfirst($currentSubLevel);
+        
+        // تكوين المستوى التالي (إن وجد)
+        $nextFullLevelName = null;
+        if (!$isMaxLevel && $nextBaseLevel && $nextSubLevel) {
+            $nextFullLevelName = ucfirst($nextBaseLevel) . ' ' . ucfirst($nextSubLevel);
+        }
+
+        // إحصائيات إضافية
+        $totalTasks = $programmer->tasks()->count();
+        $averageRating = \App\Models\Evaluation::where('evaluated_id', $programmer->id)
+            ->avg('average_score') ?? 0;
+        $averageRating = round($averageRating, 2);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'current_level_full' => $fullLevelName,      // "Beginner Silver"
+                'base_level'         => $currentBaseLevel,   // "beginner"
+                'sub_level'          => $currentSubLevel,    // "silver"
+                'progress_percentage' => $progressPercentage,
+                'next_level_full'    => $nextFullLevelName,
+                'total_tasks'        => $totalTasks,
+                'average_rating'     => $averageRating,
+                // 'score' => $score, // (اختياري) يمكن إظهار النقاط للتصحيح
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Level progression error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load level progression'
+        ], 500);
+    }
+}   
 }

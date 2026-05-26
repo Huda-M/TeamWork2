@@ -81,13 +81,13 @@ class ReportController extends Controller
             DB::beginTransaction();
 
             $report = Report::create([
-                'target_user_id' => $validated['target_user_id'],
-                'reporter_user_id' => $reporter->id,
-                'report_type' => $validated['report_type'],
-                'description' => $validated['description'],
-                'evidence' => $validated['evidence'] ?? null,
-                'admin_action' => 'pending',
-            ]);
+    'target_user_id'   => $validated['target_user_id'],
+    'reporter_user_id' => $reporter->id,
+    'description'      => $validated['description'],
+    'admin_action'     => 'warning',
+    'status'           => 'generated',
+    'report_type'      => 'other',
+]);
 
             Log::info('New report created', [
                 'report_id' => $report->id,
@@ -104,15 +104,14 @@ class ReportController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating report: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to submit report'
-            ], 500);
-        }
+    DB::rollBack();
+    return response()->json([
+        'success' => false,
+        'message' => 'Failed to submit report',
+        'error'   => $e->getMessage(),
+    ], 500);
+}
     }
-
     public function show(Report $report)
     {
         try {
@@ -347,6 +346,31 @@ class ReportController extends Controller
             ], 500);
         }
     }
+    public function getUserReportInfo($id)
+{
+    try {
+        $user = User::findOrFail($id);
+        
+        // منع الإبلاغ عن الذات أو عن الأدمن (اختياري)
+        if ($user->id === auth()->id()) {
+            return response()->json(['success' => false, 'message' => 'لا يمكنك الإبلاغ عن نفسك'], 400);
+        }
+        if ($user->role === 'admin') {
+            return response()->json(['success' => false, 'message' => 'لا يمكن الإبلاغ عن المشرفين'], 400);
+        }
+        
+        $data = [
+            'id' => $user->id,
+            'name' => $user->full_name,
+            'track' => $user->role === 'programmer' ? ($user->programmer->track ?? 'غير محدد') : null,
+            'avatar_url' => $user->role === 'programmer' ? ($user->programmer->avatar_url ?? null) : null,
+        ];
+        
+        return response()->json(['success' => true, 'data' => $data]);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'message' => 'المستخدم غير موجود'], 404);
+    }
+}
 
     public function checkUserStatus()
     {

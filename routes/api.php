@@ -1,5 +1,39 @@
 <?php
 
+/**
+ * @OA\OpenApi(
+ *     @OA\Info(
+ *         version="1.0.0",
+ *         title="TeamWork API",
+ *         description="API Documentation for Team Work System",
+ *         @OA\Contact(
+ *             email="support@teamwork.com"
+ *         ),
+ *         @OA\License(
+ *             name="Apache 2.0",
+ *             url="https://www.apache.org/licenses/LICENSE-2.0.html"
+ *         )
+ *     ),
+ *     @OA\Server(
+ *         url="https://teamwork2-main-opmxfq.free.laravel.cloud",
+ *         description="Production Server"
+ *     ),
+ *     @OA\Server(
+ *         url="http://localhost:8000",
+ *         description="Development Server"
+ *     )
+ * )
+ * 
+ * @OA\SecurityScheme(
+ *     type="http",
+ *     description="Login with username and password to get the authentication token",
+ *     name="Token",
+ *     in="header",
+ *     scheme="bearer",
+ *     bearerFormat="JWT",
+ *     securityScheme="Bearer"
+ * )
+ */
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -24,13 +58,17 @@ use App\Http\Controllers\CompanyProgrammerController;
  * @OA\Info(
  *     version="1.0.0",
  *     title="Team Work API",
- *     description="API Documentation for Team Work System"
+ *     description="API Documentation for Team Work System",
+ *     contact={
+ *         "email":"support@teamwork.com"
+ *     }
  * )
  *
  * @OA\Server(
  *     url=L5_SWAGGER_CONST_HOST,
  *     description="API Server"
  * )
+<<<<<<< HEAD
  *
  * @OA\SecurityScheme(
  *     type="http",
@@ -38,6 +76,19 @@ use App\Http\Controllers\CompanyProgrammerController;
  *     scheme="bearer",
  *     bearerFormat="JWT",
  *     description="Login with username and password to get the authentication token"
+=======
+ * 
+ * @OA\Components(
+ *     @OA\SecurityScheme(
+ *         type="http",
+ *         description="Login with username and password to get the authentication token",
+ *         name="Token",
+ *         in="header",
+ *         scheme="bearer",
+ *         bearerFormat="JWT",
+ *         securityScheme="Bearer",
+ *     )
+>>>>>>> ec3847bf3ed5af4b94d88f56f0a93a7836d0dfc0
  * )
  */
 
@@ -60,6 +111,16 @@ Route::middleware('start.session')->group(function () {
 
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
+    Route::get('/teams/{teamId}/my-ratings', [TeamController::class, 'getTeamMembersWithMyRatings']);
+    Route::get('/teams/{id}/basic-details', [TeamController::class, 'getTeamBasicDetails']);
+    Route::get('/my/level-progression', [ProgrammerController::class, 'levelProgression']);
+    Route::get('/my/dashboard', [ProgrammerController::class, 'dashboard']);
+    Route::get('/teams/{teamId}/members-with-ratings', [TeamController::class, 'getTeamMembersWithRatings']);
+    Route::get('/teams/{teamId}/members-list', [TeamController::class, 'getTeamMembersList']);
+    Route::patch('/tasks/{task}/complete', [TaskController::class, 'markAsCompleted']);
+    Route::get('/team/{teamId}/full-details', [TeamController::class, 'getFullTeamDetails']);
+    Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::prefix('company')->group(function () {
         Route::get('/profile', [CompanyController::class, 'showProfile']);
         Route::put('/profile', [CompanyController::class, 'updateProfile']);
@@ -96,6 +157,10 @@ Route::prefix('v1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/{task}/attachments', [TaskController::class, 'uploadAttachment']);
+    Route::post('/{task}/mark-as-done', [TaskController::class, 'markAsDone']);
+    Route::get('/zero-project/{projectId}', [ProjectController::class, 'zeroProject']);
+    Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
     // User profile & general
     Route::get('/user', fn(Request $request) => $request->user());
@@ -123,7 +188,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
     Route::get('/projects/{projectId}/tasks', [ProjectController::class, 'projectTasks']);
     Route::get('/users/{userId}/projects', [ProjectController::class, 'getUserProjects']);
-    Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted'])->middleware('role:admin');
+    Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
 
     // Tasks
     Route::prefix('tasks')->group(function () {
@@ -142,13 +207,16 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 Route::prefix('profile')->group(function () {
+<<<<<<< HEAD
+=======
+    Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
+>>>>>>> ec3847bf3ed5af4b94d88f56f0a93a7836d0dfc0
     Route::post('/update', [ProfileController::class, 'updateProfile']);
     Route::get('/my-stats', [ProfileController::class, 'myStats']);
     Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
     Route::get('/team-members/{projectId}/to-evaluate', [ProfileController::class, 'teamMembersToEvaluate']);
     Route::post('/evaluate/{projectId}/{evaluatedId}', [ProfileController::class, 'submitEvaluation']);
     Route::delete('/soft-delete', [ProfileController::class, 'softDeleteAccount']);
-    Route::get('/zero-project/{projectId}', [ProfileController::class, 'zeroProject']);
     Route::get('/project-details/{projectId}', [ProfileController::class, 'projectDetails']);
 });
 

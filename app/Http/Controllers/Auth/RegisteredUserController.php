@@ -179,15 +179,18 @@ public function completeProfile(Request $request)
         }
 
         $validated = $request->validate([
-            'experience_level' => 'required|in:beginner,junior,senior,expert',
+            'experience_level' => 'required|in:beginner,junior,intermediate,senior,advanced,expert',
             'track' => 'required|string',
         ]);
 
         $pointsMap = [
-            'beginner' => 0,
-            'junior' => 50,
-            'senior' => 200,
-        ];
+    'beginner'    => 0,
+    'junior'      => 50,
+    'intermediate'=> 100,
+    'senior'      => 200,
+    'advanced'    => 350,
+    'expert'      => 500,
+];
 
         if ($request->hasFile('avatar')) {
             $path = $request->file('avatar')->store('avatars', 'public');

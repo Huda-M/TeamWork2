@@ -8,6 +8,7 @@ use App\Models\TeamInvitation;
 use App\Models\TeamJoinRequest;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Models\Project;
 use App\Services\TeamMatchingService;
 use App\Services\AITeamRecommendationService;
 use Illuminate\Http\Request;
@@ -16,7 +17,9 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Annotations as OA;
-
+use App\Notifications\SendInvitationNotification;
+use App\Http\Requests\EvaluateTeamRequest;
+use App\Models\Evaluation;
 
 class TeamController extends Controller
 {
@@ -210,7 +213,7 @@ class TeamController extends Controller
      *     @OA\Response(response=500, description="Server error")
      * )
      */
-    public function getTeamDetails($id)
+public function getTeamDetails($id)
 {
     try {
         $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
@@ -219,13 +222,14 @@ class TeamController extends Controller
             'success' => true,
             'data' => [
                 'team_name' => $team->name,
-                'project_title' => $team->project->title,
+                'github_link' => $team->project->github_url ?? null,  // رابط الـ GitHub بدلاً من project_title
                 'project_description' => $team->project->description,
                 'members' => $team->activeMembers->map(function($member) {
                     return [
                         'programmer_id' => $member->programmer_id,
                         'name' => $member->programmer->user->full_name,
-                        'role' => $member->role, // 'leader' or 'member'
+                        'track' => $member->programmer->track ?? 'general', // التراك بدلاً من role
+                        'avatar_url' => $member->programmer->avatar_url,   // إضافة الصورة
                     ];
                 })
             ]
@@ -340,160 +344,334 @@ public function softDeleteTeam($id)
 {
     $user = Auth::user();
     $team = Team::findOrFail($id);
-    $isLeader = $team->isLeader($user->programmer->id);
+    
+    // التحقق من الصلاحية: يجب أن يكون قائد الفريق أو أدمن
+    $isLeader = false;
+    if ($user->programmer) {
+        $isLeader = $team->isLeader($user->programmer->id);
+    }
+    
     if (!$isLeader && $user->role !== 'admin') {
         return response()->json(['message' => 'Unauthorized'], 403);
     }
+    
+    // تنفيذ الحذف الناعم
     $team->delete(); // soft delete (بفضل SoftDeletes في الموديل)
+    
+    // تسجيل وقت مغادرة جميع الأعضاء النشطين
     $team->activeMembers()->update(['left_at' => now()]);
+    
     return response()->json(['success' => true, 'message' => 'Team soft deleted']);
 }
 /**
-     * @OA\Post(
-     *     path="/api/teams",
-     *     operationId="createTeam",
-     *     tags={"Teams"},
-     *     summary="Create a new team",
-     *     description="Only programmers can create teams. The creator becomes the leader. Invitations can be sent to other programmers.",
-     *     security={{"Bearer": {}}},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             required={"name"},
-     *             @OA\Property(property="name", type="string", example="Frontend Squad"),
-     *             @OA\Property(property="description", type="string", example="React experts"),
-     *             @OA\Property(property="is_public", type="boolean", example=false),
-     *             @OA\Property(property="github_url", type="string", format="url", example="https://github.com/org/repo"),
-     *             @OA\Property(property="category", type="array", @OA\Items(type="string"), example={"Frontend","UI/UX"}),
-     *             @OA\Property(property="required_role", type="array", @OA\Items(type="string"), example={"frontend","designer"}),
-     *             @OA\Property(property="invitations", type="array", @OA\Items(type="integer"), description="Array of programmer IDs to invite", example={7,12})
-     *         )
-     *     ),
-     *     @OA\Response(
-     *         response=201,
-     *         description="Team created successfully",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="success", type="boolean"),
-     *             @OA\Property(property="message", type="string"),
-     *             @OA\Property(property="data", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=403, description="Only programmers can create teams"),
-     *     @OA\Response(response=422, description="Validation error"),
-     *     @OA\Response(response=500, description="Server error")
-     * )
-     */
+ * @OA\Post(
+ *     path="/api/teams",
+ *     operationId="createTeam",
+ *     tags={"Teams"},
+ *     summary="Create a new team",
+ *     description="Create a new team with full configuration including type (public/private), team details, categories, required skills, and optional invitations for private teams.",
+ *     security={{"Bearer": {}}},
+ *     @OA\RequestBody(
+ *         required=true,
+ *         @OA\JsonContent(
+ *             required={"name", "description", "is_public", "github_url", "categories", "skills"},
+ *             @OA\Property(
+ *                 property="name",
+ *                 type="string",
+ *                 maxLength=255,
+ *                 example="Frontend Squad",
+ *                 description="Team name"
+ *             ),
+ *             @OA\Property(
+ *                 property="description",
+ *                 type="string",
+ *                 minLength=10,
+ *                 example="A team focused on React and Vue.js development",
+ *                 description="Team description (minimum 10 characters)"
+ *             ),
+ *             @OA\Property(
+ *                 property="is_public",
+ *                 type="boolean",
+ *                 example=true,
+ *                 description="Team visibility: true for public, false for private"
+ *             ),
+ *             @OA\Property(
+ *                 property="github_url",
+ *                 type="string",
+ *                 format="url",
+ *                 example="https://github.com/org/team-repo",
+ *                 description="GitHub repository URL"
+ *             ),
+ *             @OA\Property(
+ *                 property="categories",
+ *                 type="array",
+ *                 minItems=1,
+ *                 example={"Frontend", "UI/UX"},
+ *                 description="Team categories (can select multiple)",
+ *                 @OA\Items(
+ *                     type="string",
+ *                     maxLength=100
+ *                 )
+ *             ),
+ *             @OA\Property(
+ *                 property="skills",
+ *                 type="array",
+ *                 minItems=1,
+ *                 example={1, 2, 5},
+ *                 description="Required skills (array of skill IDs)",
+ *                 @OA\Items(
+ *                     type="integer"
+ *                 )
+ *             ),
+ *             @OA\Property(
+ *                 property="max_members",
+ *                 type="integer",
+ *                 minimum=2,
+ *                 maximum=20,
+ *                 example=5,
+ *                 description="Maximum team members (optional, default: 5)"
+ *             ),
+ *             @OA\Property(
+ *                 property="experience_level",
+ *                 type="string",
+ *                 enum={"beginner", "intermediate", "advanced", "expert"},
+ *                 example="intermediate",
+ *                 description="Required experience level (optional)"
+ *             ),
+ *             @OA\Property(
+ *                 property="invitations",
+ *                 type="array",
+ *                 example={7, 12, 15},
+ *                 description="Programmer IDs to invite (only for private teams, required if is_public=false)",
+ *                 @OA\Items(
+ *                     type="integer"
+ *                 )
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=201,
+ *         description="Team created successfully",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(property="message", type="string", example="Team created successfully"),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(
+ *                     property="team",
+ *                     type="object",
+ *                     @OA\Property(property="id", type="integer"),
+ *                     @OA\Property(property="name", type="string"),
+ *                     @OA\Property(property="description", type="string"),
+ *                     @OA\Property(property="is_public", type="boolean"),
+ *                     @OA\Property(property="github_url", type="string"),
+ *                     @OA\Property(property="status", type="string"),
+ *                     @OA\Property(property="max_members", type="integer"),
+ *                     @OA\Property(property="experience_level", type="string"),
+ *                     @OA\Property(
+ *                         property="categories",
+ *                         type="array",
+ *                         @OA\Items(type="string")
+ *                     ),
+ *                     @OA\Property(
+ *                         property="created_by",
+ *                         type="object",
+ *                         @OA\Property(property="id", type="integer"),
+ *                         @OA\Property(property="name", type="string"),
+ *                         @OA\Property(property="role", type="string", example="leader")
+ *                     )
+ *                 ),
+ *                 @OA\Property(
+ *                     property="skills",
+ *                     type="array",
+ *                     description="Required skills names",
+ *                     @OA\Items(type="string")
+ *                 ),
+ *                 @OA\Property(
+ *                     property="invitations_sent",
+ *                     type="array",
+ *                     description="List of sent invitations (for private teams)",
+ *                     @OA\Items(
+ *                         type="object",
+ *                         @OA\Property(property="programmer_id", type="integer"),
+ *                         @OA\Property(property="invitation_id", type="integer")
+ *                     )
+ *                 ),
+ *                 @OA\Property(property="members_count", type="integer", example=1)
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=403,
+ *         description="Only programmers can create teams",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=false),
+ *             @OA\Property(property="message", type="string")
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=422,
+ *         description="Validation error",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=false),
+ *             @OA\Property(property="message", type="string"),
+ *             @OA\Property(property="errors", type="object")
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=500,
+ *         description="Server error",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="success", type="boolean", example=false),
+ *             @OA\Property(property="message", type="string")
+ *         )
+ *     )
+ * )
+ */
 public function store(Request $request)
-    {
-        DB::beginTransaction();
-        try {
-            // التحقق من أن المستخدم programmer
-            $user = Auth::user();
-            if (!$user || $user->role !== 'programmer') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only programmers can create teams'
-                ], 403);
-            }
- 
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Programmer profile not found'
-                ], 404);
-            }
- 
-            // Validation - بسيط
-            $validated = $request->validate([
-                'name' => ['required', 'string', 'max:255'],
-                'description' => ['nullable', 'string'],
-                'is_public' => ['nullable', 'boolean'],
-                'github_url' => ['nullable', 'url'],
-                'category' => ['nullable', 'array'],
-                'required_role' => ['nullable', 'array'],
-                'invitations' => ['nullable', 'array'],
-                'invitations.*' => ['integer', 'exists:programmers,id'],
-            ]);
- 
-            // تحضير بيانات الفريق
-            $teamData = [
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'is_public' => $validated['is_public'] ?? false,
-                'formation_type' => 'manual',
-                'status' => 'active',
-                'max_members' => 5,
-                'min_members' => 2,
-                'experience_level' => 'intermediate',
-            ];
- 
-            // إضافة الحقول الإضافية
-            if (isset($validated['github_url'])) {
-                $teamData['github_url'] = $validated['github_url'];
-            }
- 
-            if (isset($validated['category'])) {
-                $teamData['category'] = json_encode($validated['category']);
-            }
- 
-            if (isset($validated['required_role'])) {
-                $teamData['required_role'] = json_encode($validated['required_role']);
-            }
- 
-            // إنشاء الفريق
-            $team = Team::create($teamData);
- 
-            // إضافة المُنشئ كـ leader
-            TeamMember::create([
-                'team_id' => $team->id,
-                'programmer_id' => $programmer->id,
-                'role' => 'leader',
-                'joined_at' => now(),
-                'joined_by' => $programmer->id,
-            ]);
- 
-            // إرسال الدعوات
-            if (!empty($validated['invitations'])) {
-                foreach ($validated['invitations'] as $programmerId) {
-                    // تجنب دعوة المنشئ لنفسه
-                    if ($programmerId !== $programmer->id) {
-                        TeamInvitation::create([
-                            'team_id' => $team->id,
-                            'programmer_id' => $programmerId,
-                            'invited_by' => $programmer->id,
-                            'message' => "You've been invited to join team '{$team->name}'",
-                            'status' => 'pending',
-                            'expires_at' => now()->addDays(7),
-                        ]);
-                    }
-                }
-            }
- 
-            Log::info('Team created', [
-                'team_id' => $team->id,
-                'created_by' => $programmer->id
-            ]);
- 
-            DB::commit();
- 
-            return response()->json([
-                'success' => true,
-                'message' => 'Team created successfully',
-                'data' => $team->fresh()->load('activeMembers.programmer.user')
-            ], 201);
- 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating team: ' . $e->getMessage());
+{
+    DB::beginTransaction();
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create team',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Only programmers can create teams'
+            ], 403);
         }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'name'             => 'required|string|max:255',
+            'description'      => 'required|string|min:10',
+            'is_public'        => 'required|boolean',
+            'github_url'       => 'required|url',
+            'categories'       => 'required|array|min:1',
+            'categories.*'     => 'string|max:100',
+            'required_tracks'  => 'required|array|min:1',
+            'required_tracks.*'=> 'string|max:50',
+            'invitations'      => 'nullable|array',
+            'invitations.*'    => 'string|exists:programmers,user_name',
+        ]);
+
+        if (!$validated['is_public'] && empty($validated['invitations'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Private teams must include at least one invitation'
+            ], 422);
+        }
+
+        // إنشاء مشروع بالأعمدة الجديدة
+        $project = Project::create([
+            'title'             => $validated['name'],
+            'description'       => $validated['description'],
+            'github_url'        => $validated['github_url'],
+            'categories'        => json_encode($validated['categories']),
+            'required_tracks'   => json_encode($validated['required_tracks']),
+            'category_name'     => $validated['categories'][0] ?? null, // للإبقاء على التوافق
+            'status'            => 'pending',
+            'difficulty'        => 'intermediate', // يمكن إضافته للطلب لاحقاً
+            'estimated_duration_days' => 30,
+            'max_team_size'     => 5,
+            'num_of_team'       => 1,
+            'user_id'           => $programmer->user_id,
+            'team_size'         => 5,
+            'min_team_size'     => 2,
+            'max_teams'         => 1,
+        ]);
+
+        // إنشاء فريق
+        $team = Team::create([
+            'name'            => $validated['name'],
+            'project_id'      => $project->id,
+            'is_public'       => $validated['is_public'],
+            'status'          => 'active',
+            'formation_type'  => 'manual',
+            'created_by'      => $programmer->id,
+            'join_code'       => $validated['is_public'] ? null : strtoupper(substr(md5(uniqid()), 0, 8)),
+        ]);
+
+        // إضافة المنشئ كقائد
+        TeamMember::create([
+            'team_id'       => $team->id,
+            'programmer_id' => $programmer->id,
+            'role'          => 'leader',
+            'joined_at'     => now(),
+            'joined_by'     => $programmer->id,
+        ]);
+
+       // معالجة الدعوات (بعد إزالة القيود)
+$invitationsSent = [];
+if (!$validated['is_public'] && !empty($validated['invitations'])) {
+    foreach ($validated['invitations'] as $username) {
+        if ($username === $programmer->user_name) continue;
+
+        $invitedProgrammer = Programmer::where('user_name', $username)->first();
+        
+        // ✅ فقط نتحقق من وجود المستخدم
+        if (!$invitedProgrammer) {
+            Log::warning("Programmer not found: $username");
+            continue;
+        }
+        
+        // منع الدعوات المكررة المعلقة
+        $existing = TeamInvitation::where('team_id', $team->id)
+            ->where('programmer_id', $invitedProgrammer->id)
+            ->where('status', 'pending')
+            ->first();
+        if ($existing) continue;
+
+        $invitation = TeamInvitation::create([
+    'team_id'      => $team->id,
+    'programmer_id'=> $invitedProgrammer->id,
+    'invited_by'   => $programmer->id,
+    'message'      => "You've been invited to join team '{$team->name}'",
+    'status'       => 'pending',
+    'expires_at'   => now()->addDays(7),
+]);
+
+// إرسال الإشعار
+$invitedProgrammer->user->notify(new SendInvitationNotification($invitation));
+
+        $invitationsSent[] = [
+            'username'      => $username,
+            'programmer_id' => $invitedProgrammer->id,
+            'invitation_id' => $invitation->id,
+        ];
     }
-/**
+}
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team created successfully',
+            'data' => [
+                'project' => $project->fresh(),
+                'team' => $team,
+                'invitations_sent' => $invitationsSent,
+            ]
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error creating team: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create team',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
+    /**
      * @OA\Post(
      *     path="/api/teams/{id}/invite",
      *     operationId="inviteByUsername",
@@ -1092,6 +1270,125 @@ public function updateTeam(Request $request, $id)
         return response()->json(['success' => false, 'message' => 'Failed to update team'], 500);
     }
 }
+    /**
+ * عرض تفاصيل فريق معين للمبرمج الحالي (مشروع، أعضاء، تاسكات)
+ * 
+ * @param int $teamId
+ * @param Request $request
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function getFullTeamDetails($teamId, Request $request)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب الفريق مع المشروع والأعضاء والمهام
+        $team = Team::with([
+            'project',
+            'activeMembers.programmer.user',
+            'tasks.programmer.user' // لجلب المهام مع البرمجة المسند إليها
+        ])->find($teamId);
+
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'Team not found'], 404);
+        }
+
+        // التحقق من أن المبرمج الحالي عضو في هذا الفريق
+        if (!$team->isMember($programmer->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        // التراك الخاص بي
+        $myTrack = $programmer->track ?? 'general';
+
+        // وصف المشروع
+        $projectDescription = $team->project->description ?? null;
+
+        // رابط GitHub (من المشروع)
+        $githubLink = $team->project->github_url ?? null;
+
+        // أعضاء الفريق (الاسم، الصورة، التراك)
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'id'         => $prog->id,
+                'name'       => $prog->user->full_name,
+                'avatar_url' => $prog->avatar_url,
+                'track'      => $prog->track ?? 'general',
+                'role'       => $member->role,
+            ];
+        });
+
+        // تجهيز التاسكات حسب الطلب
+        $tasksView = $request->query('tasks_view', 'my'); // my أو team
+        $tasks = [];
+
+        if ($tasksView === 'my') {
+            // تاسكات المبرمج الحالي فقط في هذا الفريق
+            $tasks = $team->tasks
+                ->where('programmer_id', $programmer->id)
+                ->map(function ($task) {
+                    return [
+                        'id'          => $task->id,
+                        'title'       => $task->title,
+                        'description' => $task->description,
+                        'status'      => $task->status,
+                        'due_date'    => $task->deadline ? $task->deadline->toDateString() : null,
+                        'priority'    => $task->priority,
+                        'created_at'  => $task->created_at->toDateTimeString(),
+                    ];
+                })->values();
+        } else {
+            // تاسكات جميع أعضاء الفريق
+            $tasks = $team->tasks->map(function ($task) {
+                return [
+                    'id'             => $task->id,
+                    'title'          => $task->title,
+                    'description'    => $task->description,
+                    'status'         => $task->status,
+                    'due_date'       => $task->deadline ? $task->deadline->toDateString() : null,
+                    'priority'       => $task->priority,
+                    'assigned_to'    => [
+                        'id'         => $task->programmer->id,
+                        'name'       => $task->programmer->user->full_name,
+                        'avatar_url' => $task->programmer->avatar_url,
+                        'track'      => $task->programmer->track ?? 'general',
+                    ],
+                    'created_at'     => $task->created_at->toDateTimeString(),
+                ];
+            })->values();
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_id'            => $team->id,
+                'team_name'          => $team->name,
+                'project_description'=> $projectDescription,
+                'github_link'        => $githubLink,
+                'my_track'           => $myTrack,
+                'members'            => $members,
+                'tasks_view'         => $tasksView,
+                'tasks'              => $tasks,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error in getFullTeamDetails: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch team details'
+        ], 500);
+    }
+}
 
     public function joinViaAIRecommendation(Request $request)
     {
@@ -1175,6 +1472,315 @@ public function updateTeam(Request $request, $id)
             ], 500);
         }
     }
+    /**
+ * عرض أعضاء الفريق فقط (مع الاسم، التراك، الصورة)
+ * 
+ * @param int $teamId
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function getTeamMembersList($teamId)
+{
+    try {
+        $team = Team::with('activeMembers.programmer.user')->find($teamId);
+        
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Team not found'
+            ], 404);
+        }
+        
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'programmer_id' => $prog->id,
+                'name' => $prog->user->full_name,
+                'track' => $prog->track ?? 'general',
+                'avatar_url' => $prog->avatar_url,
+            ];
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => $members
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('Error fetching team members list: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch team members'
+        ], 500);
+    }
 }
+    public function getTeamMembersWithRatings($teamId)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($teamId);
+        
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            // حساب متوسط التقييمات (من 1 إلى 10) وتحويله إلى نجوم من 5
+            $avgScore = Evaluation::where('evaluated_id', $prog->id)
+                ->where('team_id', $team->id) // تقييمات هذا الفريق فقط
+                ->avg('average_score') ?? 0;
+            $stars = round($avgScore / 2, 1); // تحويل 1-10 إلى 0.5-5
+            
+            // جلب أحدث feedback (اختياري)
+            $latestFeedback = Evaluation::where('evaluated_id', $prog->id)
+                ->where('team_id', $team->id)
+                ->whereNotNull('feedback')
+                ->orderBy('created_at', 'desc')
+                ->value('feedback');
+            
+            return [
+                'programmer_id' => $prog->id,
+                'name' => $prog->user->full_name,
+                'avatar_url' => $prog->avatar_url,
+                'track' => $prog->track ?? 'general',
+                'average_rating' => $stars, // من 5
+                'latest_feedback' => $latestFeedback,
+            ];
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project_name' => $team->project->title,
+                'project_description' => $team->project->description,
+                'members' => $members,
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error in getTeamMembersWithRatings: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch data'], 500);
+    }
+}
+    public function getTeamBasicDetails($id)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
 
-   
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_name' => $team->name,
+                'project_description' => $team->project->description,
+                'members' => $team->activeMembers->map(function($member) {
+                    return [
+                        'programmer_id' => $member->programmer_id,
+                        'name' => $member->programmer->user->full_name,
+                        'track' => $member->programmer->track ?? 'general',
+                        'avatar_url' => $member->programmer->avatar_url,
+                    ];
+                })
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching team basic details: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+    }
+}
+    /**
+ * عرض أعضاء الفريق مع تقييماتهم للمبرمج الحالي (النجوم والفيدباك)
+ *
+ * @param int $teamId
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function getTeamMembersWithMyRatings($teamId)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $currentProgrammer = $user->programmer;
+        if (!$currentProgrammer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب الفريق مع المشروع والأعضاء
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->find($teamId);
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'Team not found'], 404);
+        }
+
+        // التحقق من أن المستخدم الحالي عضو في هذا الفريق
+        if (!$team->isMember($currentProgrammer->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        // تجهيز بيانات الأعضاء مع تقييماتهم للمستخدم الحالي
+        $members = $team->activeMembers->map(function ($member) use ($currentProgrammer) {
+            $prog = $member->programmer;
+            
+            // جلب تقييم هذا العضو للمبرمج الحالي (إذا وجد)
+            $evaluation = \App\Models\Evaluation::where('evaluator_id', $prog->id)
+                ->where('evaluated_id', $currentProgrammer->id)
+                ->first();
+            
+            $starsGiven = null;
+            $feedbackGiven = null;
+            
+            if ($evaluation) {
+                // تحويل average_score (من 1-10) إلى نجوم من 1-5
+                $starsGiven = round($evaluation->average_score / 2, 1);
+                $feedbackGiven = $evaluation->feedback;
+            }
+            
+            return [
+                'programmer_id' => $prog->id,
+                'name'          => $prog->user->full_name,
+                'track'         => $prog->track ?? 'general',
+                'avatar_url'    => $prog->avatar_url,
+                'stars_given_to_me' => $starsGiven,   // عدد النجوم الذي قيمني به هذا العضو
+                'feedback_from_them' => $feedbackGiven, // الفيدباك الذي كتبه عني
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_name'           => $team->name,
+                'project_description' => $team->project->description,
+                'members'             => $members,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error in getTeamMembersWithMyRatings: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch team members with ratings'
+        ], 500);
+    }
+}
+    
+
+/**
+ * تقييم جميع أعضاء الفريق (بعد اكتمال المشروع)
+ *
+ * @param int $teamId
+ * @param EvaluateTeamRequest $request
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function evaluateTeamMembers($teamId, EvaluateTeamRequest $request)
+{
+    try {
+        $user = auth()->user();
+        $evaluator = $user->programmer;
+
+        // جلب الفريق مع المشروع والأعضاء
+        $team = Team::with(['project', 'activeMembers'])->find($teamId);
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'Team not found'], 404);
+        }
+
+        // التحقق من أن المستخدم الحالي عضو في هذا الفريق
+        if (!$team->isMember($evaluator->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        // التحقق من أن المشروع مكتمل
+        $project = $team->project;
+        if (!$project || $project->status !== 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'You can only evaluate team members after the project is completed'
+            ], 400);
+        }
+
+        $validated = $request->validated();
+        $evaluationsData = $validated['evaluations'];
+        $errors = [];
+        $successCount = 0;
+
+        DB::beginTransaction();
+
+        foreach ($evaluationsData as $eval) {
+            $evaluatedId = $eval['evaluated_id'];
+            $rating = $eval['rating'];      // 1-5
+            $feedback = $eval['feedback'] ?? null;
+
+            // منع التقييم الذاتي
+            if ($evaluatedId == $evaluator->id) {
+                $errors[] = "You cannot evaluate yourself (ID: $evaluatedId)";
+                continue;
+            }
+
+            // التحقق من أن المقيم عضو في الفريق
+            if (!$team->isMember($evaluatedId)) {
+                $errors[] = "Programmer ID $evaluatedId is not a member of this team";
+                continue;
+            }
+
+            // التحقق من عدم وجود تقييم سابق من هذا المقيم لنفس المقيم في نفس المشروع
+            $existing = Evaluation::where('project_id', $project->id)
+                ->where('team_id', $team->id)
+                ->where('evaluator_id', $evaluator->id)
+                ->where('evaluated_id', $evaluatedId)
+                ->first();
+
+            if ($existing) {
+                $errors[] = "You have already evaluated programmer ID $evaluatedId";
+                continue;
+            }
+
+            // تحويل الـ rating (1-5) إلى average_score (1-10)
+            $averageScore = $rating * 2;  // 5 نجوم = 10 نقاط
+
+            // إنشاء التقييم
+            Evaluation::create([
+                'project_id' => $project->id,
+                'team_id' => $team->id,
+                'evaluator_id' => $evaluator->id,
+                'evaluated_id' => $evaluatedId,
+                'technical_skills' => $rating,
+                'communication' => $rating,
+                'teamwork' => $rating,
+                'problem_solving' => $rating,
+                'reliability' => $rating,
+                'code_quality' => $rating,
+                'average_score' => $averageScore,
+                'strengths' => null,
+                'areas_for_improvement' => null,
+                'feedback' => $feedback,
+                'is_anonymous' => false,
+                'is_completed' => true,
+                'submitted_at' => now(),
+            ]);
+
+            // إضافة نقاط للمُقيَّم (اختياري)
+            $evaluatedProgrammer = Programmer::find($evaluatedId);
+            if ($evaluatedProgrammer && method_exists($evaluatedProgrammer, 'addStars')) {
+                $points = $rating * 10; // مثال: 5 نجوم = 50 نقطة
+                $evaluatedProgrammer->addStars($points, 'Received peer evaluation', [
+                    'project_id' => $project->id,
+                    'rating' => $rating
+                ]);
+            }
+
+            $successCount++;
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Successfully submitted $successCount evaluation(s).",
+            'errors' => $errors, // أخطاء جزئية إن وجدت
+            'total_submitted' => $successCount,
+            'total_requested' => count($evaluationsData)
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error evaluating team members: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to submit evaluations: ' . $e->getMessage()
+        ], 500);
+    }
+}
+}
