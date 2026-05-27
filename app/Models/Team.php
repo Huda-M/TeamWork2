@@ -199,5 +199,8 @@ class Team extends Model
         ];
     }
 
-
+    public function AiTeam()
+    {
+        return $this->hasMany(AiTeam::class);
+    }
 }

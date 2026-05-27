@@ -290,4 +290,8 @@ class Programmer extends Model
     {
         return $this->hasMany(JopOffer::class);
     }
+
+    public function AiTeam(){
+        return $this->hasMany(AiTeam::class, 'user_id');
+    }
 }

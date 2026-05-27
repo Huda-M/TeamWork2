@@ -301,9 +301,7 @@ Route::prefix('profile')->group(function () {
     });
 
 });
-
-Route::post('/ai/match-teams', [ProgrammerController::class, 'joinTeam'])->middleware('auth:sanctum');
-
+require_once __DIR__.'/ai.routes.php';
 require_once __DIR__ . '/Companies/auth.routes.php';
 require_once __DIR__ . '/Companies/programmer.routes.php';
 require_once __DIR__ . '/Companies/offer.routes.php';
