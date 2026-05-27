@@ -9,42 +9,29 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // تحديث القيم القديمة أولاً
-        DB::table('tasks')->update([
-            'priority' => DB::raw("
+        // تحويل priority من integer إلى enum ('low', 'medium', 'high')
+        Schema::table('tasks', function (Blueprint $table) {
+            // في PostgreSQL: تغيير النوع باستخدام SQL خام
+            DB::statement("ALTER TABLE tasks ALTER COLUMN priority TYPE VARCHAR(20) USING
                 CASE priority
                     WHEN 1 THEN 'low'
                     WHEN 2 THEN 'medium'
                     WHEN 3 THEN 'high'
                     ELSE 'medium'
-                END
-            ")
-        ]);
-
-        // تغيير نوع العمود لـ enum
-        Schema::table('tasks', function (Blueprint $table) {
-            $table->enum('priority', ['low', 'medium', 'high'])
-                  ->default('medium')
-                  ->change();
+                END");
         });
     }
 
     public function down(): void
     {
-        // تحويل القيم مرة أخرى لأرقام
-        DB::table('tasks')->update([
-            'priority' => DB::raw("
+        Schema::table('tasks', function (Blueprint $table) {
+            DB::statement("ALTER TABLE tasks ALTER COLUMN priority TYPE INTEGER USING
                 CASE priority
                     WHEN 'low' THEN 1
                     WHEN 'medium' THEN 2
                     WHEN 'high' THEN 3
                     ELSE 2
-                END
-            ")
-        ]);
-
-        Schema::table('tasks', function (Blueprint $table) {
-            $table->integer('priority')->change();
+                END");
         });
     }
 };
