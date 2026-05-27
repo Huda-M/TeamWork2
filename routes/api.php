@@ -23,7 +23,7 @@
  *         description="Development Server"
  *     )
  * )
- * 
+ *
  * @OA\SecurityScheme(
  *     type="http",
  *     description="Login with username and password to get the authentication token",
@@ -68,16 +68,7 @@ use App\Http\Controllers\CompanyProgrammerController;
  *     url=L5_SWAGGER_CONST_HOST,
  *     description="API Server"
  * )
-<<<<<<< HEAD
  *
- * @OA\SecurityScheme(
- *     type="http",
- *     securityScheme="Bearer",
- *     scheme="bearer",
- *     bearerFormat="JWT",
- *     description="Login with username and password to get the authentication token"
-=======
- * 
  * @OA\Components(
  *     @OA\SecurityScheme(
  *         type="http",
@@ -88,7 +79,6 @@ use App\Http\Controllers\CompanyProgrammerController;
  *         bearerFormat="JWT",
  *         securityScheme="Bearer",
  *     )
->>>>>>> ec3847bf3ed5af4b94d88f56f0a93a7836d0dfc0
  * )
  */
 
@@ -207,10 +197,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 Route::prefix('profile')->group(function () {
-<<<<<<< HEAD
-=======
     Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
->>>>>>> ec3847bf3ed5af4b94d88f56f0a93a7836d0dfc0
     Route::post('/update', [ProfileController::class, 'updateProfile']);
     Route::get('/my-stats', [ProfileController::class, 'myStats']);
     Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
