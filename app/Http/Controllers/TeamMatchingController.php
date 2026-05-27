@@ -21,7 +21,7 @@ class TeamMatchingController extends Controller
                 'user_id'=>$user->id,
                 'full_name'=>$user->full_name,
                 'skills'=>$programmer->skills,
-                'experience'=>$programmer->total_score,
+                'experience'=>$programmer->experience_level,
             ],
             'teams'=>$teams->map(function($team){
                 return [
