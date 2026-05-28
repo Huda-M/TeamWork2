@@ -23,7 +23,7 @@ class SuggestedTeamsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => 'required|exists:programmers',
+            'user_id' => 'required|exists:users',
             'team_ids' => ['required', 'array'],
             'team_ids.*' => ['required', 'exists:teams,id']
         ];

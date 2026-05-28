@@ -51,9 +51,10 @@ class TeamMatchingController extends Controller
 
     public function suggestTeam(SuggestedTeamsRequest $request){
         $data = $request->validated();
-        $programmer = auth()->user()->programmer;
+        $user = auth()->user();
+        $programmer = $user->programmer;
 
-        if(!$programmer || $programmer->id != $data['user_id']){
+        if(!$programmer || $programmer->user_id != $data['user_id']){
             return response()->json([
                 'message' => 'You are not authorized to perform this action.',
             ], 403);
@@ -61,7 +62,7 @@ class TeamMatchingController extends Controller
 
         foreach($data['team_ids'] as $teamId){
             AiTeam::firstOrCreate([
-                'user_id' => $programmer->id,
+                'user_id' => $programmer->user_id,
                 'team_id' => $teamId
             ]);
         }
@@ -81,7 +82,7 @@ class TeamMatchingController extends Controller
             ], 404);
         }
 
-        $aiTeams = AiTeam::where('user_id', $programmer->id)
+        $aiTeams = AiTeam::where('user_id', $programmer->user_id)
             ->whereHas('team', function($query) {
                 $query->where('status', 'forming');
             })
