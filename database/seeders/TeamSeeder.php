@@ -20,11 +20,11 @@ class TeamSeeder extends Seeder
                     'name' => "Team {$i} for {$project->title}",
                     'description' => 'This is a test team',
                     'formation_type' => 'manual',
-                    'status' => 'active',
+                    'status' => collect(['active', 'completed', 'disbanded', 'forming', 'voting'])->random(),
                     'project_id' => $project->id,
                     'is_public' => true,
                     'experience_level' => 'intermediate',
-                    'required_skills' => ['laravel','php','mysql','html','css','js'],
+                    'required_skills' => ['laravel', 'php', 'mysql', 'html', 'css', 'js'],
                 ]);
             }
         }
