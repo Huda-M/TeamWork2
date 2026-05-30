@@ -19,7 +19,7 @@ public function rules(): array
         'description' => 'nullable|string',
         'programmer_id' => 'nullable|exists:programmers,id',
         'deadline' => 'nullable|date',
-        'priority' => 'nullable|integer|min:1|max:10',
+        'priority' => 'nullable|in:low,medium,high',
         'git_link' => 'nullable|url',
         'tags' => 'nullable|array',
         'status' => 'nullable|string|in:todo,in_progress,done,cancelled', // اختياري بقيم محددة
