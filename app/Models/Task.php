@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Traits\HasStatistics;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Traits\HasStatistics;
 
 class Task extends Model
 {
@@ -43,8 +43,8 @@ class Task extends Model
         'reassigned_from',
         'reassigned_at',
         'git_link',
-    'tags',
-'created_by',
+        'tags',
+        'created_by',
     ];
 
     protected $casts = [
@@ -73,25 +73,27 @@ class Task extends Model
     {
         return $this->belongsTo(Team::class);
     }
-public function creator()
-{
-    return $this->belongsTo(Programmer::class, 'created_by');
-}
 
-public function attachments(): HasMany
-{
-    return $this->hasMany(TaskAttachment::class);
-}
+    public function creator()
+    {
+        return $this->belongsTo(Programmer::class, 'created_by');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(TaskAttachment::class);
+    }
+
     // في app/Models/Task.php
-public function getPriorityNameAttribute()
-{
-    return match($this->priority) {
-        1 => 'low',
-        2 => 'medium',
-        3 => 'high',
-        default => 'medium',
-    };
-}
+    public function getPriorityNameAttribute()
+    {
+        return match ($this->priority) {
+            1 => 'low',
+            2 => 'medium',
+            3 => 'high',
+            default => 'medium',
+        };
+    }
 
     /**
      * Get the programmer assigned to the task
@@ -163,7 +165,7 @@ public function getPriorityNameAttribute()
     public function scopeOverdue($query)
     {
         return $query->where('deadline', '<', now())
-                     ->whereNotIn('status', ['done', 'cancelled']);
+            ->whereNotIn('status', ['done', 'cancelled']);
     }
 
     /**
@@ -172,8 +174,8 @@ public function getPriorityNameAttribute()
     public function scopeUpcoming($query, $days = 7)
     {
         return $query->where('deadline', '>', now())
-                     ->where('deadline', '<=', now()->addDays($days))
-                     ->whereNotIn('status', ['done', 'cancelled']);
+            ->where('deadline', '<=', now()->addDays($days))
+            ->whereNotIn('status', ['done', 'cancelled']);
     }
 
     /**
@@ -182,7 +184,7 @@ public function getPriorityNameAttribute()
     public function isOverdue(): bool
     {
         return $this->deadline->isPast() &&
-               !in_array($this->status, ['done', 'cancelled']);
+               ! in_array($this->status, ['done', 'cancelled']);
     }
 
     /**
