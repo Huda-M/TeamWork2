@@ -18,7 +18,7 @@ class UpdateTaskRequest extends FormRequest
             'description' => 'nullable|string',
             'status' => 'sometimes|in:todo,in_progress,review,done',
             'deadline' => 'nullable|date',
-            'priority' => 'nullable|integer|min:1|max:3',
+            'priority' => 'nullable|in:low,medium,high',
             'git_link' => 'nullable|url',
             'tags' => 'nullable|array',
             'programmer_id' => 'nullable|exists:programmers,id', // إعادة تعيين المبرمج
