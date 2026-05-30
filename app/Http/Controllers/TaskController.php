@@ -629,7 +629,9 @@ class TaskController extends Controller
     }
 
     /**
-     * تحديث مهمة موجودة (يسمح بها قائد الفريق أو الأدمن أو المبرمج المسند إليه)
+     * تحديث مهمة موجودة
+     * - القائد/الأدمن: كل الحقول
+     * - المبرمج المُسند إليه: الحالة (status) فقط
      */
     public function update(UpdateTaskRequest $request, Task $task)
     {
@@ -637,7 +639,7 @@ class TaskController extends Controller
             $user = auth()->user();
             $programmer = $user->programmer;
 
-            // التحقق من الصلاحية: قائد الفريق أو أدمن أو المبرمج المسند إليه المهمة
+            // التحقق من الصلاحية الأساسية: قائد الفريق أو أدمن أو المبرمج المسند إليه
             $isLeader = $task->team->isLeader($programmer->id);
             $isAssigned = ($task->programmer_id === $programmer->id);
 
@@ -650,19 +652,33 @@ class TaskController extends Controller
 
             $validated = $request->validated();
 
-            // إذا حاول تغيير programmer_id وكان ليس قائداً أو أدمن، نمنعه
-            if ($request->has('programmer_id') && ! $isLeader && $user->role !== 'admin') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only team leader or admin can reassign tasks',
-                ], 403);
+            // حالة خاصة: إذا كان المبرمج المسند إليه (وليس قائداً ولا أدمن)
+            if ($isAssigned && ! $isLeader && $user->role !== 'admin') {
+                // يسمح له فقط بتعديل حقل 'status'
+                $allowedFields = ['status'];
+                $data = array_intersect_key($validated, array_flip($allowedFields));
+                if (empty($data) && $request->has('status') === false) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Assigned programmer can only update the task status',
+                    ], 403);
+                }
+                $task->update($data);
+            } else {
+                // القائد أو الأدمن: يمكنه تعديل كل الحقول (بما فيها إعادة التعيين programmer_id)
+                if ($request->has('programmer_id') && ! $task->team->isMember($request->programmer_id)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'The new assigned programmer is not a member of this team',
+                    ], 400);
+                }
+                $task->update($validated);
             }
-
-            $task->update($validated);
 
             Log::info('Task updated', [
                 'task_id' => $task->id,
                 'updated_by' => $programmer->id,
+                'updated_fields' => array_keys($validated),
             ]);
 
             $assigner = $task->assignedBy;
@@ -684,6 +700,7 @@ class TaskController extends Controller
                 'message' => 'Task updated successfully',
                 'data' => $task->fresh(['programmer.user', 'creator.user', 'team.project']),
             ]);
+
         } catch (\Exception $e) {
             Log::error('Error updating task: '.$e->getMessage());
 
@@ -693,143 +710,4 @@ class TaskController extends Controller
             ], 500);
         }
     }
-}
-    /**
- * رفع مرفق لمهمة معينة
- */
-public function uploadAttachment(Request $request, Task $task)
-{
-    try {
-        $user = auth()->user();
-        $programmer = $user->programmer;
-
-        // التحقق من أن المستخدم عضو في الفريق
-        if (!$task->team->isMember($programmer->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You are not a member of this team'
-            ], 403);
-        }
-
-        $request->validate([
-            'attachment' => 'required|file|max:10240', // max 10MB
-        ]);
-
-        $file = $request->file('attachment');
-        $fileName = $file->getClientOriginalName();
-        $fileSize = $file->getSize();
-        $fileType = $file->getMimeType();
-
-        // تخزين الملف
-        $path = $file->store('task_attachments/' . $task->id, 'public');
-
-        $attachment = $task->attachments()->create([
-            'file_name' => $fileName,
-            'file_path' => $path,
-            'file_type' => $fileType,
-            'file_size' => $fileSize,
-            'uploaded_by' => $programmer->id,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Attachment uploaded successfully',
-            'data' => [
-                'id' => $attachment->id,
-                'file_name' => $attachment->file_name,
-                'file_path' => Storage::url($attachment->file_path),
-                'file_size' => $attachment->file_size,
-                'uploaded_at' => $attachment->created_at,
-            ]
-        ], 201);
-
-    } catch (\Exception $e) {
-        Log::error('Error uploading attachment: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to upload attachment'
-        ], 500);
-    }
-}
-/**
- * تحديث مهمة موجودة
- * - القائد/الأدمن: كل الحقول
- * - المبرمج المُسند إليه: الحالة (status) فقط
- */
-public function update(UpdateTaskRequest $request, Task $task)
-{
-    try {
-        $user = auth()->user();
-        $programmer = $user->programmer;
-
-        // التحقق من الصلاحية الأساسية: قائد الفريق أو أدمن أو المبرمج المسند إليه
-        $isLeader = $task->team->isLeader($programmer->id);
-        $isAssigned = ($task->programmer_id === $programmer->id);
-        
-        if (!$isLeader && !$isAssigned && $user->role !== 'admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only team leader, assigned programmer, or admin can update this task'
-            ], 403);
-        }
-
-        $validated = $request->validated();
-
-        // حالة خاصة: إذا كان المبرمج المسند إليه (وليس قائداً ولا أدمن)
-        if ($isAssigned && !$isLeader && $user->role !== 'admin') {
-            // يسمح له فقط بتعديل حقل 'status'
-            $allowedFields = ['status'];
-            $data = array_intersect_key($validated, array_flip($allowedFields));
-            if (empty($data) && $request->has('status') === false) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Assigned programmer can only update the task status'
-                ], 403);
-            }
-            $task->update($data);
-        } else {
-            // القائد أو الأدمن: يمكنه تعديل كل الحقول (بما فيها إعادة التعيين programmer_id)
-            if ($request->has('programmer_id') && !$task->team->isMember($request->programmer_id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The new assigned programmer is not a member of this team'
-                ], 400);
-            }
-            $task->update($validated);
-        }
-
-        Log::info('Task updated', [
-            'task_id' => $task->id,
-            'updated_by' => $programmer->id,
-            'updated_fields' => array_keys($validated)
-        ]);
-
-         $assigner = $task->assignedBy;
-            if ($assigner && $assigner->user && $assigner->user->fcm_token) {
-                $pushNotify = new PushNotify;
-                $pushNotify->sendPushNotification(
-                    $assigner->user->fcm_token,
-                    'Task Updated',
-                    "Task '{$task->title}' you assigned has been Updated.",
-                    [
-                        'task_id' => (string) $task->id,
-                        'type' => 'task_updated',
-                    ]
-                );
-            }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Task updated successfully',
-            'data' => $task->fresh(['programmer.user', 'creator.user', 'team.project'])
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error updating task: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to update task'
-        ], 500);
-    }
-}
 }
