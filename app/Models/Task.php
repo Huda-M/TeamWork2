@@ -56,7 +56,7 @@ class Task extends Model
         'reviewed_at' => 'datetime',
         'assigned_at' => 'datetime',
         'reassigned_at' => 'datetime',
-        'priority' => 'integer',
+        'priority' => 'string',
         'progress_percentage' => 'integer',
         'quality_score' => 'integer',
         'required_skills' => 'array',
