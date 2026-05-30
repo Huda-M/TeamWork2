@@ -5,12 +5,13 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Task;
 use App\Models\Team;
+use Faker\Factory as Faker;
 
 class TaskSeeder extends Seeder
 {
     public function run(): void
     {
-        $faker = fake();
+        
 
         $teams = Team::with('activeMembers')->get();
 
