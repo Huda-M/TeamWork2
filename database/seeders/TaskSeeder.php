@@ -11,8 +11,8 @@ class TaskSeeder extends Seeder
 {
     public function run(): void
     {
-        
-
+    
+        $faker = Faker::create();
         $teams = Team::with('activeMembers')->get();
 
         foreach ($teams as $team) {
