@@ -37,13 +37,16 @@ class SendInvitationNotification extends Notification
      * Get the mail representation of the notification.
      */
     public function toMail(object $notifiable): MailMessage
-    {
-        return (new MailMessage)
-            ->subject('Join Team ' . $this->team->name . ' on TeamWork Platform')
-            ->greeting('Hello ' . $notifiable->name . '!')
-            ->line('You have been invited to join the team "' . $this->team->name . '".')
-            ->line('The team is working on the project: ' . $this->team->project->title)
-            ->action('View Invitation', url('/api/invitations/' . $this->invitation->id))
-            ->line('Please log in to TeamWork Platform to accept the invitation.');
-    }
+{
+    $url = url('/api/invitations/' . $this->invitation->id);
+    
+    // استخدام قالب مخصص مع تمرير المتغيرات
+    return (new MailMessage)
+        ->subject('Join Team ' . $this->team->name . ' on TeamWork Platform')
+        ->markdown('emails.invitation', [
+            'notifiable' => $notifiable,
+            'team' => $this->team,
+            'url' => $url,
+        ]);
+}
 }
