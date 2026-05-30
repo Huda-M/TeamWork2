@@ -53,6 +53,14 @@
             border-left: 4px solid #5c7dc9;
             padding-left: 15px;
         }
+        .project-description {
+            background-color: #f8f9fc;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            color: #3a5a8c;
+            line-height: 1.5;
+        }
         .button {
             display: inline-block;
             background: linear-gradient(135deg, #5c7dc9, #274c9e);
@@ -83,13 +91,19 @@
     <div class="email-container">
         <div class="email-header">
             <h1>✨ Team Invitation ✨</h1>
-            <p>You've been invited to join a team on TeamWork Platform</p>
+            <p>You've been invited to join a team on <strong>bridgeX</strong></p>
         </div>
         <div class="email-body">
             <p style="font-size: 18px;">Hello <strong>{{ $notifiable->name }}</strong>,</p>
-            <p>You have been invited to join the team:</p>
+            <p><strong>{{ $inviterName }}</strong> has invited you to join the team:</p>
             <div class="team-name">{{ $team->name }}</div>
             <div class="project-title">📌 Project: {{ $team->project->title }}</div>
+            @if($projectDescription)
+                <div class="project-description">
+                    📝 <strong>About the project:</strong><br>
+                    {{ $projectDescription }}
+                </div>
+            @endif
             <p style="margin-top: 25px;">Click the button below to view your invitation and accept it:</p>
             <div style="text-align: center;">
                 <a href="{{ $url }}" class="button">🔗 View Invitation</a>
@@ -97,7 +111,7 @@
             <p style="margin-top: 30px;">If you don't have an account yet, you will be guided to create one.</p>
         </div>
         <div class="footer">
-            &copy; {{ date('Y') }} TeamWork Platform. All rights reserved.<br>
+            &copy; {{ date('Y') }} bridgeX. All rights reserved.<br>
             If you didn't expect this invitation, you can safely ignore this email.
         </div>
     </div>
