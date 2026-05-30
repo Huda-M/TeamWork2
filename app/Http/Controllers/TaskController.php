@@ -569,4 +569,54 @@ public function uploadAttachment(Request $request, Task $task)
         ], 500);
     }
 }
+    /**
+ * تحديث مهمة موجودة (يسمح بها قائد الفريق أو الأدمن أو المبرمج المسند إليه)
+ */
+public function update(UpdateTaskRequest $request, Task $task)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
+
+        // التحقق من الصلاحية: قائد الفريق أو أدمن أو المبرمج المسند إليه المهمة
+        $isLeader = $task->team->isLeader($programmer->id);
+        $isAssigned = ($task->programmer_id === $programmer->id);
+        
+        if (!$isLeader && !$isAssigned && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader, assigned programmer, or admin can update this task'
+            ], 403);
+        }
+
+        $validated = $request->validated();
+
+        // إذا حاول تغيير programmer_id وكان ليس قائداً أو أدمن، نمنعه
+        if ($request->has('programmer_id') && !$isLeader && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader or admin can reassign tasks'
+            ], 403);
+        }
+
+        $task->update($validated);
+
+        Log::info('Task updated', [
+            'task_id' => $task->id,
+            'updated_by' => $programmer->id
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task updated successfully',
+            'data' => $task->fresh(['programmer.user', 'creator.user', 'team.project'])
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error updating task: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update task'
+        ], 500);
+    }
+}
 }
