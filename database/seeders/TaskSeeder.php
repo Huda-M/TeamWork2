@@ -19,13 +19,13 @@ class TaskSeeder extends Seeder
             for ($i = 1; $i <= 5; $i++) {
                 Task::create([
                     'team_id' => $team->id,
-                    'programmer_id' => fake()->randomElement($members), // استخدام fake() بدلاً من $this->faker
-                    'title' => fake()->sentence(3),
-                    'description' => fake()->paragraph(),
-                    'status' => fake()->randomElement(['todo', 'in_progress', 'review', 'done']),
-                    'estimated_hours' => fake()->numberBetween(4, 40),
-                    'actual_hours' => fake()->optional(0.7)->numberBetween(3, 50),
-                    'deadline' => fake()->dateTimeBetween('now', '+30 days'),
+                    'programmer_id' => $this->faker->randomElement($members),
+                    'title' => $this->faker->sentence(3),
+                    'description' => $this->faker->paragraph(),
+                    'status' => $this->faker->randomElement(['todo', 'in_progress', 'review', 'done']),
+                    'estimated_hours' => $this->faker->numberBetween(4, 40),
+                    'actual_hours' => $this->faker->optional(0.7)->numberBetween(3, 50),
+                    'deadline' => $this->faker->dateTimeBetween('now', '+30 days'),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
