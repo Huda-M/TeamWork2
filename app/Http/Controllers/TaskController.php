@@ -569,8 +569,10 @@ public function uploadAttachment(Request $request, Task $task)
         ], 500);
     }
 }
-    /**
- * تحديث مهمة موجودة (يسمح بها قائد الفريق أو الأدمن أو المبرمج المسند إليه)
+/**
+ * تحديث مهمة موجودة
+ * - القائد/الأدمن: كل الحقول
+ * - المبرمج المُسند إليه: الحالة (status) فقط
  */
 public function update(UpdateTaskRequest $request, Task $task)
 {
@@ -578,7 +580,7 @@ public function update(UpdateTaskRequest $request, Task $task)
         $user = auth()->user();
         $programmer = $user->programmer;
 
-        // التحقق من الصلاحية: قائد الفريق أو أدمن أو المبرمج المسند إليه المهمة
+        // التحقق من الصلاحية الأساسية: قائد الفريق أو أدمن أو المبرمج المسند إليه
         $isLeader = $task->team->isLeader($programmer->id);
         $isAssigned = ($task->programmer_id === $programmer->id);
         
@@ -591,19 +593,33 @@ public function update(UpdateTaskRequest $request, Task $task)
 
         $validated = $request->validated();
 
-        // إذا حاول تغيير programmer_id وكان ليس قائداً أو أدمن، نمنعه
-        if ($request->has('programmer_id') && !$isLeader && $user->role !== 'admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only team leader or admin can reassign tasks'
-            ], 403);
+        // حالة خاصة: إذا كان المبرمج المسند إليه (وليس قائداً ولا أدمن)
+        if ($isAssigned && !$isLeader && $user->role !== 'admin') {
+            // يسمح له فقط بتعديل حقل 'status'
+            $allowedFields = ['status'];
+            $data = array_intersect_key($validated, array_flip($allowedFields));
+            if (empty($data) && $request->has('status') === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Assigned programmer can only update the task status'
+                ], 403);
+            }
+            $task->update($data);
+        } else {
+            // القائد أو الأدمن: يمكنه تعديل كل الحقول (بما فيها إعادة التعيين programmer_id)
+            if ($request->has('programmer_id') && !$task->team->isMember($request->programmer_id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The new assigned programmer is not a member of this team'
+                ], 400);
+            }
+            $task->update($validated);
         }
-
-        $task->update($validated);
 
         Log::info('Task updated', [
             'task_id' => $task->id,
-            'updated_by' => $programmer->id
+            'updated_by' => $programmer->id,
+            'updated_fields' => array_keys($validated)
         ]);
 
         return response()->json([
@@ -611,6 +627,7 @@ public function update(UpdateTaskRequest $request, Task $task)
             'message' => 'Task updated successfully',
             'data' => $task->fresh(['programmer.user', 'creator.user', 'team.project'])
         ]);
+
     } catch (\Exception $e) {
         Log::error('Error updating task: ' . $e->getMessage());
         return response()->json([
