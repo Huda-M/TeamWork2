@@ -3,32 +3,48 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Task;
 use App\Models\Team;
+use App\Models\Programmer;
+use App\Models\TeamMember;
 
-class TaskSeeder extends Seeder
+class TeamMemberSeeder extends Seeder
 {
     public function run(): void
     {
-        $teams = Team::with('activeMembers')->get();
+        $programmers = Programmer::all();
+        if ($programmers->count() < 3) {
+            $this->command->warn('Not enough programmers, run ProgrammerSeeder first.');
+            return;
+        }
+
+        $teams = Team::all();
 
         foreach ($teams as $team) {
-            $members = $team->activeMembers->pluck('programmer_id')->toArray();
-            if (empty($members)) continue;
+            // Choose a random programmer as leader
+            $leader = $programmers->random();
+            TeamMember::updateOrCreate(
+                ['team_id' => $team->id, 'programmer_id' => $leader->id],
+                [
+                    'role' => 'leader',
+                    'joined_at' => now(),
+                    'joined_by' => $leader->id,
+                ]
+            );
 
-            for ($i = 1; $i <= 5; $i++) {
-                Task::create([
-                    'team_id' => $team->id,
-                    'programmer_id' => $this->faker->randomElement($members),
-                    'title' => $this->faker->sentence(3),
-                    'description' => $this->faker->paragraph(),
-                    'status' => $this->faker->randomElement(['todo', 'in_progress', 'review', 'done']),
-                    'estimated_hours' => $this->faker->numberBetween(4, 40),
-                    'actual_hours' => $this->faker->optional(0.7)->numberBetween(3, 50),
-                    'deadline' => $this->faker->dateTimeBetween('now', '+30 days'),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+            // Add 2-4 members (excluding the leader)
+            $candidates = $programmers->where('id', '!=', $leader->id);
+            $membersCount = rand(2, min(4, $candidates->count()));
+            $members = $candidates->random($membersCount);
+
+            foreach ($members as $member) {
+                TeamMember::updateOrCreate(
+                    ['team_id' => $team->id, 'programmer_id' => $member->id],
+                    [
+                        'role' => 'member',
+                        'joined_at' => now(),
+                        'joined_by' => $leader->id,
+                    ]
+                );
             }
         }
     }
