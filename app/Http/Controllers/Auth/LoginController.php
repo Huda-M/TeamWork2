@@ -14,8 +14,9 @@ class LoginController extends Controller
     {
         // تعديل قاعدة التحقق: نطلب email و password فقط
         $validator = Validator::make($request->all(), [
-            'email'    => 'required|email',
-            'password' => 'required|string',
+            'email'     => 'required|email',
+            'password'  => 'required|string',
+            'fcm_token' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -35,20 +36,25 @@ class LoginController extends Controller
                 ], 403);
             }
 
+            if ($request->has('fcm_token')) {
+                $user->update(['fcm_token' => $request->fcm_token]);
+            }
+
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
                 'message' => 'Login successful.',
                 'user' => [
-                    'id'         => $user->id,
-                    'name'       => $user->name,
-                    'email'      => $user->email,
-                    'user_name'  => $user->user_name,   // ما زلنا نرسله لكن لا نستخدمه للتسجيل
-                    'role'       => $user->role,
-                    'avatar_url' => $user->avatar_url,
-                    'country'    => $user->country,
-                    'phone'      => $user->phone,
-                    'is_verified'=> !is_null($user->email_verified_at),
+                    'id'          => $user->id,
+                    'name'        => $user->name,
+                    'email'       => $user->email,
+                    'user_name'   => $user->user_name,   // ما زلنا نرسله لكن لا نستخدمه للتسجيل
+                    'role'        => $user->role,
+                    'avatar_url'  => $user->avatar_url,
+                    'country'     => $user->country,
+                    'phone'       => $user->phone,
+                    'is_verified' => !is_null($user->email_verified_at),
+                    'fcm_token'   => $user->fcm_token,
                 ],
                 'token'      => $token,
                 'token_type' => 'Bearer'

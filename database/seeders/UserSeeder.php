@@ -22,6 +22,7 @@ class UserSeeder extends Seeder
                     'password' => Hash::make('password'),
                     'role' => 'admin',
                     'email_verified_at' => now(),
+                    'fcm_token' => null,
                 ]
             );
         });
@@ -64,6 +65,7 @@ class UserSeeder extends Seeder
                         'password' => Hash::make('password'),
                         'role' => 'company',
                         'email_verified_at' => now(),
+                        'fcm_token' => null,
                     ]
                 );
             });
@@ -96,6 +98,7 @@ class UserSeeder extends Seeder
                         'password' => Hash::make('password'),
                         'role' => 'programmer',
                         'email_verified_at' => now(),
+                        'fcm_token' => null,
                     ]
                 );
             });
