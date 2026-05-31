@@ -1,4 +1,5 @@
 <?php
+
 // app/Models/User.php
 
 namespace App\Models;
@@ -6,14 +7,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens , SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable , SoftDeletes;
 
     protected $fillable = [
         'full_name',
@@ -69,7 +71,9 @@ class User extends Authenticatable
     {
         $profile = $this->profile;
 
-        if (!$profile) return false;
+        if (! $profile) {
+            return false;
+        }
 
         $requiredFields = ['user_name', 'phone'];
 
@@ -90,26 +94,23 @@ class User extends Authenticatable
         static::created(function ($user) {
             if ($user->role === 'programmer') {
                 $user->programmer()->create([]);
-            // } elseif ($user->role === 'company') {
-            //     $user->company()->create([]);
+                // } elseif ($user->role === 'company') {
+                //     $user->company()->create([]);
             }
         });
     }
 
-
-
     public function notifications()
     {
-        return $this->morphMany(\Illuminate\Notifications\DatabaseNotification::class, 'notifiable')->orderBy('created_at', 'desc');
+        return $this->morphMany(DatabaseNotification::class, 'notifiable')->orderBy('created_at', 'desc');
     }
 
     public function markProfileAsCompleted(): void
     {
-        if ($this->isProfileCompleted() && !$this->profile_completed) {
+        if ($this->isProfileCompleted() && ! $this->profile_completed) {
             $this->update(['profile_completed' => true]);
         }
     }
-
 
     public function userAuth(): HasOne
     {
@@ -171,5 +172,10 @@ class User extends Authenticatable
     public function scopeByUsername($query, $username)
     {
         return $query->where('user_name', $username);
+    }
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
     }
 }

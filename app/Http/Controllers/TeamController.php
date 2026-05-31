@@ -351,7 +351,7 @@ class TeamController extends Controller
                 }
             }
             $tokens = array_unique($tokens);
-            if (!empty($tokens)) {
+            if (! empty($tokens)) {
                 $pushNotify = new PushNotify;
                 $pushNotify->sendBulkNotification(
                     $tokens,
@@ -756,6 +756,8 @@ class TeamController extends Controller
                     }
                 }
             }
+
+            $team->chatRoom()->create();
 
             DB::commit();
 

@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Team extends Model
 {
@@ -27,7 +28,7 @@ class Team extends Model
         'avatar_url',
         'required_skills',
         'preferred_skills',
-        'experience_level'
+        'experience_level',
     ];
 
     protected $casts = [
@@ -36,10 +37,10 @@ class Team extends Model
         'required_skills' => 'array',
         'preferred_skills' => 'array',
         'category' => 'array',
-    'required_role' => 'array',
+        'required_role' => 'array',
     ];
 
-     public function getMaxMembersAttribute()
+    public function getMaxMembersAttribute()
     {
         return $this->project->team_size;
     }
@@ -74,6 +75,11 @@ class Team extends Model
         return $this->hasMany(TeamMember::class);
     }
 
+    public function chatRoom()
+    {
+        return $this->hasOne(ChatRoom::class);
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
@@ -87,8 +93,8 @@ class Team extends Model
     public function programmers(): BelongsToMany
     {
         return $this->belongsToMany(Programmer::class, 'team_members')
-                    ->withPivot('role', 'joined_at', 'left_at')
-                    ->withTimestamps();
+            ->withPivot('role', 'joined_at', 'left_at')
+            ->withTimestamps();
     }
 
     public function leader(): HasOne
@@ -106,8 +112,6 @@ class Team extends Model
         return $this->hasMany(TeamInvitation::class);
     }
 
-
-
     public function scopeActive($query)
     {
         return $query->where('status', 'active');
@@ -120,11 +124,11 @@ class Team extends Model
 
     public function scopeHasVacancies($query)
     {
-        return $query->whereColumn('max_members', '>', function($subQuery) {
+        return $query->whereColumn('max_members', '>', function ($subQuery) {
             $subQuery->selectRaw('COUNT(*)')
-                    ->from('team_members')
-                    ->whereColumn('team_members.team_id', 'teams.id')
-                    ->whereNull('left_at');
+                ->from('team_members')
+                ->whereColumn('team_members.team_id', 'teams.id')
+                ->whereNull('left_at');
         });
     }
 
@@ -138,7 +142,6 @@ class Team extends Model
         return $query->where('experience_level', $level);
     }
 
-
     public function isMember($programmerId): bool
     {
         return $this->activeMembers()->where('programmer_id', $programmerId)->exists();
@@ -147,9 +150,9 @@ class Team extends Model
     public function isLeader($programmerId): bool
     {
         return $this->activeMembers()
-                    ->where('programmer_id', $programmerId)
-                    ->where('role', 'leader')
-                    ->exists();
+            ->where('programmer_id', $programmerId)
+            ->where('role', 'leader')
+            ->exists();
     }
 
     public function getMembersCount(): int
@@ -161,6 +164,7 @@ class Team extends Model
     {
         $code = strtoupper(substr(md5(uniqid()), 0, 8));
         $this->update(['join_code' => $code]);
+
         return $code;
     }
 
@@ -183,7 +187,7 @@ class Team extends Model
 
     public function getPerformanceReport($date = null): array
     {
-        $statDate = $date ? \Carbon\Carbon::parse($date) : now();
+        $statDate = $date ? Carbon::parse($date) : now();
         $statistics = $this->statistics()->whereDate('stat_date', $statDate)->first();
 
         if ($statistics) {

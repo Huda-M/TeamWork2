@@ -53,6 +53,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyProgrammerController;
+use Illuminate\Support\Facades\Broadcast;
 
 /**
  * @OA\Info(
@@ -301,7 +302,12 @@ Route::prefix('profile')->group(function () {
     });
 
 });
+
+// Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
 require_once __DIR__.'/ai.routes.php';
 require_once __DIR__ . '/Companies/auth.routes.php';
 require_once __DIR__ . '/Companies/programmer.routes.php';
 require_once __DIR__ . '/Companies/offer.routes.php';
+require_once __DIR__ . '/chat.routes.php';
+
