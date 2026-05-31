@@ -49,6 +49,17 @@ class TeamChatController extends Controller
         ], 201);
     }
 
+    public function TeamMessages(Team $team)
+    {
+        $this->authorizeTeamMember($team);
+        $room = $team->chatRoom;
+
+        return $room->messages()
+            ->with('user:id,full_name')
+            ->latest()
+            ->get();
+    }
+
     private function authorizeTeamMember(Team $team): void
     {
         $programmer = auth()->user()->programmer;
