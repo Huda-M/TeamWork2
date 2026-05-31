@@ -303,7 +303,7 @@ Route::prefix('profile')->group(function () {
 
 });
 
-// Broadcast::routes(['middleware' => ['auth:sanctum']]);
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 require_once __DIR__.'/ai.routes.php';
 require_once __DIR__ . '/Companies/auth.routes.php';
