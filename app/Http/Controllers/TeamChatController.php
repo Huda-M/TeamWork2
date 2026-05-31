@@ -18,7 +18,7 @@ class TeamChatController extends Controller
         return $room->messages()
             ->with('user:id,full_name')
             ->latest()
-            ->paginate(30);
+            ->get();
     }
 
     public function send(Request $request, Team $team)
