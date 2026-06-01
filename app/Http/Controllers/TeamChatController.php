@@ -9,18 +9,6 @@ use Illuminate\Http\Request;
 
 class TeamChatController extends Controller
 {
-    public function messages(Team $team)
-    {
-        $this->authorizeTeamMember($team);
-
-        $room = $team->chatRoom;
-
-        return $room->messages()
-            ->with('user:id,full_name')
-            ->latest()
-            ->get();
-    }
-
     public function send(Request $request, Team $team)
     {
         $this->authorizeTeamMember($team);
@@ -52,7 +40,7 @@ class TeamChatController extends Controller
     public function TeamMessages(Team $team)
     {
         $this->authorizeTeamMember($team);
-        $room = $team->chatRoom;
+        $room = $team->chatRoom()->firstOrCreate([]);
 
         return $room->messages()
             ->with('user:id,full_name')
