@@ -11,7 +11,7 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user =auth()->user();
         if (! $user) {
             return response()->json([
                 'success' => false,
@@ -33,7 +33,7 @@ class NotificationController extends Controller
     }
     public function unreadCount()
     {
-        $user = Auth::user();
+        $user = auth()->user();
         if (! $user) {
             return response()->json([
                 'success' => false,
@@ -55,7 +55,7 @@ class NotificationController extends Controller
     }
     public function markAsRead($id)
     {
-        $user = Auth::user();
+        $user = auth()->user();
         if (! $user) {
             return response()->json([
                 'success' => false,
@@ -83,7 +83,7 @@ class NotificationController extends Controller
 
     public function markAllAsRead()
     {
-        $user = Auth::user();
+        $user = auth()->user();
         if (! $user) {
             return response()->json([
                 'success' => false,
