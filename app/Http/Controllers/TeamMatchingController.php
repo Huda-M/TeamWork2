@@ -64,11 +64,11 @@ class TeamMatchingController extends Controller
             ], 422);
         }
 
-        AiTeam::where('user_id', $programmer->user_id)->delete();
+        AiTeam::where('user_id', $programmer->id)->delete();
 
         foreach ($aiData['team_ids'] as $teamId) {
             AiTeam::create([
-                'user_id' => $programmer->user_id,
+                'user_id' => $programmer->id,
                 'team_id' => $teamId,
             ]);
         }

@@ -53,6 +53,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyProgrammerController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Broadcast;
 
 /**

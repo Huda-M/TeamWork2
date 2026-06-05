@@ -466,19 +466,33 @@ class TaskController extends Controller
 
             DB::commit();
 
-            $task->load('programmer.user');
+            $task->load(['programmer.user', 'team']);
             $assignedUser = $task->programmer?->user;
-            if ($assignedUser && $assignedUser->fcm_token) {
-                $pushNotify = new PushNotify;
-                $pushNotify->sendPushNotification(
-                    $assignedUser->fcm_token,
-                    'New Task Assigned',
-                    "You have been assigned a new task: {$task->title}",
-                    [
-                        'task_id' => (string) $task->id,
-                        'type' => 'new_task_assigned',
-                    ]
-                );
+            if ($assignedUser) {
+                \App\Models\Notification::create([
+                    'user_id' => $assignedUser->id,
+                    'project_id' => $task->team->project_id ?? null,
+                    'task_id' => $task->id,
+                    'team_id' => $task->team_id,
+                    'is_read' => false,
+                    'title' => 'New Task Assigned',
+                    'message' => "You have been assigned a new task: {$task->title}",
+                    'type' => 'task_assigned',
+                    'related_entity_type' => 'task',
+                ]);
+
+                if ($assignedUser->fcm_token) {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $assignedUser->fcm_token,
+                        'New Task Assigned',
+                        "You have been assigned a new task: {$task->title}",
+                        [
+                            'task_id' => (string) $task->id,
+                            'type' => 'new_task_assigned',
+                        ]
+                    );
+                }
             }
 
             return response()->json([
@@ -539,17 +553,31 @@ class TaskController extends Controller
             ]);
 
             $assigner = $task->assignedBy;
-            if ($assigner && $assigner->user && $assigner->user->fcm_token) {
-                $pushNotify = new PushNotify;
-                $pushNotify->sendPushNotification(
-                    $assigner->user->fcm_token,
-                    'Task Completed',
-                    "Task '{$task->title}' you assigned has been completed.",
-                    [
-                        'task_id' => (string) $task->id,
-                        'type' => 'task_completed',
-                    ]
-                );
+            if ($assigner && $assigner->user) {
+                \App\Models\Notification::create([
+                    'user_id' => $assigner->user->id,
+                    'project_id' => $task->project_id ?? ($task->team->project_id ?? null),
+                    'task_id' => $task->id,
+                    'team_id' => $task->team_id,
+                    'is_read' => false,
+                    'title' => 'Task Completed',
+                    'message' => "Task '{$task->title}' you assigned has been completed.",
+                    'type' => 'task_assigned',
+                    'related_entity_type' => 'task',
+                ]);
+
+                if ($assigner->user->fcm_token) {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $assigner->user->fcm_token,
+                        'Task Completed',
+                        "Task '{$task->title}' you assigned has been completed.",
+                        [
+                            'task_id' => (string) $task->id,
+                            'type' => 'task_completed',
+                        ]
+                    );
+                }
             }
 
             DB::commit();
@@ -683,17 +711,31 @@ class TaskController extends Controller
             ]);
 
             $assigner = $task->assignedBy;
-            if ($assigner && $assigner->user && $assigner->user->fcm_token) {
-                $pushNotify = new PushNotify;
-                $pushNotify->sendPushNotification(
-                    $assigner->user->fcm_token,
-                    'Task Updated',
-                    "Task '{$task->title}' you assigned has been Updated.",
-                    [
-                        'task_id' => (string) $task->id,
-                        'type' => 'task_updated',
-                    ]
-                );
+            if ($assigner && $assigner->user) {
+                \App\Models\Notification::create([
+                    'user_id' => $assigner->user->id,
+                    'project_id' => $task->project_id ?? ($task->team->project_id ?? null),
+                    'task_id' => $task->id,
+                    'team_id' => $task->team_id,
+                    'is_read' => false,
+                    'title' => 'Task Updated',
+                    'message' => "Task '{$task->title}' you assigned has been Updated.",
+                    'type' => 'task_assigned',
+                    'related_entity_type' => 'task',
+                ]);
+
+                if ($assigner->user->fcm_token) {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $assigner->user->fcm_token,
+                        'Task Updated',
+                        "Task '{$task->title}' you assigned has been Updated.",
+                        [
+                            'task_id' => (string) $task->id,
+                            'type' => 'task_updated',
+                        ]
+                    );
+                }
             }
 
             return response()->json([

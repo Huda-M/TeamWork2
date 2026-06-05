@@ -346,8 +346,21 @@ class TeamController extends Controller
             $tokens = [];
             foreach ($team->activeMembers as $member) {
                 $prog = $member->programmer;
-                if ($prog && $prog->user && $prog->user->fcm_token) {
-                    $tokens[] = $prog->user->fcm_token;
+                if ($prog && $prog->user) {
+                    \App\Models\Notification::create([
+                        'user_id' => $prog->user->id,
+                        'project_id' => $team->project_id,
+                        'team_id' => $team->id,
+                        'is_read' => false,
+                        'title' => 'New Team Leader',
+                        'message' => "{$newLeader->user->full_name} is now the leader of team {$team->name}.",
+                        'type' => 'message',
+                        'related_entity_type' => 'team',
+                    ]);
+
+                    if ($prog->user->fcm_token) {
+                        $tokens[] = $prog->user->fcm_token;
+                    }
                 }
             }
             $tokens = array_unique($tokens);
@@ -743,6 +756,17 @@ class TeamController extends Controller
                         'programmer_id' => $invitedProgrammer->id,
                         'invitation_id' => $invitation->id,
                     ];
+
+                    \App\Models\Notification::create([
+                        'user_id' => $invitedProgrammer->user->id,
+                        'project_id' => $team->project_id,
+                        'team_id' => $team->id,
+                        'is_read' => false,
+                        'title' => 'New Team Invitation',
+                        'message' => "You've been invited to join team '{$team->name}'.",
+                        'type' => 'team_invite',
+                        'related_entity_type' => 'team',
+                    ]);
 
                     $fcmToken = $invitedProgrammer->user->fcm_token;
                     if ($fcmToken) {
