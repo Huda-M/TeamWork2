@@ -512,4 +512,34 @@ public function levelProgression()
         ], 500);
     }
 }   
+    /**
+ * البحث عن المبرمجين بواسطة username (للدعوات)
+ */
+public function searchByUsername(Request $request)
+{
+    $query = $request->get('query', '');
+    
+    if (strlen($query) < 2) {
+        return response()->json(['data' => []]);
+    }
+
+    $programmers = Programmer::with('user')
+        ->where('user_name', 'LIKE', "%{$query}%")
+        ->orWhereHas('user', function($q) use ($query) {
+            $q->where('full_name', 'LIKE', "%{$query}%");
+        })
+        ->limit(10)
+        ->get()
+        ->map(function($programmer) {
+            return [
+                'id' => $programmer->id,
+                'user_name' => $programmer->user_name,
+                'full_name' => $programmer->user->full_name,
+                'avatar_url' => $programmer->avatar_url,
+                'track' => $programmer->track,
+            ];
+        });
+
+    return response()->json(['data' => $programmers]);
+}
 }
