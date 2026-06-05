@@ -169,15 +169,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my/statistics', [ProgrammerController::class, 'myStatistics']);
     Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
 
-    // Notifications
-    Route::prefix('notifications')->group(function () {
-        Route::get('/', [UserController::class, 'getNotifications']);
-        Route::get('/unread-count', [UserController::class, 'getUnreadCount']);
-        Route::post('/{notificationId}/read', [UserController::class, 'markNotificationAsRead']);
-        Route::post('/read-all', [UserController::class, 'markAllNotificationsAsRead']);
-        Route::delete('/{notificationId}', [UserController::class, 'deleteNotification']);
-        Route::delete('/read/all', [UserController::class, 'deleteReadNotifications']);
-    });
+    // // Notifications
+    // Route::prefix('notifications')->group(function () {
+    //     Route::get('/', [UserController::class, 'getNotifications']);
+    //     Route::get('/unread-count', [UserController::class, 'getUnreadCount']);
+    //     Route::post('/{notificationId}/read', [UserController::class, 'markNotificationAsRead']);
+    //     Route::post('/read-all', [UserController::class, 'markAllNotificationsAsRead']);
+    //     Route::delete('/{notificationId}', [UserController::class, 'deleteNotification']);
+    //     Route::delete('/read/all', [UserController::class, 'deleteReadNotifications']);
+    // });
 
     // Projects related (authenticated)
     Route::get('/my-projects', [ProjectController::class, 'myProjects']);
