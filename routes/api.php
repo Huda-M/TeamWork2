@@ -107,6 +107,7 @@ require_once __DIR__.'/chat.routes.php';
 require_once __DIR__.'/notifications.routes.php';
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/search/programmers', [ProgrammerController::class, 'searchByUsername']);
     Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
     Route::get('/teams/{teamId}/my-ratings', [TeamController::class, 'getTeamMembersWithMyRatings']);
     Route::get('/teams/{id}/basic-details', [TeamController::class, 'getTeamBasicDetails']);
