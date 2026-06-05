@@ -2,18 +2,22 @@
 
 /**
  * @OA\OpenApi(
+ *
  *     @OA\Info(
  *         version="1.0.0",
  *         title="TeamWork API",
  *         description="API Documentation for Team Work System",
+ *
  *         @OA\Contact(
  *             email="support@teamwork.com"
  *         ),
+ *
  *         @OA\License(
  *             name="Apache 2.0",
  *             url="https://www.apache.org/licenses/LICENSE-2.0.html"
  *         )
  *     ),
+ *
  *     @OA\Server(
  *         url="https://teamwork2-main-opmxfq.free.laravel.cloud",
  *         description="Production Server"
@@ -34,15 +38,16 @@
  *     securityScheme="Bearer"
  * )
  */
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SocialAuthController;
 use App\Http\Controllers\Auth\VerifyEmailController;
-use App\Http\Controllers\Auth\PasswordResetLinkController;
-use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyProgrammerController;
 use App\Http\Controllers\EvaluationController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProgrammerController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ReportController;
@@ -50,11 +55,9 @@ use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\CompanyController;
-use App\Http\Controllers\CompanyProgrammerController;
-use App\Http\Controllers\NotificationController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Route;
 
 /**
  * @OA\Info(
@@ -72,6 +75,7 @@ use Illuminate\Support\Facades\Broadcast;
  * )
  *
  * @OA\Components(
+ *
  *     @OA\SecurityScheme(
  *         type="http",
  *         description="Login with username and password to get the authentication token",
@@ -83,8 +87,6 @@ use Illuminate\Support\Facades\Broadcast;
  *     )
  * )
  */
-
-
 Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::post('/register/verify', [RegisteredUserController::class, 'verifyAndCreate']);
 Route::post('/register/resend-code', [RegisteredUserController::class, 'resendCode']);
@@ -101,7 +103,8 @@ Route::middleware('start.session')->group(function () {
     Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
 });
 
-require_once __DIR__ . '/chat.routes.php';
+require_once __DIR__.'/chat.routes.php';
+require_once __DIR__.'/notifications.routes.php';
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
@@ -156,7 +159,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
     // User profile & general
-    Route::get('/user', fn(Request $request) => $request->user());
+    Route::get('/user', fn (Request $request) => $request->user());
     Route::post('/logout', [LoginController::class, 'logout']);
     Route::post('/register/complete-profile', [RegisteredUserController::class, 'completeProfile']);
     Route::get('/profile/status', [RegisteredUserController::class, 'profileStatus']);
@@ -165,8 +168,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Programmer specific
     Route::get('/my/statistics', [ProgrammerController::class, 'myStatistics']);
     Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
-
-    require_once __DIR__ . '/notifications.routes.php';
 
     // Notifications
     Route::prefix('notifications')->group(function () {
@@ -201,16 +202,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{task}/update-status', [TaskController::class, 'updateStatus']);
     });
 
-Route::prefix('profile')->group(function () {
-    Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
-    Route::post('/update', [ProfileController::class, 'updateProfile']);
-    Route::get('/my-stats', [ProfileController::class, 'myStats']);
-    Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
-    Route::get('/team-members/{projectId}/to-evaluate', [ProfileController::class, 'teamMembersToEvaluate']);
-    Route::post('/evaluate/{projectId}/{evaluatedId}', [ProfileController::class, 'submitEvaluation']);
-    Route::delete('/soft-delete', [ProfileController::class, 'softDeleteAccount']);
-    Route::get('/project-details/{projectId}', [ProfileController::class, 'projectDetails']);
-});
+    Route::prefix('profile')->group(function () {
+        Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
+        Route::post('/update', [ProfileController::class, 'updateProfile']);
+        Route::get('/my-stats', [ProfileController::class, 'myStats']);
+        Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
+        Route::get('/team-members/{projectId}/to-evaluate', [ProfileController::class, 'teamMembersToEvaluate']);
+        Route::post('/evaluate/{projectId}/{evaluatedId}', [ProfileController::class, 'submitEvaluation']);
+        Route::delete('/soft-delete', [ProfileController::class, 'softDeleteAccount']);
+        Route::get('/project-details/{projectId}', [ProfileController::class, 'projectDetails']);
+    });
 
     // Teams
     Route::prefix('teams')->group(function () {
@@ -310,7 +311,6 @@ Route::prefix('profile')->group(function () {
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 require_once __DIR__.'/ai.routes.php';
-require_once __DIR__ . '/Companies/auth.routes.php';
-require_once __DIR__ . '/Companies/programmer.routes.php';
-require_once __DIR__ . '/Companies/offer.routes.php';
-
+require_once __DIR__.'/Companies/auth.routes.php';
+require_once __DIR__.'/Companies/programmer.routes.php';
+require_once __DIR__.'/Companies/offer.routes.php';
