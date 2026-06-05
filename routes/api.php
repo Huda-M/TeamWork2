@@ -166,7 +166,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my/statistics', [ProgrammerController::class, 'myStatistics']);
     Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
 
-    require_once __DIR__ .'notifications.routes.php';
+    require_once __DIR__ . '/notifications.routes.php';
 
     // Notifications
     Route::prefix('notifications')->group(function () {
