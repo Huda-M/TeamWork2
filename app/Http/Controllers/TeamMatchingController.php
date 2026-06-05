@@ -25,7 +25,7 @@ class TeamMatchingController extends Controller
                 'full_name' => $user->full_name,
                 'skills' => is_string($programmer->skills)
                     ? json_decode($programmer->skills, true)
-                    : $programmer->skills,
+                    : $programmer->skills ?? [],
                 'experience' => (float) $programmer->current_level,
             ],
 
