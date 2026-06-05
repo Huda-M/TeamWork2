@@ -42,10 +42,13 @@ class TeamChatController extends Controller
         $this->authorizeTeamMember($team);
         $room = $team->chatRoom()->firstOrCreate([]);
 
-        return $room->messages()
+        return response()->json([
+            'message' => 'Messages retrieved successfully',
+            'data' => $room->messages()
             ->with('user:id,full_name')
             ->latest()
-            ->get();
+            ->get(),
+        ]);
     }
 
     private function authorizeTeamMember(Team $team): void
@@ -56,5 +59,51 @@ class TeamChatController extends Controller
             403,
             'You are not a member of this team.'
         );
+    }
+
+    public function MyChats()
+    {
+        $user = auth()->user();
+        if (!$user || !$user->programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found',
+            ], 404);
+        }
+
+        $programmer = $user->programmer;
+
+        // Retrieve teams where the programmer is currently an active member
+        $teams = $programmer->teams()
+            ->wherePivotNull('left_at')
+            ->with(['chatRoom.latestMessage.user:id,full_name'])
+            ->get();
+
+        $chats = $teams->map(function ($team) {
+            $chatRoom = $team->chatRoom ?: $team->chatRoom()->create();
+            $latestMessage = $chatRoom->latestMessage;
+
+            return [
+                'chat_room_id' => $chatRoom->id,
+                'team_id' => $team->id,
+                'team_name' => $team->name,
+                'avatar_url' => $team->avatar_url,
+                'latest_message' => $latestMessage ? [
+                    'id' => $latestMessage->id,
+                    'body' => $latestMessage->body,
+                    'user' => [
+                        'id' => $latestMessage->user->id ?? null,
+                        'full_name' => $latestMessage->user->full_name ?? null,
+                    ],
+                    'created_at' => $latestMessage->created_at,
+                ] : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Chats retrieved successfully',
+            'data' => $chats,
+        ]);
     }
 }

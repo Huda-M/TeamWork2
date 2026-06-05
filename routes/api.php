@@ -100,6 +100,7 @@ Route::middleware('start.session')->group(function () {
     Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
 });
 
+require_once __DIR__ . '/chat.routes.php';
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
@@ -309,5 +310,4 @@ require_once __DIR__.'/ai.routes.php';
 require_once __DIR__ . '/Companies/auth.routes.php';
 require_once __DIR__ . '/Companies/programmer.routes.php';
 require_once __DIR__ . '/Companies/offer.routes.php';
-require_once __DIR__ . '/chat.routes.php';
 
