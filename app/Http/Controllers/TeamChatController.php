@@ -6,6 +6,8 @@ use App\Events\TeamMessageSent;
 use App\Models\Message;
 use App\Models\Team;
 use Illuminate\Http\Request;
+use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
 
 class TeamChatController extends Controller
 {
@@ -73,10 +75,15 @@ class TeamChatController extends Controller
 
         $programmer = $user->programmer;
 
-        // Retrieve teams where the programmer is currently an active member
-        $teams = $programmer->teams()
+        // Retrieve teams where the programmer is currently an active member, filtered using Spatie QueryBuilder
+        $teamsQuery = $programmer->teams()
             ->wherePivotNull('left_at')
-            ->with(['chatRoom.latestMessage.user:id,full_name'])
+            ->with(['chatRoom.latestMessage.user:id,full_name']);
+
+        $teams = QueryBuilder::for($teamsQuery)
+            ->allowedFilters([
+                AllowedFilter::partial('name'),
+            ])
             ->get();
 
         $chats = $teams->map(function ($team) {
