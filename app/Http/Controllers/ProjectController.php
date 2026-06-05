@@ -58,6 +58,11 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
 
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
         // جلب المشروع مع الفرق والأعضاء والمهام
         $project = Project::with([
             'teams.activeMembers.programmer.user',
@@ -68,37 +73,36 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Project not found'], 404);
         }
 
-        // التحقق من شرط "zero": لا يوجد فرق OR الفرق الموجودة ليس لديها مهام
-        $hasTeams = $project->teams->isNotEmpty();
-        $hasTasks = $project->teams->flatMap->tasks->isNotEmpty();
-
-        if ($hasTeams && $hasTasks) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This project already has teams with tasks, cannot be considered as zero project'
-            ], 400);
+        // التحقق من أن المستخدم هو قائد الفريق في هذا المشروع
+        // نفترض أن المشروع له فريق واحد (كما في نظامك)
+        $team = $project->teams->first();
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
 
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json(['success' => false, 'message' => 'Only the team leader can view zero project details'], 403);
+        }
+
+        // إزالة الشرط الذي يمنع العرض إذا كانت هناك مهام
         // جمع جميع الأعضاء من كل فريق في المشروع
         $members = collect();
         foreach ($project->teams as $team) {
             foreach ($team->activeMembers as $member) {
-                $programmer = $member->programmer;
-                // مهام هذا المبرمج في هذا الفريق/المشروع
-                $programmerTasks = $team->tasks->where('programmer_id', $programmer->id);
+                $prog = $member->programmer;
+                $programmerTasks = $team->tasks->where('programmer_id', $prog->id);
                 $doneCount = $programmerTasks->where('status', 'done')->count();
                 $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
 
                 $members->push([
-                    'name'          => $programmer->user->full_name,
-                    'avatar_url'    => $programmer->avatar_url,
-                    'track'         => $programmer->track ?? 'general',
+                    'name'          => $prog->user->full_name,
+                    'avatar_url'    => $prog->avatar_url,
+                    'track'         => $prog->track ?? 'general',
                     'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
                 ]);
             }
         }
 
-        // إزالة التكرار إن وجد
         $members = $members->unique('name')->values();
 
         $responseData = [
