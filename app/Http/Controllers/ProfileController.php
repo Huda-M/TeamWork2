@@ -20,10 +20,6 @@ class ProfileController extends Controller
 {
    public function myProfile()
 {
-    return response()->json([
-    'auth_user_id' => Auth::id(),
-    'auth_email' => Auth::user()->email,
-]);
     $user = Auth::user();
     if (!$user || $user->role !== 'programmer') {
         return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -318,10 +314,6 @@ class ProfileController extends Controller
     }
 public function updateProfile(Request $request)
 {
-    return response()->json([
-    'auth_user_id' => Auth::id(),
-    'auth_email' => Auth::user()->email,
-]);
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
