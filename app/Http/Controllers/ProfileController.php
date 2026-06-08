@@ -332,6 +332,16 @@ public function updateProfile(Request $request)
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
+        // user_name validation (فقط إذا أرسله المستخدم)
+        if ($request->filled('user_name')) {
+            $rules['user_name'] = [
+                'required',
+                'string',
+                'max:255',
+                \Illuminate\Validation\Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+            ];
+        }
+
         // email validation (فقط إذا أرسله المستخدم)
         if ($request->filled('email')) {
             $rules['email'] = [
@@ -341,78 +351,81 @@ public function updateProfile(Request $request)
             ];
         }
 
-        // لا نضيف أي قاعدة للـ user_name – لن نسمح بتعديله
-
         $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
-        // Update users table
-        $userUpdated = false;
-        if ($request->has('full_name')) {
-            $user->full_name = $request->full_name;
-            $userUpdated = true;
-        }
-        if ($request->has('email')) {
-            $user->email = $request->email;
-            $userUpdated = true;
-        }
-        if ($userUpdated) {
-            $user->save();
-        }
-
-        // Update programmers table (لا نسمح بتعديل user_name)
-        $programmerUpdated = false;
-        if ($request->has('bio')) {
-            $programmer->bio = $request->bio;
-            $programmerUpdated = true;
-        }
-        if ($request->has('track')) {
-            $programmer->track = $request->track;
-            $programmerUpdated = true;
-        }
-
-        // Handle avatar upload
-        if ($request->hasFile('avatar')) {
-            $file = $request->file('avatar');
-            if ($file->isValid()) {
-                // حذف الصورة القديمة
-                if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
-                    $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                    }
-                }
-                $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs('avatars', $fileName, 'public');
-                $programmer->avatar_url = Storage::url($path);
-                $programmerUpdated = true;
-            } else {
-                return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
+        // Use database transaction to ensure data consistency
+        \DB::beginTransaction();
+        try {
+            // Update users table
+            if ($request->has('full_name')) {
+                $user->full_name = $request->full_name;
             }
-        }
+            if ($request->has('email')) {
+                $user->email = $request->email;
+            }
+            $user->save();
 
-        if ($programmerUpdated) {
+            // Update programmers table
+            if ($request->has('user_name')) {
+                $programmer->user_name = $request->user_name;
+            }
+            if ($request->has('bio')) {
+                $programmer->bio = $request->bio;
+            }
+            if ($request->has('track')) {
+                $programmer->track = $request->track;
+            }
+
+            // Handle avatar upload
+            if ($request->hasFile('avatar')) {
+                $file = $request->file('avatar');
+                if ($file->isValid()) {
+                    // حذف الصورة القديمة
+                    if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
+                        $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
+                        if (Storage::disk('public')->exists($oldPath)) {
+                            Storage::disk('public')->delete($oldPath);
+                        }
+                    }
+                    $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
+                    $path = $file->storeAs('avatars', $fileName, 'public');
+                    $programmer->avatar_url = Storage::url($path);
+                } else {
+                    \DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
+                }
+            }
+
             $programmer->save();
+            
+            // Commit transaction
+            \DB::commit();
+
+            // Get fresh data after successful commit
+            $user = Auth::user();
+            $programmer = $user->programmer;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile updated successfully',
+                'data' => [
+                    'id'         => $programmer->id,
+                    'user_name'  => $programmer->user_name,
+                    'full_name'  => $user->full_name,
+                    'email'      => $user->email,
+                    'bio'        => $programmer->bio,
+                    'track'      => $programmer->track,
+                    'avatar_url' => $programmer->avatar_url,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            throw $e;
         }
-
-        $programmer->refresh();
-        $user->refresh();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'data' => [
-                'id'         => $programmer->id,
-                'user_name'  => $programmer->user_name, // يبقى كما هو دون تغيير
-                'full_name'  => $user->full_name,
-                'email'      => $user->email,
-                'bio'        => $programmer->bio,
-                'track'      => $programmer->track,
-                'avatar_url' => $programmer->avatar_url,
-            ]
-        ]);
 
     } catch (\Exception $e) {
         Log::error('Profile update error: ' . $e->getMessage());
@@ -423,6 +436,7 @@ public function updateProfile(Request $request)
         ], 500);
     }
 }
+
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
     public function projectDetails($projectId)
     {
