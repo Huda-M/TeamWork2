@@ -332,16 +332,6 @@ public function updateProfile(Request $request)
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        // user_name validation (فقط إذا أرسله المستخدم)
-        if ($request->filled('user_name')) {
-            $rules['user_name'] = [
-                'required',
-                'string',
-                'max:255',
-                \Illuminate\Validation\Rule::unique('programmers', 'user_name')->ignore($programmer->id)
-            ];
-        }
-
         // email validation (فقط إذا أرسله المستخدم)
         if ($request->filled('email')) {
             $rules['email'] = [
@@ -354,6 +344,19 @@ public function updateProfile(Request $request)
         $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        // التحقق اليدوي من user_name إذا أرسله المستخدم
+        if ($request->filled('user_name')) {
+            $existingUser = Programmer::where('user_name', $request->user_name)
+                ->where('id', '!=', $programmer->id)
+                ->first();
+            if ($existingUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Username already taken'
+                ], 409);
+            }
         }
 
         // Update users table
