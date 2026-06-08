@@ -341,22 +341,11 @@ public function updateProfile(Request $request)
             ];
         }
 
+        // لا نضيف أي قاعدة للـ user_name – لن نسمح بتعديله
+
         $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
-        }
-
-        // التحقق اليدوي من user_name إذا أرسله المستخدم
-        if ($request->filled('user_name')) {
-            $existingUser = Programmer::where('user_name', $request->user_name)
-                ->where('id', '!=', $programmer->id)
-                ->first();
-            if ($existingUser) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Username already taken'
-                ], 409);
-            }
         }
 
         // Update users table
@@ -373,12 +362,8 @@ public function updateProfile(Request $request)
             $user->save();
         }
 
-        // Update programmers table
+        // Update programmers table (لا نسمح بتعديل user_name)
         $programmerUpdated = false;
-        if ($request->has('user_name')) {
-            $programmer->user_name = $request->user_name;
-            $programmerUpdated = true;
-        }
         if ($request->has('bio')) {
             $programmer->bio = $request->bio;
             $programmerUpdated = true;
@@ -420,7 +405,7 @@ public function updateProfile(Request $request)
             'message' => 'Profile updated successfully',
             'data' => [
                 'id'         => $programmer->id,
-                'user_name'  => $programmer->user_name,
+                'user_name'  => $programmer->user_name, // يبقى كما هو دون تغيير
                 'full_name'  => $user->full_name,
                 'email'      => $user->email,
                 'bio'        => $programmer->bio,
