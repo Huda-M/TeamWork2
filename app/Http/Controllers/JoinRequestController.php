@@ -45,7 +45,6 @@ class JoinRequestController extends Controller
             $joinRequest = JoinRequest::create([
                 'team_id' => $team->id,
                 'programmer_id' => $programmer->id,
-                'message' => $request->message,
                 'status' => 'pending',
             ]);
             DB::commit();
