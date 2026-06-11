@@ -184,6 +184,10 @@ class Team extends Model
             ]);
         });
     }
+    public function joinRequests()
+    {
+        return $this->hasMany(JoinRequest::class);
+    }
 
     public function getPerformanceReport($date = null): array
     {
