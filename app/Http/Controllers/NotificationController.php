@@ -19,8 +19,8 @@ class NotificationController extends Controller
         }
 
         $query = QueryBuilder::for(Notification::class)
-            ->allowedFilters(['is_read'])
-            ->where('user_id', $user->id);
+            ->allowedFilters(['read_at', 'type'])
+            ->where('notifiable_id', $user->id);
 
         $notifications = $query->orderBy('created_at', 'desc')->paginate(20);
 
@@ -41,8 +41,8 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        $unreadCount = Notification::where('user_id', $user->id)
-            ->where('is_read', false)
+        $unreadCount = Notification::where('notifiable_id', $user->id)
+            ->where('read_at', null)
             ->count();
 
         return response()->json([
@@ -64,7 +64,7 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        $notification = Notification::where('user_id', $user->id)->where('id', $id)->first();
+        $notification = Notification::where('notifiable_id', $user->id)->where('id', $id)->first();
 
         if (! $notification) {
             return response()->json([
@@ -73,7 +73,7 @@ class NotificationController extends Controller
             ], 404);
         }
 
-        $notification->update(['is_read' => true]);
+        $notification->update(['read_at' => now()]);
 
         return response()->json([
             'success' => true,
@@ -92,9 +92,9 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        Notification::where('user_id', $user->id)
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
+        Notification::where('notifiable_id', $user->id)
+            ->where('read_at', null)
+            ->update(['read_at' => now()]);
 
         return response()->json([
             'success' => true,
