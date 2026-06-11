@@ -4,18 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
-use App\Notifications\TaskCreatedNotification;
-use App\Notifications\TaskCompletedNotification;
-use App\Notifications\TaskUpdatedNotification;
 use App\Models\Task;
 use App\Models\Team;
+use App\Notifications\TaskCompletedNotification;
+use App\Notifications\TaskCreatedNotification;
+use App\Notifications\TaskUpdatedNotification;
 use App\Services\FCM\PushNotify;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use OpenApi\Annotations as OA;
 use Illuminate\Support\Facades\Storage;
+use OpenApi\Annotations as OA;
 
 /**
  * @OA\Info(
@@ -467,23 +467,27 @@ class TaskController extends Controller
                 'created_by' => $programmer->id,
             ]);
 
-            
             DB::commit();
 
             $task->load(['programmer.user', 'team']);
             $assignedUser = $task->programmer?->user;
             if ($assignedUser) {
+
                 if ($assignedUser->fcm_token) {
-                    $pushNotify = new PushNotify;
-                    $pushNotify->sendPushNotification(
-                        $assignedUser->fcm_token,
-                        'New Task Assigned',
-                        "You have been assigned a new task: {$task->title}",
-                        [
-                            'task_id' => (string) $task->id,
-                            'type' => 'new_task_assigned',
-                        ]
-                    );
+                    try {
+                        $pushNotify = new PushNotify;
+                        $pushNotify->sendPushNotification(
+                            $assignedUser->fcm_token,
+                            'New Task Assigned',
+                            "You have been assigned a new task: {$task->title}",
+                            [
+                                'task_id' => (string) $task->id,
+                                'type' => 'new_task_assigned',
+                            ]
+                        );
+                    } catch (\Throwable $e) {
+                        Log::error('FCM notification failed: '.$e->getMessage());
+                    }
                 }
 
                 $assignedUser->notify(new TaskCreatedNotification($task));
@@ -546,7 +550,7 @@ class TaskController extends Controller
                 'marked_by' => $programmer->id,
             ]);
 
-            //TODO:notification
+            // TODO:notification
 
             $assigner = $task->assignedBy;
             if ($assigner && $assigner->user) {
