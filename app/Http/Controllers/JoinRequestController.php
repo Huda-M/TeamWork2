@@ -4,9 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Team;
 use App\Models\JoinRequest;
-use App\Models\Programmer;
-use App\Notifications\JoinRequestStatusNotification;
-use App\Notifications\NewJoinRequestNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 class JoinRequestController extends Controller
 {
     /**
-     * إرسال طلب انضمام جديد إلى فريق
+     * إرسال طلب انضمام إلى فريق
      */
     public function store(Request $request, Team $team)
     {
@@ -30,35 +27,27 @@ class JoinRequestController extends Controller
                 return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
             }
 
-            // التحقق من أن المبرمج ليس عضواً بالفعل في الفريق
+            // التحقق من العضوية الحالية
             if ($team->isMember($programmer->id)) {
                 return response()->json(['success' => false, 'message' => 'You are already a member of this team'], 400);
             }
 
-            // التحقق من وجود طلب معلق سابق
-            $existingRequest = JoinRequest::where('team_id', $team->id)
+            // التحقق من وجود طلب معلق
+            $existing = JoinRequest::where('team_id', $team->id)
                 ->where('programmer_id', $programmer->id)
                 ->where('status', 'pending')
                 ->first();
-
-            if ($existingRequest) {
+            if ($existing) {
                 return response()->json(['success' => false, 'message' => 'You already have a pending request for this team'], 400);
             }
 
             DB::beginTransaction();
-
-            // إنشاء طلب جديد
             $joinRequest = JoinRequest::create([
                 'team_id' => $team->id,
                 'programmer_id' => $programmer->id,
                 'message' => $request->message,
                 'status' => 'pending',
             ]);
-
-            // إرسال إشعار لقائد الفريق
-            $teamLeader = $team->leader->programmer->user;
-            $teamLeader->notify(new NewJoinRequestNotification($joinRequest, $programmer, $team));
-
             DB::commit();
 
             return response()->json([
@@ -86,11 +75,7 @@ class JoinRequestController extends Controller
             }
 
             $joinRequests = $programmer->joinRequests()->with('team')->get();
-
-            return response()->json([
-                'success' => true,
-                'data' => $joinRequests
-            ]);
+            return response()->json(['success' => true, 'data' => $joinRequests]);
         } catch (\Exception $e) {
             Log::error('Error fetching join requests: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to fetch join requests'], 500);
@@ -105,12 +90,10 @@ class JoinRequestController extends Controller
         try {
             $user = Auth::user();
             $programmer = $user->programmer;
-
             if (!$programmer) {
                 return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
             }
 
-            // التحقق من أن المستخدم هو قائد الفريق
             if (!$team->isLeader($programmer->id)) {
                 return response()->json(['success' => false, 'message' => 'Only the team leader can view join requests'], 403);
             }
@@ -120,10 +103,7 @@ class JoinRequestController extends Controller
                 ->where('status', 'pending')
                 ->get();
 
-            return response()->json([
-                'success' => true,
-                'data' => $joinRequests
-            ]);
+            return response()->json(['success' => true, 'data' => $joinRequests]);
         } catch (\Exception $e) {
             Log::error('Error fetching team join requests: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to fetch team join requests'], 500);
@@ -131,20 +111,18 @@ class JoinRequestController extends Controller
     }
 
     /**
-     * قبول أو رفض طلب الانضمام
+     * قبول أو رفض طلب الانضمام (للقائد فقط)
      */
     public function update(Request $request, JoinRequest $joinRequest)
     {
         try {
             $user = Auth::user();
             $programmer = $user->programmer;
-
             if (!$programmer) {
                 return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
             }
 
             $team = $joinRequest->team;
-            // التحقق من أن المستخدم هو قائد الفريق
             if (!$team->isLeader($programmer->id)) {
                 return response()->json(['success' => false, 'message' => 'Only the team leader can approve or reject join requests'], 403);
             }
@@ -167,7 +145,6 @@ class JoinRequestController extends Controller
                     'joined_at' => now(),
                     'joined_by' => $programmer->id,
                 ]);
-
                 $joinRequest->update(['status' => 'approved']);
                 $message = 'Join request approved. You are now a member of the team.';
             } else {
@@ -177,9 +154,6 @@ class JoinRequestController extends Controller
                 ]);
                 $message = 'Join request rejected.';
             }
-
-            // إرسال إشعار للمبرمج بنتيجة الطلب
-            $joinRequest->programmer->user->notify(new JoinRequestStatusNotification($joinRequest, $team, $validated['status']));
 
             DB::commit();
 
