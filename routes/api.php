@@ -58,6 +58,7 @@ use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\JoinRequestController;
 
 /**
  * @OA\Info(
@@ -107,6 +108,10 @@ require_once __DIR__.'/chat.routes.php';
 require_once __DIR__.'/notifications.routes.php';
 
 Route::middleware('auth:sanctum')->group(function () {
+Route::post('/teams/{team}/join-requests', [JoinRequestController::class, 'store']); 
+Route::get('/teams/join-requests', [JoinRequestController::class, 'index']); 
+Route::get('/teams/{team}/join-requests', [JoinRequestController::class, 'teamJoinRequests']); 
+Route::put('/join-requests/{joinRequest}', [JoinRequestController::class, 'update']); 
     Route::get('/search/programmers', [ProgrammerController::class, 'searchByUsername']);
     Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
     Route::get('/teams/{teamId}/my-ratings', [TeamController::class, 'getTeamMembersWithMyRatings']);
