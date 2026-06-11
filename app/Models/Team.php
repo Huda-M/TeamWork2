@@ -11,10 +11,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Notifications\Notifiable;
 class Team extends Model
 {
-    use HasFactory , SoftDeletes;
+    use HasFactory , SoftDeletes, Notifiable;
 
     protected $fillable = [
         'name',

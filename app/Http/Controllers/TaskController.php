@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
+use App\Notifications\TaskCreatedNotification;
+use App\Notifications\TaskCompletedNotification;
+use App\Notifications\TaskUpdatedNotification;
 use App\Models\Task;
 use App\Models\Team;
 use App\Services\FCM\PushNotify;
@@ -464,23 +467,12 @@ class TaskController extends Controller
                 'created_by' => $programmer->id,
             ]);
 
+            
             DB::commit();
 
             $task->load(['programmer.user', 'team']);
             $assignedUser = $task->programmer?->user;
             if ($assignedUser) {
-                \App\Models\Notification::create([
-                    'user_id' => $assignedUser->id,
-                    'project_id' => $task->team->project_id ?? null,
-                    'task_id' => $task->id,
-                    'team_id' => $task->team_id,
-                    'is_read' => false,
-                    'title' => 'New Task Assigned',
-                    'message' => "You have been assigned a new task: {$task->title}",
-                    'type' => 'task_assigned',
-                    'related_entity_type' => 'task',
-                ]);
-
                 if ($assignedUser->fcm_token) {
                     $pushNotify = new PushNotify;
                     $pushNotify->sendPushNotification(
@@ -493,6 +485,8 @@ class TaskController extends Controller
                         ]
                     );
                 }
+
+                $assignedUser->notify(new TaskCreatedNotification($task));
             }
 
             return response()->json([
@@ -552,20 +546,10 @@ class TaskController extends Controller
                 'marked_by' => $programmer->id,
             ]);
 
+            //TODO:notification
+
             $assigner = $task->assignedBy;
             if ($assigner && $assigner->user) {
-                \App\Models\Notification::create([
-                    'user_id' => $assigner->user->id,
-                    'project_id' => $task->project_id ?? ($task->team->project_id ?? null),
-                    'task_id' => $task->id,
-                    'team_id' => $task->team_id,
-                    'is_read' => false,
-                    'title' => 'Task Completed',
-                    'message' => "Task '{$task->title}' you assigned has been completed.",
-                    'type' => 'task_assigned',
-                    'related_entity_type' => 'task',
-                ]);
-
                 if ($assigner->user->fcm_token) {
                     $pushNotify = new PushNotify;
                     $pushNotify->sendPushNotification(
@@ -578,6 +562,7 @@ class TaskController extends Controller
                         ]
                     );
                 }
+                $assigner->user->notify(new TaskCompletedNotification($task));
             }
 
             DB::commit();
@@ -712,18 +697,6 @@ class TaskController extends Controller
 
             $assigner = $task->assignedBy;
             if ($assigner && $assigner->user) {
-                \App\Models\Notification::create([
-                    'user_id' => $assigner->user->id,
-                    'project_id' => $task->project_id ?? ($task->team->project_id ?? null),
-                    'task_id' => $task->id,
-                    'team_id' => $task->team_id,
-                    'is_read' => false,
-                    'title' => 'Task Updated',
-                    'message' => "Task '{$task->title}' you assigned has been Updated.",
-                    'type' => 'task_assigned',
-                    'related_entity_type' => 'task',
-                ]);
-
                 if ($assigner->user->fcm_token) {
                     $pushNotify = new PushNotify;
                     $pushNotify->sendPushNotification(
@@ -736,6 +709,7 @@ class TaskController extends Controller
                         ]
                     );
                 }
+                $assigner->user->notify(new TaskUpdatedNotification($task));
             }
 
             return response()->json([

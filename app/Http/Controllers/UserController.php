@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
@@ -18,7 +17,7 @@ class UserController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Users fetched successfully',
-            'data' => $users
+            'data' => $users,
         ]);
     }
 
@@ -33,14 +32,14 @@ class UserController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'User Created Successfully',
-            'data' => $user
+            'data' => $user,
         ], 201);
     }
 
     public function show(string $id)
     {
         $user = User::find($id);
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'User not found',
@@ -50,7 +49,7 @@ class UserController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'User Fetched Successfully',
-            'data' => $user
+            'data' => $user,
         ]);
     }
 
@@ -58,10 +57,10 @@ class UserController extends Controller
     {
         $user = User::find($id);
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'User not found'
+                'message' => 'User not found',
             ], 404);
         }
 
@@ -76,248 +75,47 @@ class UserController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'User Updated Successfully',
-            'data' => $user->fresh()
+            'data' => $user->fresh(),
         ]);
     }
 
-public function destroy($id)
-{
-    try {
-        $user = Auth::user();
-        $targetUser = User::find($id);
-
-        if (!$targetUser) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found'
-            ], 404);
-        }
-
-        // السماح للمستخدم بحذف نفسه، أو للأدمن بحذف أي مستخدم
-        if ($user->id !== $targetUser->id && $user->role !== 'admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        // Soft delete
-        $targetUser->delete();
-
-        // إبطال التوكنات الحالية (اختياري)
-        $targetUser->tokens()->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Account deleted successfully'
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Error deleting user: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to delete account'
-        ], 500);
-    }
-}
-
-
-public function markNotificationAsRead($notificationId)
-{
-    try {
-        $user = Auth::user();
-
-        $notification = $user->notifications()->where('id', $notificationId)->first();
-
-        if ($notification) {
-            $notification->markAsRead();
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification marked as read'
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error marking notification as read: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to mark notification as read'
-        ], 500);
-    }
-}
-
-public function markAllNotificationsAsRead()
-{
-    try {
-        $user = Auth::user();
-        $user->unreadNotifications->markAsRead();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'All notifications marked as read'
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error marking all notifications as read: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to mark all notifications as read'
-        ], 500);
-    }
-}
-
-    public function getNotifications(Request $request)
+    public function destroy($id)
     {
         try {
             $user = Auth::user();
+            $targetUser = User::find($id);
 
-            if (!$user) {
+            if (! $targetUser) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
+                    'message' => 'User not found',
+                ], 404);
             }
 
-            $notifications = $user->notifications()
-                ->orderBy('created_at', 'desc')
-                ->paginate(20);
+            // السماح للمستخدم بحذف نفسه، أو للأدمن بحذف أي مستخدم
+            if ($user->id !== $targetUser->id && $user->role !== 'admin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized',
+                ], 403);
+            }
 
-            $formattedNotifications = $notifications->through(function ($notification) {
-                $data = $notification->data;
+            // Soft delete
+            $targetUser->delete();
 
-                return [
-                    'id' => $notification->id,
-                    'type' => $data['type'] ?? 'general',
-                    'team_id' => $data['team_id'] ?? null,
-                    'team_name' => $data['team_name'] ?? null,
-                    'message' => $data['message'] ?? $notification->data['message'] ?? 'New notification',
-                    'action_url' => $data['action_url'] ?? null,
-                    'action_text' => $data['action_text'] ?? null,
-                    'read_at' => $notification->read_at,
-                    'created_at' => $notification->created_at,
-                    'is_read' => !is_null($notification->read_at),
-                ];
-            });
+            // إبطال التوكنات الحالية (اختياري)
+            $targetUser->tokens()->delete();
 
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'notifications' => $formattedNotifications,
-                    'unread_count' => $user->unreadNotifications->count(),
-                    'total' => $notifications->total(),
-                    'per_page' => $notifications->perPage(),
-                    'current_page' => $notifications->currentPage(),
-                    'last_page' => $notifications->lastPage(),
-                ],
-                'message' => 'Notifications fetched successfully'
+                'message' => 'Account deleted successfully',
             ]);
-
         } catch (\Exception $e) {
-            Log::error('Error fetching notifications: ' . $e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch notifications'
-            ], 500);
-        }
-    }
-
-
-    public function deleteNotification($notificationId)
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
-            }
-
-            $notification = $user->notifications()->where('id', $notificationId)->first();
-
-            if ($notification) {
-                $notification->delete();
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Notification deleted successfully'
-                ]);
-            }
+            Log::error('Error deleting user: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Notification not found'
-            ], 404);
-
-        } catch (\Exception $e) {
-            Log::error('Error deleting notification: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete notification'
-            ], 500);
-        }
-    }
-
-    public function deleteReadNotifications()
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
-            }
-
-            $count = $user->notifications()->whereNotNull('read_at')->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Read notifications deleted successfully',
-                'data' => [
-                    'deleted_count' => $count
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error deleting read notifications: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete read notifications'
-            ], 500);
-        }
-    }
-
-    public function getUnreadCount()
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated'
-                ], 401);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'unread_count' => $user->unreadNotifications->count()
-                ],
-                'message' => 'Unread count fetched successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error fetching unread count: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch unread count'
+                'message' => 'Failed to delete account',
             ], 500);
         }
     }
