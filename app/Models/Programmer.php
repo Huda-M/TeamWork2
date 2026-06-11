@@ -294,4 +294,8 @@ class Programmer extends Model
     public function AiTeam(){
         return $this->hasMany(AiTeam::class, 'user_id');
     }
+    public function joinRequests()
+    {
+        return $this->hasMany(JoinRequest::class);
+    }
 }
