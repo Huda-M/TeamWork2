@@ -95,7 +95,6 @@
         </div>
         <div class="email-body">
             <p style="font-size: 18px;">Hello <strong>{{ $notifiable->name }}</strong>,</p>
-            <p><strong>{{ $inviterName }}</strong> has invited you to join the team:</p>
             <div class="team-name">{{ $team->name }}</div>
             <div class="project-title">📌 Project: {{ $team->project->title }}</div>
             @if($projectDescription)
