@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\TeamInvitation;
+use App\Models\Programmer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -12,44 +13,43 @@ class SendInvitationNotification extends Notification
     use Queueable;
 
     protected $invitation;
-
     protected $team;
+    protected $inviterName;
+    protected $projectDescription;
 
-    /**
-     * Create a new notification instance.
-     */
     public function __construct(TeamInvitation $invitation)
     {
         $this->invitation = $invitation;
         $this->team = $invitation->team;
+
+        // جلب اسم المرسل (اللي بعت الدعوة)
+        $inviter = Programmer::with('user')->find($invitation->invited_by);
+        $this->inviterName = $inviter?->user?->full_name ?? 'A team member';
+
+        // جلب وصف المشروع
+        $this->projectDescription = $this->team->project->description ?? '';
     }
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
-        $url = url('/api/invitations/'.$this->invitation->id);
+        $url = url('/api/invitations/' . $this->invitation->id);
 
-        // استخدام قالب مخصص مع تمرير المتغيرات
         return (new MailMessage)
-            ->subject('Join Team '.$this->team->name.' on BridgX Platform')
+            ->subject('Join Team ' . $this->team->name . ' on bridgeX')
             ->markdown('emails.invitation', [
-                'notifiable' => $notifiable,
-                'team' => $this->team,
-                'url' => $url,
+                'notifiable'         => $notifiable,
+                'team'               => $this->team,
+                'inviterName'        => $this->inviterName,
+                'projectDescription' => $this->projectDescription,
+                'url'                => $url,
             ]);
     }
+
 
     public function toDatabase(object $notifiable): array
     {
