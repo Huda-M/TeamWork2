@@ -54,7 +54,7 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        $unreadCount = Notification::where('notifiable_id', $user->id)
+        $unreadCount = Notification::query()->where('notifiable_id', $user->id)
             ->where('read_at', null)
             ->count();
 
@@ -77,14 +77,7 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        if (! \Illuminate\Support\Str::isUuid($id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Notification not found',
-            ], 404);
-        }
-
-        $notification = Notification::where('notifiable_id', $user->id)->where('id', $id)->first();
+        $notification = Notification::query()->where('notifiable_id', $user->id)->where('id', $id)->first();
 
         if (! $notification) {
             return response()->json([
@@ -112,7 +105,7 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        Notification::where('notifiable_id', $user->id)
+        Notification::query()->where('notifiable_id', $user->id)
             ->where('read_at', null)
             ->update(['read_at' => now()]);
 
