@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use Spatie\QueryBuilder\QueryBuilder;
+use App\Http\Resources\NotificationResource;
 
 class NotificationController extends Controller
 {
@@ -24,10 +25,22 @@ class NotificationController extends Controller
 
         $notifications = $query->orderBy('created_at', 'desc')->paginate(20);
 
+        $resource = NotificationResource::collection($notifications)->response()->getData(true);
+
         return response()->json([
             'success' => true,
             'message' => 'Notifications fetched successfully',
-            'data' => $notifications,
+            'notifications' => $resource['data'],
+            'pagination' => [
+                'total' => $resource['meta']['total'] ?? null,
+                'per_page' => $resource['meta']['per_page'] ?? null,
+                'current_page' => $resource['meta']['current_page'] ?? null,
+                'last_page' => $resource['meta']['last_page'] ?? null,
+            ],
+            'links' => [
+                'next' => $resource['links']['next'] ?? null,
+                'prev' => $resource['links']['prev'] ?? null,
+            ],
         ]);
     }
 
