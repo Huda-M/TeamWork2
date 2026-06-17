@@ -77,7 +77,7 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        $notification = Notification::query()->where('notifiable_id', $user->id)->where('id', $id)->first();
+        $notification = $user->notifications()->where('id', $id)->first();
 
         if (! $notification) {
             return response()->json([
@@ -105,9 +105,7 @@ class NotificationController extends Controller
             ], 401);
         }
 
-        Notification::query()->where('notifiable_id', $user->id)
-            ->where('read_at', null)
-            ->update(['read_at' => now()]);
+        $user->notifications()->where('read_at', null)->update(['read_at' => now()]);
 
         return response()->json([
             'success' => true,
