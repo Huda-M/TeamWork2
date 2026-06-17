@@ -194,64 +194,62 @@ class TaskController extends Controller
      * )
      */
     public function inProgressTasks(Request $request)
-    {
-        try {
-            $user = Auth::user();
-            if (! $user || $user->role !== 'programmer') {
-                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-            }
-
-            $programmer = $user->programmer;
-            if (! $programmer) {
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
-
-            $query = Task::where('programmer_id', $programmer->id)
-                ->whereIn('status', ['in_progress', 'review'])
-                ->with(['team.project'])
-                ->orderBy('deadline', 'asc');
-
-            $tasks = $query->paginate(20);
-
-            $result = $tasks->map(function ($task) {
-                $createdAt = $task->created_at;
-                $deadline = $task->deadline;
-                $totalDays = $createdAt->diffInDays($deadline);
-                $passedDays = $createdAt->diffInDays(now());
-                $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
-                if ($percentageTimePassed > 100) {
-                    $percentageTimePassed = 100;
-                }
-
-                return [
-                    'task_id' => $task->id,
-                    'task_title' => $task->title,
-                    'project_name' => $task->team->project->title ?? null,
-                    'due_date' => $task->deadline->toDateString(),
-                    'priority' => $task->priority,
-                    'status' => $task->status,
-                    'days_remaining' => now()->diffInDays($task->deadline, false),
-                    'is_overdue' => $task->deadline->isPast(),
-                    'percentage_time_passed' => $percentageTimePassed,
-                ];
-            });
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'in_progress_tasks' => $result,
-                    'total' => $tasks->total(),
-                    'current_page' => $tasks->currentPage(),
-                    'last_page' => $tasks->lastPage(),
-                ],
-                'message' => 'In-progress tasks fetched successfully',
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error fetching in-progress tasks: '.$e->getMessage());
-
-            return response()->json(['success' => false, 'message' => 'Failed to fetch in-progress tasks'], 500);
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        $query = Task::where('programmer_id', $programmer->id)
+            ->where('status', 'active') // ✅ تم التعديل
+            ->with(['team.project'])
+            ->orderBy('deadline', 'asc');
+
+        $tasks = $query->paginate(20);
+
+        $result = $tasks->map(function ($task) {
+            $createdAt = $task->created_at;
+            $deadline = $task->deadline;
+            $totalDays = $createdAt->diffInDays($deadline);
+            $passedDays = $createdAt->diffInDays(now());
+            $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
+            if ($percentageTimePassed > 100) $percentageTimePassed = 100;
+
+            return [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'project_name' => $task->team->project->title ?? null,
+                'due_date' => $task->deadline->toDateString(),
+                'priority' => $task->priority,
+                'status' => $task->status,
+                'days_remaining' => now()->diffInDays($task->deadline, false),
+                'is_overdue' => $task->deadline->isPast(),
+                'percentage_time_passed' => $percentageTimePassed,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'active_tasks' => $result, // ✅ تغيير المفتاح من in_progress_tasks إلى active_tasks
+                'total' => $tasks->total(),
+                'current_page' => $tasks->currentPage(),
+                'last_page' => $tasks->lastPage(),
+            ],
+            'message' => 'Active tasks fetched successfully', // ✅ تحديث الرسالة
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching active tasks: ' . $e->getMessage());
+
+        return response()->json(['success' => false, 'message' => 'Failed to fetch active tasks'], 500);
     }
+}
 
     /**
      * @OA\Get(
