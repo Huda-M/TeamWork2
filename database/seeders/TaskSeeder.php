@@ -11,7 +11,6 @@ class TaskSeeder extends Seeder
 {
     public function run(): void
     {
-
         $faker = Factory::create();
         $teams = Team::with('activeMembers')->get();
 
@@ -30,20 +29,17 @@ class TaskSeeder extends Seeder
                     'description' => $faker->paragraph(),
                     'status' => $faker->randomElement([
                         'todo',
-                        'in_progress',
-                        'review',
+                        'active',
                         'done',
                     ]),
                     'estimated_hours' => $faker->numberBetween(4, 40),
                     'actual_hours' => $faker->optional(0.7)->numberBetween(3, 50),
                     'deadline' => $faker->dateTimeBetween('now', '+30 days'),
-
                     'priority' => $faker->randomElement([
                         'low',
                         'medium',
                         'high',
                     ]),
-
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
