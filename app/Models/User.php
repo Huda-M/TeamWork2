@@ -116,7 +116,6 @@ protected static function boot()
 
     static::created(function ($user) {
         if ($user->role === 'programmer') {
-            // ← استخدمي firstOrCreate بدل create
             Programmer::firstOrCreate(
                 ['user_id' => $user->id],
                 ['profile_completed' => false]
