@@ -111,17 +111,19 @@ protected static function booted()
     });
 }
     protected static function boot()
-    {
-        parent::boot();
+{
+    parent::boot();
 
-        static::created(function ($user) {
-            if ($user->role === 'programmer') {
+    static::created(function ($user) {
+        if ($user->role === 'programmer') {
+            // ← تأكدي إن مفيش programmer موجود قبل التخليق
+            $existing = Programmer::withTrashed()->where('user_id', $user->id)->first();
+            if (!$existing) {
                 $user->programmer()->create([]);
-                // } elseif ($user->role === 'company') {
-                //     $user->company()->create([]);
             }
-        });
-    }
+        }
+    });
+}
 
     public function notifications()
     {
