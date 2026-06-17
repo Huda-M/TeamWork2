@@ -77,6 +77,13 @@ class NotificationController extends Controller
             ], 401);
         }
 
+        if (! \Illuminate\Support\Str::isUuid($id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Notification not found',
+            ], 404);
+        }
+
         $notification = Notification::where('notifiable_id', $user->id)->where('id', $id)->first();
 
         if (! $notification) {
