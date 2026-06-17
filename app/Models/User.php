@@ -110,21 +110,20 @@ protected static function booted()
         }
     });
 }
-    protected static function boot()
+protected static function boot()
 {
     parent::boot();
 
     static::created(function ($user) {
         if ($user->role === 'programmer') {
-            // ← تأكدي إن مفيش programmer موجود قبل التخليق
-            $existing = Programmer::withTrashed()->where('user_id', $user->id)->first();
-            if (!$existing) {
-                $user->programmer()->create([]);
-            }
+            // ← استخدمي firstOrCreate بدل create
+            Programmer::firstOrCreate(
+                ['user_id' => $user->id],
+                ['profile_completed' => false]
+            );
         }
     });
 }
-
     public function notifications()
     {
         return $this->morphMany(DatabaseNotification::class, 'notifiable')->orderBy('created_at', 'desc');
