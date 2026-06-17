@@ -10,14 +10,14 @@ use App\Models\Team;
 use App\Models\TeamInvitation;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Notifications\InvitationAcceptedNotification;
+use App\Notifications\InvitationDeclinedNotification;
 use App\Notifications\SendInvitationNotification;
 use App\Notifications\SwapLeaderNotification;
 use App\Notifications\TeamCreatedNotification;
 use App\Notifications\TeamUpdatedNotification;
-use App\Notifications\InvitationAcceptedNotification;
-use App\Notifications\InvitationDeclinedNotification;
-use App\Services\FCM\PushNotify;
 use App\Services\AITeamRecommendationService;
+use App\Services\FCM\PushNotify;
 use App\Services\TeamMatchingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -765,10 +765,21 @@ class TeamController extends Controller
                             ['team_id' => $team->id, 'invitation_id' => $invitation->id]
                         );
                     }
+
+                    $programmer->user->notify(new TeamCreatedNotification($team));
+
+                    $leaderfcm = $programmer->user->fcm_token;
+                    if ($leaderfcm) {
+                        $pushNotify = new PushNotify;
+                        $pushNotify->sendPushNotification(
+                            $leaderfcm,
+                            'Team Created',
+                            "Team '{$team->name}' has been created successfully.",
+                            ['team_id' => $team->id]
+                        );
+                    }
                 }
             }
-
-            $programmer->user->notify(new TeamCreatedNotification($team));
 
             $team->chatRoom()->create();
 
@@ -1113,7 +1124,7 @@ class TeamController extends Controller
             DB::commit();
             $inviter = $invitation->invitedBy;
 
-            $pushNotifyService = new PushNotify();
+            $pushNotifyService = new PushNotify;
             if ($inviter && $inviter->user) {
                 if ($inviter->user->fcm_token) {
                     $pushNotifyService->sendPushNotification(
@@ -1126,7 +1137,7 @@ class TeamController extends Controller
                         ]
                     );
                 }
-                $inviter->user->notify(new InvitationAcceptedNotification($invitation,$user));
+                $inviter->user->notify(new InvitationAcceptedNotification($invitation, $user));
             }
 
             return response()->json([
@@ -1200,7 +1211,7 @@ class TeamController extends Controller
                 'programmer_id' => $programmer->id,
             ]);
             DB::commit();
-            $pushService = new PushNotify();
+            $pushService = new PushNotify;
             $inviter = $invitation->invitedBy;
             if ($inviter && $inviter->user) {
                 if ($inviter->user->fcm_token) {
@@ -1430,12 +1441,12 @@ class TeamController extends Controller
 
             $team->update($validated);
 
-            $pushNotification = new PushNotify();
+            $pushNotification = new PushNotify;
             // إرسال إشعار بالتحديث لجميع أعضاء الفريق
             $members = $team->activeMembers()->with('programmer.user')->get();
             foreach ($members as $member) {
                 $member->programmer->user->notify(new TeamUpdatedNotification($team));
-                $pushNotification->sendPushNotification($member->programmer->user->fcm_token, "Team Updated", "The team " . $team->name . " has been updated successfully");
+                $pushNotification->sendPushNotification($member->programmer->user->fcm_token, 'Team Updated', 'The team '.$team->name.' has been updated successfully');
             }
 
             // إذا تم تحديث is_public وتم جعله خاصاً، يمكن إعادة توليد join_code
