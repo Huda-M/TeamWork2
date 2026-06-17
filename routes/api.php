@@ -225,7 +225,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [TeamController::class, 'index']);
         Route::post('/', [TeamController::class, 'store']);
         Route::get('/{id}', [TeamController::class, 'showTeam']);
-        Route::get('/{id}/details', [TeamController::class, 'getTeamDetails']);
+        Route::get('/projects/{projectId}/team-details', [TeamController::class, 'getTeamDetails']);
         Route::put('/{id}', [TeamController::class, 'updateTeam']);
         Route::delete('/{id}', [TeamController::class, 'destroyTeam']);               // hard delete
         Route::delete('/{id}/soft', [TeamController::class, 'softDeleteTeam']);     // soft delete
