@@ -349,10 +349,10 @@ public function updateProfile(Request $request)
 
         // لو مفيش programmer، خلق واحد (مش محتمل بس safety)
         if (!$programmer) {
-            $programmer = Programmer::create([
-                'user_id' => $user->id,
-                'user_name' => $request->user_name ?? $user->full_name,
-            ]);
+            $programmer = Programmer::firstOrCreate(
+    ['user_id' => $user->id],
+    ['user_name' => $request->user_name ?? $user->full_name]
+);
         }
 
         $rules = [
