@@ -49,28 +49,28 @@ class ProfileController extends Controller
     {
         $user = Auth::user();
         $programmer = $user->programmer;
-
+        
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer not found'], 404);
         }
-
+        
         // عدد التيمات التي انضم إليها (نشطة فقط)
         $teamsCount = $programmer->teams()
             ->wherePivotNull('left_at')
             ->count();
-
+        
         // عدد التاسكات المكتملة وغير المكتملة
         $completedTasks = $programmer->tasks()
             ->where('status', 'done')
             ->count();
-
+        
         $incompleteTasks = $programmer->tasks()
             ->whereIn('status', ['todo', 'in_progress', 'review'])
             ->count();
-
+        
         // حساب الليفل النصي
         $levelText = $programmer->calculateLevel();
-
+        
         return response()->json([
             'success' => true,
             'data' => [
@@ -87,13 +87,13 @@ class ProfileController extends Controller
             ]
         ]);
     }
-
+    
     // 3. عرض التقييمات التي تلقيتها
     public function myEvaluations()
     {
         $user = Auth::user();
         $programmer = $user->programmer;
-
+        
         $evaluations = Evaluation::where('evaluated_id', $programmer->id)
             ->with(['evaluator.user', 'project'])
             ->get()
@@ -115,19 +115,19 @@ class ProfileController extends Controller
                     'submitted_at' => $eval->submitted_at,
                 ];
             });
-
+        
         return response()->json([
             'success' => true,
             'data' => $evaluations
         ]);
     }
-
+    
     // 4. عرض أعضاء الفريق لتقييمهم
     public function teamMembersToEvaluate($projectId)
     {
         $user = Auth::user();
         $programmer = $user->programmer;
-
+        
         // جلب الفريق الذي ينتمي إليه المبرمج في هذا المشروع
         $team = Team::whereHas('project', function($q) use ($projectId) {
                 $q->where('id', $projectId);
@@ -136,25 +136,24 @@ class ProfileController extends Controller
                 $q->where('programmer_id', $programmer->id);
             })
             ->first();
-
+        
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'You are not in any team for this project'], 404);
         }
-
+        
         $members = $team->activeMembers()
             ->with('programmer.user')
             ->where('programmer_id', '!=', $programmer->id)
             ->get()
             ->map(function($member) {
-                $prog = $member->programmer;
                 return [
                     'programmer_id' => $member->programmer_id,
-                    'name' => $prog->user->full_name,
-                    'track' => $prog->track,
-                    'avatar_url' => $prog->avatar_url, // ← استخدم avatar_url مباشرة
+                    'name' => $member->programmer->user->full_name,
+                    'track' => $member->programmer->track,
+                    'avatar_url' => $member->programmer->avatar ? asset('storage/'.$member->programmer->avatar) : null,
                 ];
             });
-
+        
         return response()->json([
             'success' => true,
             'data' => [
@@ -165,13 +164,13 @@ class ProfileController extends Controller
             ]
         ]);
     }
-
+    
     // 5. تقديم تقييم لعضو فريق
     public function submitEvaluation(Request $request, $projectId, $evaluatedId)
     {
         $user = Auth::user();
         $evaluator = $user->programmer;
-
+        
         $validated = $request->validate([
             'technical_skills' => 'required|integer|min:1|max:5',
             'communication' => 'required|integer|min:1|max:5',
@@ -183,10 +182,10 @@ class ProfileController extends Controller
             'areas_for_improvement' => 'nullable|string',
             'feedback' => 'nullable|string',
         ]);
-
+        
         $project = Project::findOrFail($projectId);
         $evaluated = Programmer::findOrFail($evaluatedId);
-
+        
         // التحقق من أن المقيم والمقيم في نفس الفريق
         $team = Team::where('project_id', $projectId)
             ->whereHas('activeMembers', function($q) use ($evaluator) {
@@ -196,11 +195,11 @@ class ProfileController extends Controller
                 $q->where('programmer_id', $evaluated->id);
             })
             ->first();
-
+        
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'Both programmers are not in the same team for this project'], 400);
         }
-
+        
         // حساب متوسط التقييم
         $scores = [
             $validated['technical_skills'],
@@ -213,7 +212,7 @@ class ProfileController extends Controller
             $scores[] = $validated['code_quality'];
         }
         $average = round(array_sum($scores) / count($scores), 2);
-
+        
         $evaluation = Evaluation::create([
             'project_id' => $projectId,
             'team_id' => $team->id,
@@ -231,72 +230,71 @@ class ProfileController extends Controller
             'feedback' => $validated['feedback'] ?? null,
             'submitted_at' => now(),
         ]);
-
+        
         // إضافة نجوم للمقيم
         $evaluated->addStars(5);
-
+        
         return response()->json([
             'success' => true,
             'message' => 'Evaluation submitted successfully',
             'data' => $evaluation
         ]);
     }
-
-    public function softDeleteAccount()
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 401);
-        }
-
-        DB::beginTransaction();
-        try {
-            // إلغاء التوكنات
-            if (method_exists($user, 'tokens')) {
-                $user->tokens()->delete();
-            }
-
-            $user->delete();
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Account soft deleted successfully'
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Soft delete failed: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete account: ' . $e->getMessage()
-            ], 500);
-        }
+public function softDeleteAccount()
+{
+    $user = Auth::user();
+    
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 401);
     }
 
+    // إلغاء التوكنات
+    try {
+        if (method_exists($user, 'tokens')) {
+            $user->tokens()->delete();
+        }
+    } catch (\Exception $e) {
+        Log::warning('Token deletion failed: ' . $e->getMessage());
+    }
+
+    // Soft delete
+    try {
+        $user->delete();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Account soft deleted successfully'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Soft delete failed: ' . $e->getMessage());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete account: ' . $e->getMessage()
+        ], 500);
+    }
+}
     // 7. Zero Project - عرض تفاصيل المشروع مع إحصائيات الأعضاء
     public function zeroProject($projectId)
     {
         $user = Auth::user();
         $programmer = $user->programmer;
-
+        
         $project = Project::with(['teams.activeMembers.programmer', 'teams.tasks'])
             ->findOrFail($projectId);
-
+        
         // جلب الفريق الخاص بالمبرمج
         $team = $project->teams->first(function($t) use ($programmer) {
             return $t->activeMembers->contains('programmer_id', $programmer->id);
         });
-
+        
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this project'], 403);
         }
-
+        
         $members = $team->activeMembers->map(function($member) {
             $prog = $member->programmer;
             $tasksCount = $prog->tasks()->where('team_id', $member->team_id)->count();
@@ -305,7 +303,7 @@ class ProfileController extends Controller
                 ->where('status', 'done')
                 ->count();
             $completionRate = $tasksCount > 0 ? round(($completedTasks / $tasksCount) * 100) : 0;
-
+            
             return [
                 'programmer_id' => $prog->id,
                 'name' => $prog->user->full_name,
@@ -315,11 +313,11 @@ class ProfileController extends Controller
                 'completion_rate' => $completionRate,
             ];
         });
-
+        
         $totalTasks = $team->tasks()->count();
         $totalCompleted = $team->tasks()->where('status', 'done')->count();
         $remainingTasks = $totalTasks - $totalCompleted;
-
+        
         return response()->json([
             'success' => true,
             'data' => [
@@ -333,112 +331,64 @@ class ProfileController extends Controller
             ]
         ]);
     }
+public function updateProfile(Request $request)
+{
+    $user = auth()->user();
+    
+    // Validate the input
+    $validated = $request->validate([
+        'user_name' => 'nullable|string|unique:programmers,user_name,' . $user->programmer->id,
+        'full_name' => 'nullable|string',
+        'bio' => 'nullable|string',
+        'track' => 'nullable|string',
+        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
 
-    public function updateProfile(Request $request)
-    {
-        try {
-            $user = auth()->user();
+    // Update the user record
+    $user->update([
+        'full_name' => $validated['full_name'] ?? $user->full_name,
+    ]);
 
-            if (!$user || $user->role !== 'programmer') {
-                return response()->json(['success' => false, 'message' => 'Only programmers can update profile'], 403);
-            }
-
-            // Validate the input
-            $validated = $request->validate([
-                'user_name' => 'nullable|string|unique:programmers,user_name,' . ($user->programmer?->id ?? 'NULL'),
-                'full_name' => 'nullable|string|max:255',
-                'bio' => 'nullable|string|max:1000',
-                'track' => 'nullable|string|max:100',
-                'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            ]);
-
-            DB::beginTransaction();
-
-            // Update the user record
-            if ($request->has('full_name')) {
-                $user->update(['full_name' => $validated['full_name']]);
-            }
-
-            // Get programmer record (must exist)
-            $programmer = Programmer::withTrashed()->where('user_id', $user->id)->first();
-
-            if (!$programmer) {
-                DB::rollBack();
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
-
-            // Restore if soft deleted
-            if ($programmer->trashed()) {
-                $programmer->restore();
-            }
-
-            // Update programmer fields
-            $updateData = [];
-            if ($request->has('user_name')) {
-                $updateData['user_name'] = $validated['user_name'];
-            }
-            if ($request->has('bio')) {
-                $updateData['bio'] = $validated['bio'];
-            }
-            if ($request->has('track')) {
-                $updateData['track'] = $validated['track'];
-            }
-
-            // Handle avatar upload
-            if ($request->hasFile('avatar')) {
-                $file = $request->file('avatar');
-                if ($file->isValid()) {
-                    // Delete old avatar
-                    if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
-                        $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
-                        Storage::disk('public')->delete($oldPath);
-                    }
-
-                    $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
-                    $path = $file->storeAs('avatars', $fileName, 'public');
-
-                    // ← Absolute URL using asset()
-                    $updateData['avatar_url'] = asset('storage/' . $path);
-                }
-            }
-
-            if (!empty($updateData)) {
-                $programmer->update($updateData);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile updated successfully',
-                'data' => [
-                    'id' => $programmer->id,
-                    'user_name' => $programmer->user_name,
-                    'full_name' => $user->full_name,
-                    'email' => $user->email,
-                    'bio' => $programmer->bio,
-                    'track' => $programmer->track,
-                    'avatar_url' => $programmer->avatar_url,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Profile update error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred while updating profile',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    // Get or create the programmer record (should only get, never create)
+    $programmer = $user->programmer;
+    
+    if (!$programmer) {
+        $programmer = Programmer::create(['user_id' => $user->id]);
     }
 
+    // Update the programmer record
+    $programmer->update([
+        'user_name' => $validated['user_name'] ?? $programmer->user_name,
+        'bio' => $validated['bio'] ?? $programmer->bio,
+        'track' => $validated['track'] ?? $programmer->track,
+    ]);
+
+    // Handle avatar upload
+    if ($request->hasFile('avatar')) {
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $programmer->update(['avatar_url' => '/storage/' . $path]);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Profile updated successfully',
+        'data' => [
+            'id' => $programmer->id,
+            'user_name' => $programmer->user_name,
+            'full_name' => $user->full_name,
+            'email' => $user->email,
+            'bio' => $programmer->bio,
+            'track' => $programmer->track,
+            'avatar_url' => $programmer->avatar_url,
+        ]
+    ]);
+}
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
     public function projectDetails($projectId)
     {
         $user = Auth::user();
         $programmer = $user->programmer;
-
+        
         $project = Project::with([
             'teams.activeMembers.programmer.user',
             'teams.activeMembers.programmer.tasks',
@@ -446,30 +396,30 @@ class ProfileController extends Controller
                 $q->where('evaluated_id', $programmer->id);
             }
         ])->findOrFail($projectId);
-
+        
         $team = $project->teams->first(function($t) use ($programmer) {
             return $t->activeMembers->contains('programmer_id', $programmer->id);
         });
-
+        
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this project'], 403);
         }
-
+        
         $memberRole = $team->activeMembers->firstWhere('programmer_id', $programmer->id)->role;
-
+        
         $members = $team->activeMembers->map(function($member) {
             $prog = $member->programmer;
             return [
                 'id' => $prog->id,
                 'name' => $prog->user->full_name,
                 'track' => $prog->track,
-                'avatar_url' => $prog->avatar_url, // ← استخدم avatar_url مباشرة
+                'avatar_url' => $prog->avatar ? asset('storage/'.$prog->avatar) : null,
                 'role' => $member->role,
             ];
         });
-
+        
         $isCompleted = $project->status === 'completed';
-
+        
         $response = [
             'success' => true,
             'data' => [
@@ -481,7 +431,7 @@ class ProfileController extends Controller
                 'members' => $members,
             ]
         ];
-
+        
         if ($isCompleted) {
             // إذا كان المشروع مكتملاً، أضف التقييمات وتاريخ الانتهاء
             $evaluations = $project->evaluations->map(function($eval) {
@@ -493,7 +443,7 @@ class ProfileController extends Controller
                     'areas_for_improvement' => $eval->areas_for_improvement,
                 ];
             });
-
+            
             $response['data']['evaluations'] = $evaluations;
             $response['data']['completion_date'] = $project->updated_at->toDateString();
             $response['data']['duration_days'] = $project->estimated_duration_days;
@@ -510,7 +460,7 @@ class ProfileController extends Controller
             $response['data']['tasks_status'] = $tasksStats;
             $response['data']['personal_tasks'] = $tasks->where('programmer_id', $programmer->id)->values();
         }
-
+        
         return response()->json($response);
     }
 }
