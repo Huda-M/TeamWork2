@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ProgrammerResource;
 use App\Models\Programmer;
 use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
 use App\Http\Resources\ProgrammerDetailsResource;
 
 class ProgrammerController extends Controller
@@ -20,7 +21,12 @@ class ProgrammerController extends Controller
 
         $programmers = QueryBuilder::for(Programmer::class)
             ->with(['skills', 'tracks', 'user'])
-            ->allowedFilters(['skills.name', 'track', 'stars', 'experience_level'])
+            ->allowedFilters([
+                'skills.name',
+                'track',
+                AllowedFilter::exact('stars'),
+                'experience_level',
+            ])
             ->paginate(10);
 
         $resource = ProgrammerResource::collection($programmers)->response()->getData(true);
