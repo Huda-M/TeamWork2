@@ -23,24 +23,12 @@ class NotificationController extends Controller
             ->allowedFilters(['read_at', 'type'])
             ->where('notifiable_id', $user->id);
 
-        $notifications = $query->orderBy('created_at', 'desc')->paginate(20);
-
-        $resource = NotificationResource::collection($notifications)->response()->getData(true);
+        $notifications = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'success' => true,
             'message' => 'Notifications fetched successfully',
-            'notifications' => $resource['data'],
-            'pagination' => [
-                'total' => $resource['meta']['total'] ?? null,
-                'per_page' => $resource['meta']['per_page'] ?? null,
-                'current_page' => $resource['meta']['current_page'] ?? null,
-                'last_page' => $resource['meta']['last_page'] ?? null,
-            ],
-            'links' => [
-                'next' => $resource['links']['next'] ?? null,
-                'prev' => $resource['links']['prev'] ?? null,
-            ],
+            'notifications' => NotificationResource::collection($notifications),
         ]);
     }
 
