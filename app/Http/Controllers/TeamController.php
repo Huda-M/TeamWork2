@@ -247,33 +247,35 @@ class TeamController extends Controller
      * )
      */
     public function getTeamDetails($id)
-    {
-        try {
-            $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'team_name' => $team->name,
-                    'github_link' => $team->project->github_url ?? null,  // رابط الـ GitHub بدلاً من project_title
-                    'project_description' => $team->project->description,
-                    'members' => $team->activeMembers->map(function ($member) {
-                        return [
-                            'programmer_id' => $member->programmer_id,
-                            'name' => $member->programmer->user->full_name,
-                            'track' => $member->programmer->track ?? 'general', // التراك بدلاً من role
-                            'avatar_url' => $member->programmer->avatar_url,   // إضافة الصورة
-                        ];
-                    }),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error fetching team details: '.$e->getMessage());
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_id' => $team->id,
+                'project_id' => $team->project_id,  // ← أضيفي الـ project_id
+                'project_name' => $team->project->title ?? null,  // ← اسم المشروع كمان
+                'team_name' => $team->name,
+                'github_link' => $team->project->github_url ?? null,
+                'project_description' => $team->project->description,
+                'members' => $team->activeMembers->map(function ($member) {
+                    return [
+                        'programmer_id' => $member->programmer_id,
+                        'name' => $member->programmer->user->full_name,
+                        'track' => $member->programmer->track ?? 'general',
+                        'avatar_url' => $member->programmer->avatar_url,
+                    ];
+                }),
+            ],
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching team details: '.$e->getMessage());
 
-            return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
-        }
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
-
+}
     /**
      * @OA\Post(
      *     path="/api/teams/{teamId}/change-leader/{programmerId}",
