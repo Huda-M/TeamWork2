@@ -4,29 +4,26 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 
 class Notification extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUlids;
     protected $fillable = [
-        'user_id',
-        'project_id',
-        'task_id',
-        'team_id',
-        'interview_id',
-        'is_read',
-        'title',
-        'message',
+        'notifiable_id',
+        'notifiable_type',
         'type',
-        'related_entity_type',
+        'data',
+        'read_at',
     ];
 
     protected $casts = [
         'data' => 'array',
+        'read_at' => 'datetime',
     ];
-
-    public function user():BelongsTo{
-        return $this->belongsTo(User::class);
+    public function notifiable()
+    {
+        return $this->morphTo();
     }
+
 }
