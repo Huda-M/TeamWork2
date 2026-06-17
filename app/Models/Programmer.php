@@ -16,10 +16,16 @@ class Programmer extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'user_id',
+    'user_id',
         'user_name',
         'phone',
+        'bio',
+        'track',
         'avatar_url',
+        'experience_level',
+        'is_available',
+        'profile_completed',
+        'skills',
         'cover_image',
         'behance_url',
         'title',
@@ -28,16 +34,10 @@ class Programmer extends Model
         'portfolio_url',
         'linkedin_url',
         'twitter_url',
-        'is_available',
         'hourly_rate',
         'preferred_working_hours',
         'timezone',
         'current_team_id',
-        'profile_completed',
-        'experience_level',
-        'track',
-        'skills',
-        'bio',
         'total_score',
     ];
 
