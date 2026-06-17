@@ -246,17 +246,20 @@ class TeamController extends Controller
      *     @OA\Response(response=500, description="Server error")
      * )
      */
-    public function getTeamDetails($id)
+  public function getTeamDetails($projectId)
 {
     try {
-        $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
+        // جلب التيم المرتبط بالمشروع
+        $team = Team::with(['project', 'activeMembers.programmer.user'])
+            ->where('project_id', $projectId)
+            ->firstOrFail();
 
         return response()->json([
             'success' => true,
             'data' => [
+                'project_id' => $team->project_id,
+                'project_name' => $team->project->title ?? null,
                 'team_id' => $team->id,
-                'project_id' => $team->project_id,  // ← أضيفي الـ project_id
-                'project_name' => $team->project->title ?? null,  // ← اسم المشروع كمان
                 'team_name' => $team->name,
                 'github_link' => $team->project->github_url ?? null,
                 'project_description' => $team->project->description,
@@ -271,7 +274,7 @@ class TeamController extends Controller
             ],
         ]);
     } catch (\Exception $e) {
-        Log::error('Error fetching team details: '.$e->getMessage());
+        Log::error('Error fetching team details by project: '.$e->getMessage());
 
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
