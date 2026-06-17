@@ -102,12 +102,7 @@ class RegisteredUserController extends Controller
         ]);
 
         // ← التعديل هنا
-        if ($user->role === 'programmer') {
-            Programmer::firstOrCreate(
-                ['user_id' => $user->id],
-                ['profile_completed' => false]
-            );
-        } elseif ($user->role === 'company') {
+        if  ($user->role === 'company') {
             Company::firstOrCreate(
                 ['user_id' => $user->id],
                 [
