@@ -241,22 +241,43 @@ class ProfileController extends Controller
         ]);
     }
     
-    // 6. Soft Delete للحساب
-    public function softDeleteAccount()
-    {
-        $user = Auth::user();
-        
-        // إلغاء التوكنات الحالية
-        $user->tokens()->delete();
-        
-        // Soft delete للمستخدم
-        $user->delete();
+   public function softDeleteAccount()
+{
+    $user = Auth::user();
+    
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 401);
+    }
+
+    // 1. إلغاء التوكنات (لو Sanctum مش مستخدم، استخدمي طريقة تانية)
+    // try {
+    //     if (method_exists($user, 'tokens')) {
+    //         $user->tokens()->delete();
+    //     }
+    // } catch (\Exception $e) {
+    //     Log::warning('Token deletion failed: ' . $e->getMessage());
+    // }
+
+    // 2. Soft delete للمستخدم
+    try {
+        $user->delete(); // Soft delete (لو SoftDeletes trait موجود)
         
         return response()->json([
             'success' => true,
             'message' => 'Account soft deleted successfully'
         ]);
+    } catch (\Exception $e) {
+        Log::error('Soft delete failed: ' . $e->getMessage());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete account: ' . $e->getMessage()
+        ], 500);
     }
+}
     
     // 7. Zero Project - عرض تفاصيل المشروع مع إحصائيات الأعضاء
     public function zeroProject($projectId)
