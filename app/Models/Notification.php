@@ -21,6 +21,11 @@ class Notification extends Model
         'type',
         'related_entity_type',
     ];
+
+    protected $casts = [
+        'data' => 'array',
+    ];
+
     public function user():BelongsTo{
         return $this->belongsTo(User::class);
     }

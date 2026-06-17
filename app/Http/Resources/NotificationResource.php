@@ -14,11 +14,16 @@ class NotificationResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $data = is_array($this->data) ? $this->data : (json_decode($this->data ?: '', true) ?: []);
+        
+        $details = $data;
+        unset($details['message']);
+
         return [
             'id' => $this->id,
             'type' => $this->type,
-            'message' => $this->data['message'],
-            'data' => $this->data['data'],
+            'message' => $data['message'] ?? 'New notification',
+            'data' => $data['data'] ?? $details,
             'read_at' => $this->read_at,
             'created_at' => $this->created_at,
             'is_read' => !is_null($this->read_at),
