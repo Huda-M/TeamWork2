@@ -713,7 +713,7 @@ class TeamController extends Controller
 
             // معالجة الدعوات (بعد إزالة القيود)
             $invitationsSent = [];
-            if (! $validated['is_public'] && ! empty($validated['invitations'])) {
+            if (! empty($validated['invitations'])) {
                 foreach ($validated['invitations'] as $username) {
                     if ($username === $programmer->user_name) {
                         continue;
