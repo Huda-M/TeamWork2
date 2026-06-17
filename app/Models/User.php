@@ -93,18 +93,17 @@ protected static function booted()
             return;
         }
 
-        // غيّر الـ email عشان يفضى للتسجيل التاني
         $originalEmail = $user->email;
         $user->email = $originalEmail . '.deleted.' . $user->id . '@archived.local';
         $user->saveQuietly();
 
-        // Soft delete programmer profile
+        // Soft delete programmer
         if ($user->programmer) {
             $user->programmer->delete();
         }
 
-        // Soft delete teams created by this programmer
-        if ($user->programmer && method_exists($user->programmer, 'createdTeams')) {
+        // Soft delete teams
+        if ($user->programmer && $user->programmer->createdTeams) {
             $user->programmer->createdTeams()->each(function ($team) {
                 $team->delete();
             });
