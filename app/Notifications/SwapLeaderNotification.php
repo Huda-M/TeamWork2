@@ -27,7 +27,7 @@ class SwapLeaderNotification extends Notification
     {
         return [
             'title' => 'Swap Leader',
-            'message' => 'The new leader of your team is '.$this->newleader->full_name,
+            'message' => 'The new leader of your team is '.$this->newleader->full_name
         ];
     }
 }
