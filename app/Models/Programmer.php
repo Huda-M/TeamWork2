@@ -8,11 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 class Programmer extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',
@@ -38,7 +39,6 @@ class Programmer extends Model
         'skills',
         'bio',
         'total_score',
-
     ];
 
     protected $casts = [
@@ -66,13 +66,6 @@ class Programmer extends Model
             ->withPivot('progress_percentage', 'started_at', 'completed_at')
             ->withTimestamps();
     }
-    public function isLeader($programmerId)
-{
-    return $this->activeMembers()
-        ->where('programmer_id', $programmerId)
-        ->where('role', 'leader')
-        ->exists();
-}
 
     public function teams(): BelongsToMany
     {
@@ -119,6 +112,27 @@ class Programmer extends Model
     public function programmerLevel(): HasOne
     {
         return $this->hasOne(ProgrammerLevel::class);
+    }
+
+    // ← العلاقات الجديدة
+    public function createdTeams(): HasMany
+    {
+        return $this->hasMany(Team::class, 'created_by');
+    }
+
+    public function createdProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'user_id');
+    }
+
+    public function evaluations(): HasMany
+    {
+        return $this->hasMany(Evaluation::class, 'evaluated_id');
+    }
+
+    public function evaluationsGiven(): HasMany
+    {
+        return $this->hasMany(Evaluation::class, 'evaluator_id');
     }
 
     // ========== أكسسوارات ==========
@@ -182,14 +196,12 @@ class Programmer extends Model
 
         $newLevel = $this->experience_level;
         if ($oldLevel !== $newLevel) {
-            // حدث تغيير المستوى – يمكن إضافة إشعار هنا
             logger("Programmer {$this->id} leveled up from $oldLevel to $newLevel");
         }
     }
 
     /**
      * حساب المستوى بناءً على إجمالي النجوم (points)
-     * تستخدم لعرض المستوى كنص (Beginner, Junior, Senior...)
      */
     public function calculateLevelFromStars(): string
     {
@@ -262,7 +274,7 @@ class Programmer extends Model
         }
         $completedOnTime = $this->tasks()
             ->where('status', 'done')
-            ->where('actual_hours', '<=', \DB::raw('estimated_hours * 1.2'))
+            ->where('actual_hours', '<=', DB::raw('estimated_hours * 1.2'))
             ->count();
 
         return ($completedOnTime / $totalTasks) * 100;
@@ -291,9 +303,11 @@ class Programmer extends Model
         return $this->hasMany(JopOffer::class);
     }
 
-    public function AiTeam(){
+    public function AiTeam()
+    {
         return $this->hasMany(AiTeam::class, 'user_id');
     }
+
     public function joinRequests()
     {
         return $this->hasMany(JoinRequest::class);
