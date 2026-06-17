@@ -524,10 +524,7 @@ public function searchByUsername(Request $request)
     }
 
     $programmers = Programmer::with('user')
-        ->where('user_name', 'LIKE', "%{$query}%")
-        ->orWhereHas('user', function($q) use ($query) {
-            $q->where('full_name', 'LIKE', "%{$query}%");
-        })
+        ->where('user_name', 'LIKE', "%{$query}%")  
         ->limit(10)
         ->get()
         ->map(function($programmer) {
