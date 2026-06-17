@@ -87,29 +87,30 @@ class RegisteredUserController extends Controller
         }
 
         DB::beginTransaction();
-        try {
-            // ← لو في deleted user بنفس الـ email، امسحيه نهائي قبل الإنشاء
-            $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
-            if ($deletedUser) {
-                $deletedUser->forceDelete();
-            }
+    try {
+        $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
+        if ($deletedUser) {
+            $deletedUser->forceDelete();
+        }
 
-            // إنشاء المستخدم
-            $user = User::create([
-                'full_name' => $registrationData['full_name'],
-                'email' => $request->email,
-                'password' => Hash::make($registrationData['password']),
-                'role' => $registrationData['role'],
-                'email_verified_at' => now(),
-            ]);
+        $user = User::create([
+            'full_name' => $registrationData['full_name'],
+            'email' => $request->email,
+            'password' => Hash::make($registrationData['password']),
+            'role' => $registrationData['role'],
+            'email_verified_at' => now(),
+        ]);
 
-            // 🔹 إنشاء البروفايل حسب الدور
-            if ($user->role === 'programmer') {
-                $user->programmer()->create([
-                    'profile_completed' => false,
-                ]);
-            } elseif ($user->role === 'company') {
-                $user->company()->create([
+        // ← التعديل هنا
+        if ($user->role === 'programmer') {
+            Programmer::firstOrCreate(
+                ['user_id' => $user->id],
+                ['profile_completed' => false]
+            );
+        } elseif ($user->role === 'company') {
+            Company::firstOrCreate(
+                ['user_id' => $user->id],
+                [
                     'company_name' => $user->full_name,
                     'phone' => '0000000000',
                     'cr_number' => 'TEMP_' . Str::random(10),
@@ -121,8 +122,9 @@ class RegisteredUserController extends Controller
                     'website' => 'https://temp.com',
                     'subscription_end_date' => now()->addYear(),
                     'profile_completed' => false,
-                ]);
-            }
+                ]
+            );
+        }
 
             event(new Registered($user));
 
