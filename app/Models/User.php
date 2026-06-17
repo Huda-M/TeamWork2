@@ -86,28 +86,29 @@ class User extends Authenticatable
         return true;
     }
 
-    protected static function booted()
+protected static function booted()
 {
-    // لما تعملي soft delete
     static::deleting(function ($user) {
         if ($user->isForceDeleting()) {
-            return; // لو hard delete سيبه
+            return;
         }
-        
-        // غيّر الـ email عشان يفضى للحساب الجديد
+
+        // غيّر الـ email عشان يفضى للتسجيل التاني
         $originalEmail = $user->email;
         $user->email = $originalEmail . '.deleted.' . $user->id . '@archived.local';
         $user->saveQuietly();
-        
-        // Soft delete programmer
+
+        // Soft delete programmer profile
         if ($user->programmer) {
             $user->programmer->delete();
         }
-        
-        // Soft delete teams
-        $user->programmer?->createdTeams()->each(function ($team) {
-            $team->delete();
-        });
+
+        // Soft delete teams created by this programmer
+        if ($user->programmer && method_exists($user->programmer, 'createdTeams')) {
+            $user->programmer->createdTeams()->each(function ($team) {
+                $team->delete();
+            });
+        }
     });
 }
     protected static function boot()
