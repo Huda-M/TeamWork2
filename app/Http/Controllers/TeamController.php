@@ -308,6 +308,10 @@ class TeamController extends Controller
                 return response()->json(['success' => false, 'message' => 'Invitation has expired'], 400);
             }
             $team = $invitation->team;
+            $activeTeamsCount = $programmer->teams()->wherePivotNull('left_at')->count();
+    if ($activeTeamsCount >= 10) {
+        return response()->json(['success' => false, 'message' => 'You have reached the maximum limit of 10 teams'], 400);
+    }
             if ($team->status !== 'active') return response()->json(['success' => false, 'message' => 'This team is not active.'], 400);
             if (! $team->hasVacancy()) return response()->json(['success' => false, 'message' => 'Team is full'], 400);
             if ($programmer->is_in_team) return response()->json(['success' => false, 'message' => 'You are already in another team'], 400);
