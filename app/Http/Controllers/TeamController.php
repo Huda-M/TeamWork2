@@ -638,7 +638,7 @@ public function getInvitationDetails($invitationId)
             'team.project',
             'team.activeMembers.programmer.user',
             'team.leader.programmer.user',
-            'inviter.user' // من أرسل الدعوة
+            'inviter.user'
         ])->find($invitationId);
 
         if (!$invitation) {
@@ -651,49 +651,76 @@ public function getInvitationDetails($invitationId)
         }
 
         $team = $invitation->team;
-        $project = $team->project;
+        $project = $team ? $team->project : null;
 
-        // بيانات القائد
-        $leader = $team->leader?->programmer;
+        // ----- معالجة المرسل (inviter) بأمان -----
+        $inviter = $invitation->inviter;
+        $inviterData = null;
+        if ($inviter && $inviter->user) {
+            $inviterData = [
+                'name'       => $inviter->user->full_name ?? 'Deleted User',
+                'track'      => $inviter->track ?? 'general',
+                'avatar_url' => $inviter->avatar_url,
+            ];
+        } else {
+            $inviterData = [
+                'name'       => 'Deleted User',
+                'track'      => 'general',
+                'avatar_url' => null,
+            ];
+        }
+
+        // ----- معالجة القائد بأمان -----
+        $leader = $team ? $team->leader?->programmer : null;
         $leaderData = null;
-        if ($leader) {
+        if ($leader && $leader->user) {
             $leaderData = [
                 'name'       => $leader->user->full_name,
                 'track'      => $leader->track ?? 'general',
                 'avatar_url' => $leader->avatar_url,
             ];
+        } else {
+            // إذا كان القائد محذوفاً، نعرض بيانات جزئية
+            $leaderData = [
+                'name'       => 'Deleted Leader',
+                'track'      => 'general',
+                'avatar_url' => null,
+            ];
         }
 
-        // أعضاء الفريق (جميع الأعضاء النشطين)
-        $members = $team->activeMembers->map(function ($member) {
-            $prog = $member->programmer;
-            return [
-                'name'       => $prog->user->full_name,
-                'avatar_url' => $prog->avatar_url,
-                'track'      => $prog->track ?? 'general',
-            ];
-        });
+        // ----- أعضاء الفريق (تجاهل المحذوفين) -----
+        $members = $team ? $team->activeMembers
+            ->filter(function ($member) {
+                return $member->programmer && $member->programmer->user;
+            })
+            ->map(function ($member) {
+                $prog = $member->programmer;
+                return [
+                    'name'       => $prog->user->full_name,
+                    'avatar_url' => $prog->avatar_url,
+                    'track'      => $prog->track ?? 'general',
+                ];
+            })->values() : collect();
+
+        // ----- بيانات المشروع بأمان -----
+        $projectData = $project ? [
+            'title'       => $project->title ?? 'Deleted Project',
+            'category'    => $project->category_name ?? null,
+            'description' => $project->description ?? null,
+        ] : null;
 
         return response()->json([
             'success' => true,
             'data' => [
                 'invitation_id' => $invitation->id,
                 'status'        => $invitation->status,
-                'invited_by'    => [
-                    'name'       => $invitation->inviter->user->full_name,
-                    'track'      => $invitation->inviter->track ?? 'general',
-                    'avatar_url' => $invitation->inviter->avatar_url,
-                ],
+                'invited_by'    => $inviterData,
                 'team' => [
-                    'name'          => $team->name,
-                    'members_count' => $team->activeMembers()->count(),
-                    'project' => [
-                        'title'       => $project->title,
-                        'category'    => $project->category_name,
-                        'description' => $project->description,
-                    ],
-                    'leader' => $leaderData,
-                    'members' => $members,
+                    'name'          => $team?->name ?? 'Deleted Team',
+                    'members_count' => $team ? $team->activeMembers()->count() : 0,
+                    'project'       => $projectData,
+                    'leader'        => $leaderData,
+                    'members'       => $members,
                 ],
                 'expires_at' => $invitation->expires_at,
                 'created_at' => $invitation->created_at,
