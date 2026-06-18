@@ -366,7 +366,7 @@ public function updateProfile(Request $request)
     // Handle avatar upload
     if ($request->hasFile('avatar')) {
         $path = $request->file('avatar')->store('avatars', 'public');
-        $programmer->update(['avatar_url' => '/storage/' . $path]);
+        $programmer->update(['avatar_url' => $path]);
     }
 
     return response()->json([
@@ -379,7 +379,7 @@ public function updateProfile(Request $request)
             'email' => $user->email,
             'bio' => $programmer->bio,
             'track' => $programmer->track,
-            'avatar_url' => $programmer->avatar_url,
+            'avatar_url' => asset('storage/' . $programmer->avatar_url),
         ]
     ]);
 }
