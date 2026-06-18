@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateProjectRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use OpenApi\Annotations as OA;
 
 
@@ -36,6 +37,11 @@ class ProjectController extends Controller
 
             $projects = $query->paginate(15);
 
+            // Transform projects to include full image URLs
+            $projects->getCollection()->transform(function ($project) {
+                return $this->transformProject($project);
+            });
+
             return response()->json([
                 'success' => true,
                 'message' => 'Projects fetched successfully',
@@ -50,297 +56,283 @@ class ProjectController extends Controller
             ], 500);
         }
     }
- public function zeroProject($projectId)
-{
-    try {
-        $user = Auth::user();
-        if (!$user || $user->role !== 'programmer') {
-            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-        }
 
-        $programmer = $user->programmer;
-        if (!$programmer) {
-            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-        }
-
-        // جلب المشروع مع الفرق والأعضاء والمهام
-        $project = Project::with([
-            'teams.activeMembers.programmer.user',
-            'teams.tasks'
-        ])->find($projectId);
-
-        if (!$project) {
-            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
-        }
-
-        // التحقق من أن المستخدم هو قائد الفريق في هذا المشروع
-        // نفترض أن المشروع له فريق واحد (كما في نظامك)
-        $team = $project->teams->first();
-        if (!$team) {
-            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
-        }
-
-        if (!$team->isLeader($programmer->id)) {
-            return response()->json(['success' => false, 'message' => 'Only the team leader can view zero project details'], 403);
-        }
-
-        // إزالة الشرط الذي يمنع العرض إذا كانت هناك مهام
-        // جمع جميع الأعضاء من كل فريق في المشروع
-        $members = collect();
-        foreach ($project->teams as $team) {
-            foreach ($team->activeMembers as $member) {
-                $prog = $member->programmer;
-                $programmerTasks = $team->tasks->where('programmer_id', $prog->id);
-                $doneCount = $programmerTasks->where('status', 'done')->count();
-                $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
-
-                $members->push([
-                    'name'          => $prog->user->full_name,
-                    'avatar_url'    => $prog->avatar_url,
-                    'track'         => $prog->track ?? 'general',
-                    'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
-                ]);
+    public function zeroProject($projectId)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user || $user->role !== 'programmer') {
+                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
             }
-        }
 
-        $members = $members->unique('name')->values();
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+            }
 
-        $responseData = [
-            'project_id'    => $project->id,
-            'project_title' => $project->title,
-            'description'   => $project->description,
-            'total_members' => $members->count(),
-            'pending_tasks' => $project->teams->flatMap->tasks->whereNotIn('status', ['done', 'cancelled'])->count(),
-            'members'       => $members,
-        ];
+            // جلب المشروع مع الفرق والأعضاء والمهام
+            $project = Project::with([
+                'teams.activeMembers.programmer.user',
+                'teams.tasks'
+            ])->find($projectId);
 
-        return response()->json([
-            'success' => true,
-            'data'    => $responseData,
-            'message' => 'Zero project details fetched successfully'
-        ]);
+            if (!$project) {
+                return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+            }
 
-    } catch (\Exception $e) {
-        Log::error('Error fetching zero project: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to fetch zero project details'
-        ], 500);
-    }
-}
-    public function store(StoreTaskRequest $request, Team $team)
-{
-    try {
-        $user = $request->user();
-        $programmer = $user->programmer;
+            // التحقق من أن المستخدم هو قائد الفريق في هذا المشروع
+            // نفترض أن المشروع له فريق واحد (كما في نظامك)
+            $team = $project->teams->first();
+            if (!$team) {
+                return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+            }
 
-        // التحقق من أن المستخدم قائد الفريق
-        if (!$team->isLeader($programmer->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only team leader can create tasks'
-            ], 403);
-        }
+            if (!$team->isLeader($programmer->id)) {
+                return response()->json(['success' => false, 'message' => 'Only the team leader can view zero project details'], 403);
+            }
 
-        // التحقق من أن المبرمج المعين موجود في الفريق
-        if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The assigned programmer is not a member of this team'
-            ], 400);
-        }
+            // إزالة الشرط الذي يمنع العرض إذا كانت هناك مهام
+            // جمع جميع الأعضاء من كل فريق في المشروع
+            $members = collect();
+            foreach ($project->teams as $team) {
+                foreach ($team->activeMembers as $member) {
+                    $prog = $member->programmer;
+                    $programmerTasks = $team->tasks->where('programmer_id', $prog->id);
+                    $doneCount = $programmerTasks->where('status', 'done')->count();
+                    $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
 
-        DB::beginTransaction();
+                    $members->push([
+                        'name'          => $prog->user->full_name,
+                        'avatar_url'    => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
+                        'track'         => $prog->track ?? 'general',
+                        'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
+                    ]);
+                }
+            }
 
-        $task = $team->tasks()->create([
-            'programmer_id' => $request->programmer_id ?? $programmer->id,
-            'project_id' => $team->project_id,
-            'title' => $request->title,
-            'description' => $request->description,
-            'status' => $request->status ?? 'todo',
-            'estimated_hours' => $request->estimated_hours,
-            'deadline' => $request->deadline,
-            'priority' => $request->priority ?? 5,
-            'complexity' => $request->complexity ?? 'medium',
-            'git_link' => $request->git_link,
-            'tags' => $request->tags, // json array
-        ]);
+            $members = $members->unique('name')->values();
 
-        Log::info('Task created', [
-            'task_id' => $task->id,
-            'team_id' => $team->id,
-            'created_by' => $programmer->id
-        ]);
-
-        DB::commit();
-
-        return response()->json([
-            'success' => true,
-            'data' => $task->load('programmer.user'),
-            'message' => 'Task created successfully'
-        ], 201);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Error creating task: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to create task'
-        ], 500);
-    }
-}
-public function markAsCompleted($projectId)
-{
-    try {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
-        }
-
-        $project = Project::with('teams')->find($projectId);
-        if (!$project) {
-            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
-        }
-
-        $team = $project->teams->first();
-        if (!$team) {
-            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
-        }
-
-        $programmer = $user->programmer;
-        if (!$programmer || !$team->isLeader($programmer->id)) {
-            return response()->json(['success' => false, 'message' => 'Only the team leader can mark the project as completed'], 403);
-        }
-
-        // تحديث حالة الفريق إلى 'completed' بدلاً من ذلك
-        $team->update(['status' => 'completed']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Project marked as completed (team status updated)',
-            'project_status' => $project->status // هذا سيعيد 'completed' الآن تلقائياً
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error marking project completed: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to mark project: ' . $e->getMessage()], 500);
-    }
-}
-public function myProjectDetails($projectId, Request $request)
-{
-    try {
-        $user = auth()->user();
-        if (!$user || $user->role !== 'programmer') {
-            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-        }
-
-        $programmer = $user->programmer;
-        if (!$programmer) {
-            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-        }
-
-        // جلب المشروع مع العلاقات المطلوبة
-        $project = Project::with([
-            'teams.activeMembers.programmer.user',
-            'teams.activeMembers.programmer.tasks',
-            'evaluations' // التقييمات الخاصة بالمشروع
-        ])->find($projectId);
-
-        if (!$project) {
-            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
-        }
-
-        // تحديد الفريق الذي ينتمي إليه المبرمج الحالي
-        $myTeam = $project->teams->first(function ($team) use ($programmer) {
-            return $team->activeMembers->contains('programmer_id', $programmer->id);
-        });
-
-        if (!$myTeam) {
-            return response()->json(['success' => false, 'message' => 'You are not a member of any team in this project'], 403);
-        }
-
-        // التراك الخاص بي
-        $myTrack = $programmer->track ?? 'general';
-
-        // رابط GitHub (من المشروع أو من الفريق – نأخذ من المشروع لأنه موجود هناك في كودك)
-        $githubLink = $project->github_url ?? null;
-
-        // أعضاء الفريق (للمشاريع الجارية نحتاج أسمائهم وصورهم فقط)
-        $teamMembers = $myTeam->activeMembers->map(function ($member) {
-            $prog = $member->programmer;
-            return [
-                'id' => $prog->id,
-                'name' => $prog->user->full_name,
-                'avatar_url' => $prog->avatar_url,
-                'role_in_team' => $member->role,
+            $responseData = [
+                'project_id'    => $project->id,
+                'project_title' => $project->title,
+                'description'   => $project->description,
+                'total_members' => $members->count(),
+                'pending_tasks' => $project->teams->flatMap->tasks->whereNotIn('status', ['done', 'cancelled'])->count(),
+                'members'       => $members,
             ];
-        });
 
-        // البيانات المشتركة بين الحالتين (مكتمل / قيد التنفيذ)
-        $responseData = [
-            'project' => [
-                'id' => $project->id,
-                'title' => $project->title,
-                'description' => $project->description,
-                'status' => $project->status,
-                'my_track' => $myTrack,
-                'github_link' => $githubLink,
-                'team_members' => $teamMembers,
-            ]
-        ];
+            return response()->json([
+                'success' => true,
+                'data'    => $responseData,
+                'message' => 'Zero project details fetched successfully'
+            ]);
 
-        // إذا كان المشروع مكتملاً (completed)
-        if ($project->status === 'completed') {
-            $responseData['project']['category'] = $project->category_name;
-            // المدة المتوقعة للمشروع (بالأيام)
-            $durationDays = $project->estimated_duration_days;
-            // تاريخ الانتهاء الفعلي (آخر تحديث للمشروع أو آخر مهمة)
-            $completionDate = $project->updated_at->toDateString();
+        } catch (\Exception $e) {
+            Log::error('Error fetching zero project: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch zero project details'
+            ], 500);
+        }
+    }
 
-            // جلب جميع التقييمات الخاصة بهذا المشروع (feedbacks)
-            $feedbacks = $project->evaluations->map(function ($eval) {
+    public function store(StoreProjectRequest $request)
+    {
+        try {
+            $user = $request->user();
+
+            DB::beginTransaction();
+
+            $validated = $request->validated();
+
+            // Handle project image upload like avatar
+            if ($request->hasFile('image')) {
+                $validated['image_url'] = $request->file('image')->store('projects', 'public');
+            }
+
+            $project = Project::create($validated);
+
+            if ($request->has('skills')) {
+                $project->skills()->sync($validated['skills']);
+            }
+
+            Log::info('Project created', [
+                'project_id' => $project->id,
+                'created_by' => $user->id
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->transformProject($project->load('skills', 'user')),
+                'message' => 'Project created successfully'
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating project: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create project'
+            ], 500);
+        }
+    }
+
+    public function markAsCompleted($projectId)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+            }
+
+            $project = Project::with('teams')->find($projectId);
+            if (!$project) {
+                return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+            }
+
+            $team = $project->teams->first();
+            if (!$team) {
+                return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+            }
+
+            $programmer = $user->programmer;
+            if (!$programmer || !$team->isLeader($programmer->id)) {
+                return response()->json(['success' => false, 'message' => 'Only the team leader can mark the project as completed'], 403);
+            }
+
+            // تحديث حالة الفريق إلى 'completed' بدلاً من ذلك
+            $team->update(['status' => 'completed']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Project marked as completed (team status updated)',
+                'project_status' => $project->status // هذا سيعيد 'completed' الآن تلقائياً
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error marking project completed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to mark project: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function myProjectDetails($projectId, Request $request)
+    {
+        try {
+            $user = auth()->user();
+            if (!$user || $user->role !== 'programmer') {
+                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+            }
+
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+            }
+
+            // جلب المشروع مع العلاقات المطلوبة
+            $project = Project::with([
+                'teams.activeMembers.programmer.user',
+                'teams.activeMembers.programmer.tasks',
+                'evaluations' // التقييمات الخاصة بالمشروع
+            ])->find($projectId);
+
+            if (!$project) {
+                return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+            }
+
+            // تحديد الفريق الذي ينتمي إليه المبرمج الحالي
+            $myTeam = $project->teams->first(function ($team) use ($programmer) {
+                return $team->activeMembers->contains('programmer_id', $programmer->id);
+            });
+
+            if (!$myTeam) {
+                return response()->json(['success' => false, 'message' => 'You are not a member of any team in this project'], 403);
+            }
+
+            // التراك الخاص بي
+            $myTrack = $programmer->track ?? 'general';
+
+            // رابط GitHub (من المشروع أو من الفريق – نأخذ من المشروع لأنه موجود هناك في كودك)
+            $githubLink = $project->github_url ?? null;
+
+            // أعضاء الفريق (للمشاريع الجارية نحتاج أسمائهم وصورهم فقط)
+            $teamMembers = $myTeam->activeMembers->map(function ($member) {
+                $prog = $member->programmer;
                 return [
-                    'evaluator_name' => $eval->evaluator->user->full_name,
-                    'evaluated_name' => $eval->evaluated->user->full_name,
-                    'average_score' => $eval->average_score,
-                    'feedback' => $eval->feedback,
-                    'strengths' => $eval->strengths,
-                    'areas_for_improvement' => $eval->areas_for_improvement,
+                    'id' => $prog->id,
+                    'name' => $prog->user->full_name,
+                    'avatar_url' => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
+                    'role_in_team' => $member->role,
                 ];
             });
 
-            // حساب النجوم (rating) للمبرمج الحالي بناءً على التقييمات التي استقبلها في هذا المشروع
-            $myEvaluations = $project->evaluations->where('evaluated_id', $programmer->id);
-            $averageRating = $myEvaluations->isNotEmpty() ? $myEvaluations->avg('average_score') : 0;
-            // تحويل إلى نسبة مئوية من 5 (مثلاً 4.2 من 5)
-            $starsPercentage = round(($averageRating / 5) * 100, 2);
+            // البيانات المشتركة بين الحالتين (مكتمل / قيد التنفيذ)
+            $responseData = [
+                'project' => [
+                    'id' => $project->id,
+                    'title' => $project->title,
+                    'description' => $project->description,
+                    'status' => $project->status,
+                    'my_track' => $myTrack,
+                    'github_link' => $githubLink,
+                    'team_members' => $teamMembers,
+                    'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
+                ]
+            ];
 
-            $responseData['project']['duration_days'] = $durationDays;
-            $responseData['project']['completion_date'] = $completionDate;
-            $responseData['project']['feedbacks'] = $feedbacks;
-            $responseData['project']['my_rating'] = round($averageRating, 2); // من 5
-            $responseData['project']['stars_percentage'] = $starsPercentage; // نسبة مئوية
+            // إذا كان المشروع مكتملاً (completed)
+            if ($project->status === 'completed') {
+                $responseData['project']['category'] = $project->category_name;
+                // المدة المتوقعة للمشروع (بالأيام)
+                $durationDays = $project->estimated_duration_days;
+                // تاريخ الانتهاء الفعلي (آخر تحديث للمشروع أو آخر مهمة)
+                $completionDate = $project->updated_at->toDateString();
 
-        } else {
-            // المشروع قيد التنفيذ (ongoing)
-            $responseData['project']['team_members_count'] = $teamMembers->count();
-            // يمكن إضافة مهام إن وجدت (اختياري)
-            if ($request->boolean('include_team_tasks', false)) {
-                $teamTasks = $myTeam->tasks()->with('programmer.user')->get();
-                $responseData['team_tasks'] = $teamTasks;
+                // جلب جميع التقييمات الخاصة بهذا المشروع (feedbacks)
+                $feedbacks = $project->evaluations->map(function ($eval) {
+                    return [
+                        'evaluator_name' => $eval->evaluator->user->full_name,
+                        'evaluated_name' => $eval->evaluated->user->full_name,
+                        'average_score' => $eval->average_score,
+                        'feedback' => $eval->feedback,
+                        'strengths' => $eval->strengths,
+                        'areas_for_improvement' => $eval->areas_for_improvement,
+                    ];
+                });
+
+                // حساب النجوم (rating) للمبرمج الحالي بناءً على التقييمات التي استقبلها في هذا المشروع
+                $myEvaluations = $project->evaluations->where('evaluated_id', $programmer->id);
+                $averageRating = $myEvaluations->isNotEmpty() ? $myEvaluations->avg('average_score') : 0;
+                // تحويل إلى نسبة مئوية من 5 (مثلاً 4.2 من 5)
+                $starsPercentage = round(($averageRating / 5) * 100, 2);
+
+                $responseData['project']['duration_days'] = $durationDays;
+                $responseData['project']['completion_date'] = $completionDate;
+                $responseData['project']['feedbacks'] = $feedbacks;
+                $responseData['project']['my_rating'] = round($averageRating, 2); // من 5
+                $responseData['project']['stars_percentage'] = $starsPercentage; // نسبة مئوية
+
+            } else {
+                // المشروع قيد التنفيذ (ongoing)
+                $responseData['project']['team_members_count'] = $teamMembers->count();
+                // يمكن إضافة مهام إن وجدت (اختياري)
+                if ($request->boolean('include_team_tasks', false)) {
+                    $teamTasks = $myTeam->tasks()->with('programmer.user')->get();
+                    $responseData['team_tasks'] = $teamTasks;
+                }
             }
+
+            return response()->json([
+                'success' => true,
+                'data' => $responseData
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error in myProjectDetails: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to fetch project details'], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'data' => $responseData
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error in myProjectDetails: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to fetch project details'], 500);
     }
-}
 
     public function update(UpdateProjectRequest $request, $id)
     {
@@ -357,6 +349,15 @@ public function myProjectDetails($projectId, Request $request)
             DB::beginTransaction();
 
             $validated = $request->validated();
+
+            // Handle project image upload like avatar - delete old image if exists
+            if ($request->hasFile('image')) {
+                if ($project->image_url && Storage::disk('public')->exists($project->image_url)) {
+                    Storage::disk('public')->delete($project->image_url);
+                }
+                $validated['image_url'] = $request->file('image')->store('projects', 'public');
+            }
+
             $project->update($validated);
 
             if ($request->has('skills')) {
@@ -373,7 +374,7 @@ public function myProjectDetails($projectId, Request $request)
             return response()->json([
                 'success' => true,
                 'message' => 'Project updated successfully',
-                'data' => $project->load('skills')
+                'data' => $this->transformProject($project->load('skills'))
             ]);
 
         } catch (\Exception $e) {
@@ -408,6 +409,11 @@ public function myProjectDetails($projectId, Request $request)
             }
 
             DB::beginTransaction();
+
+            // Delete project image if exists (like avatar deletion)
+            if ($project->image_url && Storage::disk('public')->exists($project->image_url)) {
+                Storage::disk('public')->delete($project->image_url);
+            }
 
             $project->skills()->detach();
             $project->delete();
@@ -451,6 +457,26 @@ public function myProjectDetails($projectId, Request $request)
                 ->withCount('activeMembers')
                 ->paginate(15);
 
+            // Transform team members to include full avatar URLs
+            $teams->getCollection()->transform(function ($team) {
+                if ($team->leader && $team->leader->programmer) {
+                    $team->leader->programmer->avatar_url = $team->leader->programmer->avatar_url 
+                        ? Storage::disk('public')->url($team->leader->programmer->avatar_url) 
+                        : null;
+                }
+
+                $team->activeMembers->transform(function ($member) {
+                    if ($member->programmer) {
+                        $member->programmer->avatar_url = $member->programmer->avatar_url 
+                            ? Storage::disk('public')->url($member->programmer->avatar_url) 
+                            : null;
+                    }
+                    return $member;
+                });
+
+                return $team;
+            });
+
             return response()->json([
                 'success' => true,
                 'message' => 'Project teams fetched successfully',
@@ -490,7 +516,7 @@ public function myProjectDetails($projectId, Request $request)
                         'programmer_id' => $programmer->id,
                         'user_name' => $programmer->user_name,
                         'full_name' => $programmer->user->full_name,
-                        'avatar_url' => $programmer->avatar_url,
+                        'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
                         'role_in_team' => $member->role,
                         'specialization' => $specialization,
                         'team_name' => $team->name,
@@ -566,6 +592,7 @@ public function myProjectDetails($projectId, Request $request)
                         'difficulty' => $project->difficulty,
                         'max_team_size' => $project->team_size,
                         'num_of_teams' => $project->teams->count(),
+                        'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
                         'owner' => [
                             'id' => $project->user->id,
                             'name' => $project->user->full_name,
@@ -632,12 +659,17 @@ public function myProjectDetails($projectId, Request $request)
                         'project_completion_percentage' => $project->completion_percentage,
                         'my_completion_percentage' => $myCompletion,
                         'my_specialization' => $programmer->track ?? $this->extractSpecializationFromSkills($programmer),
+                        'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
                     ];
                 });
             } elseif ($user->role === 'company') {
-                $projects = Project::where('user_id', $userId)->get();
+                $projects = Project::where('user_id', $userId)->get()->map(function($project) {
+                    return $this->transformProject($project);
+                });
             } elseif ($user->role === 'admin') {
-                $projects = Project::with('user')->get();
+                $projects = Project::with('user')->get()->map(function($project) {
+                    return $this->transformProject($project);
+                });
             }
 
             return response()->json([
@@ -656,71 +688,72 @@ public function myProjectDetails($projectId, Request $request)
     }
 
     public function myProjects(Request $request)
-{
-    $user = Auth::user();
-    if (!$user || $user->role !== 'programmer') {
-        return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-    }
+    {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
 
-    $programmer = $user->programmer;
-    if (!$programmer) {
-        return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-    }
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
 
-    // إعدادات pagination (افتراضي 10 مشاريع لكل صفحة)
-    $perPage = (int) $request->get('per_page', 10);
-    $page = (int) $request->get('page', 1);
-    $statusFilter = $request->query('status'); // 'ongoing' أو 'completed'
+        // إعدادات pagination (افتراضي 10 مشاريع لكل صفحة)
+        $perPage = (int) $request->get('per_page', 10);
+        $page = (int) $request->get('page', 1);
+        $statusFilter = $request->query('status'); // 'ongoing' أو 'completed'
 
-    // جلب كل مشاريع المبرمج عبر الفرق (بدون pagination في الاستعلام)
-    $allProjects = Project::whereHas('teams.activeMembers', function($q) use ($programmer) {
-        $q->where('programmer_id', $programmer->id);
-    })->with(['teams.tasks'])->get();
+        // جلب كل مشاريع المبرمج عبر الفرق (بدون pagination في الاستعلام)
+        $allProjects = Project::whereHas('teams.activeMembers', function($q) use ($programmer) {
+            $q->where('programmer_id', $programmer->id);
+        })->with(['teams.tasks'])->get();
 
-    $ongoingProjects = [];
-    $completedProjects = [];
+        $ongoingProjects = [];
+        $completedProjects = [];
 
-    foreach ($allProjects as $project) {
-        // حساب تقدم المبرمج في هذا المشروع
-        $myTasks = $project->teams->flatMap->tasks->where('programmer_id', $programmer->id);
-        $completedMyTasks = $myTasks->where('status', 'done')->count();
-        $myCompletion = $myTasks->isEmpty() ? 0 : round(($completedMyTasks / $myTasks->count()) * 100);
+        foreach ($allProjects as $project) {
+            // حساب تقدم المبرمج في هذا المشروع
+            $myTasks = $project->teams->flatMap->tasks->where('programmer_id', $programmer->id);
+            $completedMyTasks = $myTasks->where('status', 'done')->count();
+            $myCompletion = $myTasks->isEmpty() ? 0 : round(($completedMyTasks / $myTasks->count()) * 100);
 
-        $projectData = [
-            'id' => $project->id,
-            'title' => $project->title,
-            'description' => $project->description,
-            'category' => $project->category_name,
-            'estimated_duration_days' => $project->estimated_duration_days,
-            'expected_end_date' => $project->expected_end_date->toDateString(),
-            'project_completion_percentage' => $project->completion_percentage,
-            'my_completion_percentage' => $myCompletion,
-            'my_specialization' => $programmer->track ?? 'general',
-        ];
+            $projectData = [
+                'id' => $project->id,
+                'title' => $project->title,
+                'description' => $project->description,
+                'category' => $project->category_name,
+                'estimated_duration_days' => $project->estimated_duration_days,
+                'expected_end_date' => $project->expected_end_date->toDateString(),
+                'project_completion_percentage' => $project->completion_percentage,
+                'my_completion_percentage' => $myCompletion,
+                'my_specialization' => $programmer->track ?? 'general',
+                'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
+            ];
 
-        if ($project->status === 'ongoing') {
-            $ongoingProjects[] = $projectData;
-        } else {
-            $projectData['completion_date'] = $project->updated_at->toDateString();
-            $completedProjects[] = $projectData;
+            if ($project->status === 'ongoing') {
+                $ongoingProjects[] = $projectData;
+            } else {
+                $projectData['completion_date'] = $project->updated_at->toDateString();
+                $completedProjects[] = $projectData;
+            }
+        }
+
+        // الرد حسب الفلتر مع تطبيق pagination
+        if ($statusFilter === 'ongoing') {
+            $paginated = $this->paginateCollection(collect($ongoingProjects), $perPage, $page);
+            return response()->json(['success' => true, 'data' => $paginated]);
+        } 
+        elseif ($statusFilter === 'completed') {
+            $paginated = $this->paginateCollection(collect($completedProjects), $perPage, $page);
+            return response()->json(['success' => true, 'data' => $paginated]);
+        } 
+        else {
+            $allProjectsList = array_merge($ongoingProjects, $completedProjects);
+            $paginated = $this->paginateCollection(collect($allProjectsList), $perPage, $page);
+            return response()->json(['success' => true, 'data' => $paginated]);
         }
     }
-
-    // الرد حسب الفلتر مع تطبيق pagination
-    if ($statusFilter === 'ongoing') {
-        $paginated = $this->paginateCollection(collect($ongoingProjects), $perPage, $page);
-        return response()->json(['success' => true, 'data' => $paginated]);
-    } 
-    elseif ($statusFilter === 'completed') {
-        $paginated = $this->paginateCollection(collect($completedProjects), $perPage, $page);
-        return response()->json(['success' => true, 'data' => $paginated]);
-    } 
-    else {
-        $allProjectsList = array_merge($ongoingProjects, $completedProjects);
-        $paginated = $this->paginateCollection(collect($allProjectsList), $perPage, $page);
-        return response()->json(['success' => true, 'data' => $paginated]);
-    }
-}
 
     private function extractSpecializationFromSkills($programmer)
     {
@@ -738,45 +771,64 @@ public function myProjectDetails($projectId, Request $request)
         return 'general';
     }
 
-    
+
     public function projectTasks($projectId, Request $request)
-{
-    try {
-        $project = Project::with(['teams.tasks' => function($q) use ($request) {
-            if ($request->has('status')) {
-                $q->where('tasks.status', $request->status);
-            }
-            if ($request->has('programmer_id')) {
-                $q->where('tasks.programmer_id', $request->programmer_id);
-            }
-            $q->orderBy('priority', 'desc')->orderBy('deadline');
-        }, 'teams.tasks.programmer.user'])->findOrFail($projectId);
+    {
+        try {
+            $project = Project::with(['teams.tasks' => function($q) use ($request) {
+                if ($request->has('status')) {
+                    $q->where('tasks.status', $request->status);
+                }
+                if ($request->has('programmer_id')) {
+                    $q->where('tasks.programmer_id', $request->programmer_id);
+                }
+                $q->orderBy('priority', 'desc')->orderBy('deadline');
+            }, 'teams.tasks.programmer.user'])->findOrFail($projectId);
 
-        $allTasks = $project->teams->flatMap->tasks;
+            $allTasks = $project->teams->flatMap->tasks;
 
-        return response()->json([
-            'success' => true,
-            'data' => $allTasks,
-            'message' => 'Project tasks retrieved successfully'
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Error fetching project tasks: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to fetch project tasks'
-        ], 500);
+            // Transform tasks to include full avatar URLs for programmers
+            $allTasks->transform(function ($task) {
+                if ($task->programmer && $task->programmer->avatar_url) {
+                    $task->programmer->avatar_url = Storage::disk('public')->url($task->programmer->avatar_url);
+                }
+                return $task;
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $allTasks,
+                'message' => 'Project tasks retrieved successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching project tasks: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch project tasks'
+            ], 500);
+        }
     }
-}
+
+    /**
+     * Helper method to transform project with full image URL
+     * Like ProfileController does with avatar_url
+     */
+    private function transformProject($project)
+    {
+        $project->image_url = $project->image_url ? Storage::disk('public')->url($project->image_url) : null;
+        return $project;
+    }
+
     private function paginateCollection($collection, $perPage, $page)
-{
-    $items = $collection->slice(($page - 1) * $perPage, $perPage)->values();
-    
-    return new \Illuminate\Pagination\LengthAwarePaginator(
-        $items,
-        $collection->count(),
-        $perPage,
-        $page,
-        ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
-    );
-}
+    {
+        $items = $collection->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $collection->count(),
+            $perPage,
+            $page,
+            ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
+        );
+    }
 }
