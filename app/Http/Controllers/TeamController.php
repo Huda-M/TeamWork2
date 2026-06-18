@@ -720,7 +720,6 @@ public function getAllMyInvitations()
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // جلب جميع الدعوات الموجهة لهذا المبرمج
         $invitations = TeamInvitation::where('programmer_id', $programmer->id)
             ->with([
                 'team.project',
@@ -731,27 +730,41 @@ public function getAllMyInvitations()
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // تنسيق البيانات لكل دعوة
         $data = $invitations->map(function ($invitation) {
             $team = $invitation->team;
-            $project = $team->project;
+            $project = $team ? $team->project : null;
 
-            // القائد - نعرض الـ avatar فقط
-            $leader = $team->leader?->programmer;
+            // --- معالجة المرسل (inviter) بأمان ---
+            $inviter = $invitation->inviter;
+            $inviterData = null;
+            if ($inviter && $inviter->user) {
+                $inviterData = [
+                    'name'       => $inviter->user->full_name ?? 'Deleted User',
+                    'track'      => $inviter->track ?? 'general',
+                    'avatar_url' => $inviter->avatar_url,
+                ];
+            } else {
+                $inviterData = [
+                    'name'       => 'Deleted User',
+                    'track'      => 'general',
+                    'avatar_url' => null,
+                ];
+            }
+
+            // --- معالجة القائد بأمان ---
+            $leader = $team ? $team->leader?->programmer : null;
             $leaderAvatar = $leader?->avatar_url ?? null;
 
-            // أعضاء الفريق - نعرض الـ avatars فقط (مصفوفة من الروابط)
-            $membersAvatars = $team->activeMembers->map(function ($member) {
-                return $member->programmer->avatar_url;
-            })->filter()->values(); // إزالة القيم الفارغة
-
-            // من أرسل الدعوة (قد يكون القائد نفسه أو شخص آخر)
-            $inviter = $invitation->inviter;
-            $inviterData = $inviter ? [
-                'name'       => $inviter->user->full_name,
-                'track'      => $inviter->track ?? 'general',
-                'avatar_url' => $inviter->avatar_url,
-            ] : null;
+            // --- معالجة الأعضاء (تجاهل المحذوفين) ---
+            $membersAvatars = $team ? $team->activeMembers
+                ->filter(function ($member) {
+                    return $member->programmer && $member->programmer->user;
+                })
+                ->map(function ($member) {
+                    return $member->programmer->avatar_url;
+                })
+                ->filter()
+                ->values() : collect();
 
             return [
                 'invitation_id' => $invitation->id,
@@ -760,16 +773,16 @@ public function getAllMyInvitations()
                 'expires_at'    => $invitation->expires_at,
                 'invited_by'    => $inviterData,
                 'team' => [
-                    'name'          => $team->name,
-                    'members_count' => $team->activeMembers()->count(),
-                    'project' => [
-                        'title'       => $project->title,
-                        'category'    => $project->category_name,
-                        'description' => $project->description,
-                        'github_url'  => $project->github_url,
-                    ],
-                    'leader_avatar' => $leaderAvatar,      // 👈 الـ Avatar الخاص بالقائد فقط
-                    'members_avatars' => $membersAvatars,   // 👈 قائمة الـ Avatars للأعضاء
+                    'name'          => $team?->name ?? 'Deleted Team',
+                    'members_count' => $team ? $team->activeMembers()->count() : 0,
+                    'project' => $project ? [
+                        'title'       => $project->title ?? 'Deleted Project',
+                        'category'    => $project->category_name ?? null,
+                        'description' => $project->description ?? null,
+                        'github_url'  => $project->github_url ?? null,
+                    ] : null,
+                    'leader_avatar'   => $leaderAvatar,
+                    'members_avatars' => $membersAvatars,
                 ],
             ];
         });
@@ -786,3 +799,4 @@ public function getAllMyInvitations()
     }
 }
 }
+
