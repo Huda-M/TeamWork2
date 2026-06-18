@@ -614,4 +614,89 @@ class TeamController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to submit evaluations: '.$e->getMessage()], 500);
         }
     }
+    /**
+ * عرض تفاصيل دعوة معينة (خاصة بالمبرمج المدعو)
+ */
+public function getInvitationDetails($invitationId)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
+
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب الدعوة مع العلاقات
+        $invitation = TeamInvitation::with([
+            'team.project',
+            'team.activeMembers.programmer.user',
+            'team.leader.programmer.user',
+            'inviter.user' // من أرسل الدعوة
+        ])->find($invitationId);
+
+        if (!$invitation) {
+            return response()->json(['success' => false, 'message' => 'Invitation not found'], 404);
+        }
+
+        // التحقق من أن الدعوة موجهة لهذا المبرمج
+        if ($invitation->programmer_id !== $programmer->id) {
+            return response()->json(['success' => false, 'message' => 'This invitation is not for you'], 403);
+        }
+
+        $team = $invitation->team;
+        $project = $team->project;
+
+        // بيانات القائد
+        $leader = $team->leader?->programmer;
+        $leaderData = null;
+        if ($leader) {
+            $leaderData = [
+                'name'       => $leader->user->full_name,
+                'track'      => $leader->track ?? 'general',
+                'avatar_url' => $leader->avatar_url,
+            ];
+        }
+
+        // أعضاء الفريق (جميع الأعضاء النشطين)
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'name'       => $prog->user->full_name,
+                'avatar_url' => $prog->avatar_url,
+                'track'      => $prog->track ?? 'general',
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'invitation_id' => $invitation->id,
+                'status'        => $invitation->status,
+                'invited_by'    => [
+                    'name'       => $invitation->inviter->user->full_name,
+                    'track'      => $invitation->inviter->track ?? 'general',
+                    'avatar_url' => $invitation->inviter->avatar_url,
+                ],
+                'team' => [
+                    'name'          => $team->name,
+                    'members_count' => $team->activeMembers()->count(),
+                    'project' => [
+                        'title'       => $project->title,
+                        'category'    => $project->category_name,
+                        'description' => $project->description,
+                    ],
+                    'leader' => $leaderData,
+                    'members' => $members,
+                ],
+                'expires_at' => $invitation->expires_at,
+                'created_at' => $invitation->created_at,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching invitation details: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch invitation details'], 500);
+    }
+}
 }
