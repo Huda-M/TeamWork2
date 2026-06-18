@@ -705,4 +705,84 @@ public function getInvitationDetails($invitationId)
         return response()->json(['success' => false, 'message' => 'Failed to fetch invitation details'], 500);
     }
 }
+    /**
+ * عرض جميع الدعوات المستلمة للمبرمج الحالي مع تفاصيل كل فريق
+ *
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function getAllMyInvitations()
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
+
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب جميع الدعوات الموجهة لهذا المبرمج
+        $invitations = TeamInvitation::where('programmer_id', $programmer->id)
+            ->with([
+                'team.project',
+                'team.activeMembers.programmer.user',
+                'team.leader.programmer.user',
+                'inviter.user'
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // تنسيق البيانات لكل دعوة
+        $data = $invitations->map(function ($invitation) {
+            $team = $invitation->team;
+            $project = $team->project;
+
+            // القائد - نعرض الـ avatar فقط
+            $leader = $team->leader?->programmer;
+            $leaderAvatar = $leader?->avatar_url ?? null;
+
+            // أعضاء الفريق - نعرض الـ avatars فقط (مصفوفة من الروابط)
+            $membersAvatars = $team->activeMembers->map(function ($member) {
+                return $member->programmer->avatar_url;
+            })->filter()->values(); // إزالة القيم الفارغة
+
+            // من أرسل الدعوة (قد يكون القائد نفسه أو شخص آخر)
+            $inviter = $invitation->inviter;
+            $inviterData = $inviter ? [
+                'name'       => $inviter->user->full_name,
+                'track'      => $inviter->track ?? 'general',
+                'avatar_url' => $inviter->avatar_url,
+            ] : null;
+
+            return [
+                'invitation_id' => $invitation->id,
+                'status'        => $invitation->status,
+                'sent_at'       => $invitation->created_at,
+                'expires_at'    => $invitation->expires_at,
+                'invited_by'    => $inviterData,
+                'team' => [
+                    'name'          => $team->name,
+                    'members_count' => $team->activeMembers()->count(),
+                    'project' => [
+                        'title'       => $project->title,
+                        'category'    => $project->category_name,
+                        'description' => $project->description,
+                        'github_url'  => $project->github_url,
+                    ],
+                    'leader_avatar' => $leaderAvatar,      // 👈 الـ Avatar الخاص بالقائد فقط
+                    'members_avatars' => $membersAvatars,   // 👈 قائمة الـ Avatars للأعضاء
+                ],
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+            'count' => $data->count(),
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching all invitations: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch invitations'], 500);
+    }
+}
 }
