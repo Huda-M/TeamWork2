@@ -174,6 +174,7 @@ class TeamController extends Controller
                 'status' => 'pending',
                 'difficulty' => 'intermediate',
                 'estimated_duration_days' => 30,
+                'max_members'     => 10,
                 'max_team_size' => 5,
                 'num_of_team' => 1,
                 'user_id' => $programmer->user_id,
@@ -188,7 +189,7 @@ class TeamController extends Controller
                 'status' => 'active',
                 'formation_type' => 'manual',
                 'created_by' => $programmer->id,
-                'max_members'     => 10,
+                'max_members' => $project->max_members, // ← Fix: propagate max_members from project to team
                 'join_code' => $validated['is_public'] ? null : strtoupper(substr(md5(uniqid()), 0, 8)),
             ]);
             TeamMember::create([
