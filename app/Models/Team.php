@@ -41,9 +41,9 @@ class Team extends Model
     ];
 
     public function getMaxMembersAttribute()
-    {
-        return $this->project->team_size;
-    }
+{
+    return $this->project->max_members ?? $this->project->team_size ?? 10;
+}
 
     public function getMinMembersAttribute()
     {
