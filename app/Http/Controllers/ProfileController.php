@@ -39,7 +39,7 @@ class ProfileController extends Controller
             'email'      => $user->email,
             'bio'        => $programmer->bio,
             'track'      => $programmer->track,
-            'avatar_url' => $programmer->avatar_url,
+            'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
         ]
     ]);
 }
@@ -150,7 +150,7 @@ class ProfileController extends Controller
                     'programmer_id' => $member->programmer_id,
                     'name' => $member->programmer->user->full_name,
                     'track' => $member->programmer->track,
-                    'avatar_url' => $member->programmer->avatar ? asset('storage/'.$member->programmer->avatar) : null,
+                    'avatar_url' => $member->programmer->avatar_url ? Storage::disk('public')->url($member->programmer->avatar_url) : null,
                 ];
             });
         
@@ -379,7 +379,7 @@ public function updateProfile(Request $request)
             'email' => $user->email,
             'bio' => $programmer->bio,
             'track' => $programmer->track,
-            'avatar_url' => asset('storage/' . $programmer->avatar_url),
+            'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
         ]
     ]);
 }
@@ -413,7 +413,7 @@ public function updateProfile(Request $request)
                 'id' => $prog->id,
                 'name' => $prog->user->full_name,
                 'track' => $prog->track,
-                'avatar_url' => $prog->avatar ? asset('storage/'.$prog->avatar) : null,
+                'avatar_url' => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
                 'role' => $member->role,
             ];
         });
