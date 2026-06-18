@@ -178,7 +178,7 @@ class TeamController extends Controller
                 'max_team_size' => 5,
                 'num_of_team' => 1,
                 'user_id' => $programmer->user_id,
-                'team_size' => 5,
+                'team_size' => 10,
                 'min_team_size' => 2,
                 'max_teams' => 1,
             ]);
