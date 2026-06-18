@@ -147,9 +147,10 @@ class Programmer extends Model
     }
 
     public function getIsInTeamAttribute(): bool
-    {
-        return $this->teams()->wherePivotNull('left_at')->exists();
-    }
+{
+    $activeTeamsCount = $this->teams()->wherePivotNull('left_at')->count();
+    return $activeTeamsCount >= 10; // ← 10 teams max
+}
 
     public function getActiveTeamAttribute(): ?Team
     {
