@@ -397,12 +397,12 @@ class TaskController extends Controller
                     'created_by' => [
                         'id' => $task->creator?->id,
                         'name' => $task->creator?->user?->full_name,
-                        'avatar_url' => $task->creator?->avatar_url,
+                        'avatar_url' => $task->creator?->avatar_url ? Storage::disk('public')->url($task->creator->avatar_url) : null,
                     ],
                     'assigned_to' => [
                         'id' => $task->programmer?->id,
                         'name' => $task->programmer?->user?->full_name,
-                        'avatar_url' => $task->programmer?->avatar_url,
+                        'avatar_url' => $task->programmer?->avatar_url ? Storage::disk('public')->url($task->programmer->avatar_url) : null,
                     ],
                     'attachments' => $task->attachments->map(function ($attachment) {
                         return [
