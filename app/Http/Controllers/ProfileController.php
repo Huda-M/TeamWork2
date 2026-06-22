@@ -335,14 +335,16 @@ public function softDeleteAccount()
     
 public function updateProfile(Request $request)
 {
-    dd(
-    $request->method(),
-    $request->headers->all(),
-    $request->input(),
-    $request->files->all(),
-    $_POST,
-    $_FILES
-);
+    return response()->json([
+        'debug' => true,
+        'method' => $request->method(),
+        'headers' => $request->headers->all(),
+        'input' => $request->input(),
+        'files' => $request->files->all(),
+        'post' => $_POST,
+        'files_server' => $_FILES,
+        'php_input' => file_get_contents('php://input'),
+    ]);
     // try {
     //     $user = Auth::user();
     //     if (!$user || $user->role !== 'programmer') {
