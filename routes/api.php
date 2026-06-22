@@ -194,6 +194,7 @@ Route::prefix('v1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/projects/{projectId}/full-details', [TeamController::class, 'getProjectFullDetails']);
     Route::post('/{task}/attachments', [TaskController::class, 'uploadAttachment']);
     Route::post('/{task}/mark-as-done', [TaskController::class, 'markAsDone']);
     Route::get('/zero-project/{projectId}', [ProjectController::class, 'zeroProject']);
