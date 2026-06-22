@@ -333,9 +333,27 @@ public function softDeleteAccount()
         ]);
     }
     
+/**
+ * تحديث الملف الشخصي للمبرمج (مع تتبع كامل)
+ */
 public function updateProfile(Request $request)
 {
     try {
+        // ============================================================
+        // 1. تسجيل كل شيء عن الطلب
+        // ============================================================
+        Log::channel('stack')->info('=== PROFILE UPDATE REQUEST RECEIVED ===');
+        Log::channel('stack')->info('Headers: ' . json_encode($request->headers->all()));
+        Log::channel('stack')->info('Content-Type: ' . $request->header('Content-Type'));
+        Log::channel('stack')->info('Request all: ' . json_encode($request->all()));
+        Log::channel('stack')->info('Request input: ' . json_encode($request->input()));
+        Log::channel('stack')->info('Request getContent: ' . $request->getContent());
+        Log::channel('stack')->info('Request method: ' . $request->method());
+        Log::channel('stack')->info('Request path: ' . $request->path());
+
+        // ============================================================
+        // 2. التحقق من المصادقة والصلاحيات
+        // ============================================================
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
@@ -346,47 +364,50 @@ public function updateProfile(Request $request)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // -- تسجيل كل ما يصل من الطلب --
-        Log::info('Profile update - full request', [
-            'all_input' => $request->all(),
-            'all_files' => $request->allFiles(),
-            'method' => $request->method(),
-            'content_type' => $request->header('Content-Type'),
-        ]);
+        Log::channel('stack')->info('User ID: ' . $user->id . ', Programmer ID: ' . $programmer->id);
 
-        // -- بناء مصفوفة التحديث --
+        // ============================================================
+        // 3. التحقق من وجود الحقول المطلوبة
+        // ============================================================
+        $fields = ['full_name', 'email', 'user_name', 'bio', 'track'];
+        foreach ($fields as $field) {
+            Log::channel('stack')->info("Field '{$field}' exists: " . ($request->has($field) ? 'YES' : 'NO') . ", value: " . $request->input($field, 'NULL'));
+        }
+
+        // ============================================================
+        // 4. جمع البيانات المراد تحديثها (برمجياً)
+        // ============================================================
         $updateData = [];
 
-        // الحصول على القيم: نفضل `input` عن `has` لأنه يتعامل مع القيم الفارغة بشكل أفضل
-        $fullName = $request->input('full_name');
-        if ($fullName !== null) {
-            $updateData['full_name'] = $fullName;
+        if ($request->filled('full_name')) {
+            $updateData['full_name'] = $request->input('full_name');
         }
 
-        $email = $request->input('email');
-        if ($email !== null) {
-            $updateData['email'] = $email;
+        if ($request->filled('email')) {
+            $updateData['email'] = $request->input('email');
         }
 
-        $userName = $request->input('user_name');
-        if ($userName !== null) {
-            $updateData['user_name'] = $userName;
+        if ($request->filled('user_name')) {
+            $updateData['user_name'] = $request->input('user_name');
         }
 
-        $bio = $request->input('bio');
-        if ($bio !== null) {
-            $updateData['bio'] = $bio;
+        // الحقول الاختيارية يمكن أن تكون فارغة
+        if ($request->has('bio')) {
+            $updateData['bio'] = $request->input('bio');
         }
 
-        $track = $request->input('track');
-        if ($track !== null) {
-            $updateData['track'] = $track;
+        if ($request->has('track')) {
+            $updateData['track'] = $request->input('track');
         }
 
-        Log::info('Profile update - data to update', $updateData);
+        Log::channel('stack')->info('UpdateData after collecting fields: ' . json_encode($updateData));
 
-        // -- رفع الصورة --
+        // ============================================================
+        // 5. معالجة رفع الصورة
+        // ============================================================
+        $avatarUploaded = false;
         if ($request->hasFile('avatar')) {
+            Log::channel('stack')->info('Avatar file detected');
             $file = $request->file('avatar');
             if ($file->isValid()) {
                 // حذف القديمة
@@ -399,14 +420,20 @@ public function updateProfile(Request $request)
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
                 $path = $file->storeAs('avatars', $fileName, 'public');
                 $updateData['avatar_url'] = $path;
-                Log::info('Avatar uploaded', ['path' => $path]);
+                $avatarUploaded = true;
             } else {
+                Log::channel('stack')->warning('Uploaded file is invalid');
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
             }
+        } else {
+            Log::channel('stack')->info('No avatar file detected');
         }
 
-        // -- التحقق من وجود بيانات للتحديث --
-        if (empty($updateData)) {
+        // ============================================================
+        // 6. إذا لم توجد أي تغييرات، نعيد رسالة واضحة
+        // ============================================================
+        if (empty($updateData) && !$avatarUploaded) {
+            Log::channel('stack')->info('No changes detected, returning early');
             return response()->json([
                 'success' => true,
                 'message' => 'No changes detected',
@@ -414,7 +441,9 @@ public function updateProfile(Request $request)
             ], 200);
         }
 
-        // -- تحديث الـ User أولاً (لو فيه تغييرات على full_name أو email) --
+        // ============================================================
+        // 7. تحديث جدول users (full_name, email)
+        // ============================================================
         $userUpdate = [];
         if (isset($updateData['full_name'])) {
             $userUpdate['full_name'] = $updateData['full_name'];
@@ -426,23 +455,41 @@ public function updateProfile(Request $request)
         }
         if (!empty($userUpdate)) {
             $user->update($userUpdate);
-            Log::info('User updated', $userUpdate);
+            Log::channel('stack')->info('User updated with: ' . json_encode($userUpdate));
         }
 
-        // -- تحديث الـ Programmer (الباقي من البيانات) --
+        // ============================================================
+        // 8. تحديث جدول programmers (باقي الحقول)
+        // ============================================================
         if (!empty($updateData)) {
-            $updated = $programmer->update($updateData);
-            Log::info('Programmer updated', [
-                'updateData' => $updateData,
-                'affected_rows' => $updated,
-            ]);
+            $affected = $programmer->update($updateData);
+            Log::channel('stack')->info('Programmer updated with: ' . json_encode($updateData) . ', affected rows: ' . $affected);
         }
 
-        // -- إعادة تحميل البيانات --
+        // ============================================================
+        // 9. إعادة تحميل البيانات من قاعدة البيانات
+        // ============================================================
         $programmer->refresh();
         $user->refresh();
 
-        // -- إرجاع الرد --
+        // ============================================================
+        // 10. إعداد رابط الصورة للرد
+        // ============================================================
+        $avatarUrl = $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null;
+
+        // ============================================================
+        // 11. إرجاع الرد النهائي
+        // ============================================================
+        Log::channel('stack')->info('Final response data: ' . json_encode([
+            'id'         => $programmer->id,
+            'user_name'  => $programmer->user_name,
+            'full_name'  => $user->full_name,
+            'email'      => $user->email,
+            'bio'        => $programmer->bio,
+            'track'      => $programmer->track,
+            'avatar_url' => $avatarUrl,
+        ]));
+
         return response()->json([
             'success' => true,
             'message' => 'Profile updated successfully',
@@ -453,7 +500,7 @@ public function updateProfile(Request $request)
                 'email'      => $user->email,
                 'bio'        => $programmer->bio,
                 'track'      => $programmer->track,
-                'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+                'avatar_url' => $avatarUrl,
             ]
         ]);
 
@@ -461,6 +508,7 @@ public function updateProfile(Request $request)
         Log::error('Profile update error: ' . $e->getMessage(), [
             'user_id' => Auth::id(),
             'request_data' => $request->all(),
+            'trace' => $e->getTraceAsString(),
         ]);
         return response()->json([
             'success' => false,
