@@ -335,6 +335,17 @@ public function softDeleteAccount()
     
 public function updateProfile(Request $request)
 {
+    $rawInput = file_get_contents('php://input');
+    $jsonData = json_decode($rawInput, true);
+    
+    return response()->json([
+        'debug' => true,
+        'php_input' => $rawInput,
+        'json_decode' => $jsonData,
+        'request_all' => $request->all(),
+        'request_json' => $request->json()->all(),
+        'headers' => $request->headers->all(),
+    ]);
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
