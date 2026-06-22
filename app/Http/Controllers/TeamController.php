@@ -1084,5 +1084,36 @@ public function getProjectFullDetails($projectId, Request $request)
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
 }
+    /**
+ * عرض تفاصيل أساسية للفريق باستخدام projectId (نسخة basic-details)
+ */
+public function getProjectBasicDetails($projectId)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])
+            ->where('project_id', $projectId)
+            ->firstOrFail();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'team_name' => $team->name,
+                'project_description' => $team->project->description,
+                'members' => $team->activeMembers->map(function ($member) {
+                    $prog = $member->programmer;
+                    return [
+                        'programmer_id' => $member->programmer_id,
+                        'name' => $prog->user->full_name,
+                        'track' => $prog->track ?? 'general',
+                        'avatar_url' => $prog->avatar_url ?: null,
+                    ];
+                }),
+            ]
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching project basic details: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch project basic details'], 500);
+    }
+}
 }
 
