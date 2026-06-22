@@ -1187,5 +1187,129 @@ public function getProjectMembersWithMyRatings($projectId)
         return response()->json(['success' => false, 'message' => 'Failed to fetch ratings'], 500);
     }
 }
+    /**
+ * تقييم جميع أعضاء الفريق في مشروع معين (بعد اكتمال المشروع)
+ * نسخة evaluate-all لكن بـ projectId
+ */
+public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $request)
+{
+    try {
+        $user = auth()->user();
+        $evaluator = $user->programmer;
+
+        // جلب المشروع مع الفريق
+        $project = Project::with('teams.activeMembers')->find($projectId);
+        if (!$project) {
+            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+        }
+
+        // جلب الفريق المرتبط بالمشروع (نفترض فريق واحد)
+        $team = $project->teams->first();
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+        }
+
+        // التحقق من أن المستخدم عضو في هذا الفريق
+        if (!$team->isMember($evaluator->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        // التحقق من أن المشروع مكتمل
+        if ($project->status !== 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'You can only evaluate team members after the project is completed'
+            ], 400);
+        }
+
+        $validated = $request->validated();
+        $evaluationsData = $validated['evaluations'];
+        $errors = [];
+        $successCount = 0;
+
+        DB::beginTransaction();
+
+        foreach ($evaluationsData as $eval) {
+            $evaluatedId = $eval['evaluated_id'];
+            $rating = $eval['rating'];
+            $feedback = $eval['feedback'] ?? null;
+
+            // منع التقييم الذاتي
+            if ($evaluatedId == $evaluator->id) {
+                $errors[] = "You cannot evaluate yourself (ID: $evaluatedId)";
+                continue;
+            }
+
+            // التحقق من أن المقيم عضو في الفريق
+            if (!$team->isMember($evaluatedId)) {
+                $errors[] = "Programmer ID $evaluatedId is not a member of this team";
+                continue;
+            }
+
+            // التحقق من عدم وجود تقييم سابق
+            $existing = Evaluation::where('project_id', $project->id)
+                ->where('team_id', $team->id)
+                ->where('evaluator_id', $evaluator->id)
+                ->where('evaluated_id', $evaluatedId)
+                ->first();
+
+            if ($existing) {
+                $errors[] = "You have already evaluated programmer ID $evaluatedId";
+                continue;
+            }
+
+            // تحويل الـ rating (1-5) إلى average_score (1-10)
+            $averageScore = $rating * 2;
+
+            // إنشاء التقييم
+            Evaluation::create([
+                'project_id' => $project->id,
+                'team_id' => $team->id,
+                'evaluator_id' => $evaluator->id,
+                'evaluated_id' => $evaluatedId,
+                'technical_skills' => $rating,
+                'communication' => $rating,
+                'teamwork' => $rating,
+                'problem_solving' => $rating,
+                'reliability' => $rating,
+                'code_quality' => $rating,
+                'average_score' => $averageScore,
+                'strengths' => null,
+                'areas_for_improvement' => null,
+                'feedback' => $feedback,
+                'is_anonymous' => false,
+                'is_completed' => true,
+                'submitted_at' => now(),
+            ]);
+
+            // إضافة نقاط للمُقيَّم
+            $evaluatedProgrammer = Programmer::find($evaluatedId);
+            if ($evaluatedProgrammer && method_exists($evaluatedProgrammer, 'addStars')) {
+                $points = $rating * 10;
+                $evaluatedProgrammer->addStars($points, 'Received peer evaluation', [
+                    'project_id' => $project->id,
+                    'rating' => $rating
+                ]);
+            }
+
+            $successCount++;
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Successfully submitted $successCount evaluation(s).",
+            'errors' => $errors,
+            'total_submitted' => $successCount,
+            'total_requested' => count($evaluationsData)
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error evaluating team members: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to submit evaluations: ' . $e->getMessage()], 500);
+    }
+}
 }
 
