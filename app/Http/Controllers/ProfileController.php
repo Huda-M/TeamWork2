@@ -335,17 +335,6 @@ public function softDeleteAccount()
     
 public function updateProfile(Request $request)
 {
-   
-    // ====== TEMP DEBUG - شيليها بعد التشخيص ======
-    return response()->json([
-        'debug_all_input'        => $request->all(),
-        'debug_files'            => $request->files->all(),
-        'debug_content_type'     => $request->header('Content-Type'),
-        'debug_content_length'   => $request->header('Content-Length'),
-        'php_post_max_size'      => ini_get('post_max_size'),
-        'php_upload_max_filesize'=> ini_get('upload_max_filesize'),
-        'php_max_input_vars'     => ini_get('max_input_vars'),
-    ]);
     
     try {
         $user = Auth::user();
