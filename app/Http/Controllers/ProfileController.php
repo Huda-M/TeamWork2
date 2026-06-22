@@ -346,6 +346,13 @@ public function updateProfile(Request $request)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
+        // سجل البيانات الواردة
+        \Log::info('Profile update request', [
+            'user_id' => $user->id,
+            'request_data' => $request->all(),
+            'current_programmer' => $programmer->toArray()
+        ]);
+
         $rules = [
             'full_name' => 'sometimes|required|string|max:255',
             'bio'       => 'nullable|string|max:1000',
@@ -353,7 +360,7 @@ public function updateProfile(Request $request)
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        // user_name validation: only if provided and different from current
+        // user_name validation
         if ($request->filled('user_name')) {
             $newUserName = $request->user_name;
             $currentUserName = $programmer->user_name;
@@ -366,12 +373,11 @@ public function updateProfile(Request $request)
                     Rule::unique('programmers', 'user_name')->ignore($programmer->id)
                 ];
             } else {
-                // If same as current, no need to validate uniqueness
                 $rules['user_name'] = 'sometimes|string|max:255';
             }
         }
 
-        // email validation (only if provided and different from current)
+        // email validation
         if ($request->filled('email')) {
             $newEmail = $request->email;
             $currentEmail = $user->email;
@@ -392,9 +398,9 @@ public function updateProfile(Request $request)
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
-        // Update users table
+        // تحديث جدول users
         $userUpdated = false;
-        if ($request->has('full_name')) {
+        if ($request->has('full_name') && $request->full_name !== $user->full_name) {
             $user->full_name = $request->full_name;
             $userUpdated = true;
         }
@@ -404,28 +410,29 @@ public function updateProfile(Request $request)
         }
         if ($userUpdated) {
             $user->save();
+            \Log::info('User updated', ['user_id' => $user->id, 'new_data' => $user->toArray()]);
         }
 
-        // Update programmers table
+        // تحديث جدول programmers
         $programmerUpdated = false;
         if ($request->has('user_name') && $request->user_name !== $programmer->user_name) {
             $programmer->user_name = $request->user_name;
             $programmerUpdated = true;
         }
-        if ($request->has('bio')) {
+        if ($request->has('bio') && $request->bio !== $programmer->bio) {
             $programmer->bio = $request->bio;
             $programmerUpdated = true;
         }
-        if ($request->has('track')) {
+        if ($request->has('track') && $request->track !== $programmer->track) {
             $programmer->track = $request->track;
             $programmerUpdated = true;
         }
 
-        // Handle avatar upload
+        // رفع الصورة
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                // Delete old avatar
+                // حذف الصورة القديمة
                 if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
                     $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
                     if (Storage::disk('public')->exists($oldPath)) {
@@ -441,16 +448,38 @@ public function updateProfile(Request $request)
             }
         }
 
+        // سجل ما إذا تم تحديث البرمجة
+        \Log::info('Programmer update status', [
+            'programmer_id' => $programmer->id,
+            'programmerUpdated' => $programmerUpdated,
+            'fields_to_update' => [
+                'user_name' => $request->user_name ?? 'not sent',
+                'bio' => $request->bio ?? 'not sent',
+                'track' => $request->track ?? 'not sent',
+            ]
+        ]);
+
         if ($programmerUpdated) {
-            $programmer->save();
+            $saved = $programmer->save();
+            \Log::info('Programmer save result', [
+                'programmer_id' => $programmer->id,
+                'saved' => $saved,
+                'updated_data' => $programmer->toArray()
+            ]);
         }
 
-        // Refresh models to get latest data
+        // إعادة تحميل البيانات من قاعدة البيانات
         $programmer->refresh();
         $user->refresh();
 
-        // Prepare avatar URL
         $avatarUrl = $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null;
+
+        \Log::info('Final profile data', [
+            'programmer_id' => $programmer->id,
+            'user_name' => $programmer->user_name,
+            'bio' => $programmer->bio,
+            'track' => $programmer->track,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -467,9 +496,9 @@ public function updateProfile(Request $request)
         ]);
 
     } catch (\Exception $e) {
-        Log::error('Profile update error: ' . $e->getMessage(), [
+        \Log::error('Profile update error: ' . $e->getMessage(), [
             'user_id' => Auth::id(),
-            'request_data' => $request->all(),
+            'trace' => $e->getTraceAsString(),
         ]);
         return response()->json([
             'success' => false,
