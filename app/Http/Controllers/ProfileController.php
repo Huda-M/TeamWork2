@@ -335,48 +335,53 @@ public function softDeleteAccount()
 public function updateProfile(Request $request)
 {
     $user = auth()->user();
-    
-    // Validate the input
-    $validated = $request->validate([
-        'user_name' => 'nullable|string|unique:programmers,user_name,' . $user->programmer->id,
-        'full_name' => 'nullable|string',
-        'bio' => 'nullable|string',
-        'track' => 'nullable|string',
-        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-    ]);
-
-    // Update the user record
-    $user->update([
-        'full_name' => $validated['full_name'] ?? $user->full_name,
-    ]);
-
-    // Get programmer record
     $programmer = $user->programmer;
-    
+
+    // Validate ALL fields that were sent
+    $rules = [
+        'full_name' => 'sometimes|string|max:255',
+        'bio' => 'sometimes|string|max:1000',
+        'track' => 'sometimes|string|max:100',
+        'user_name' => 'sometimes|string|max:255|unique:programmers,user_name,' . ($programmer ? $programmer->id : 'NULL'),
+        'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ];
+
+    $validated = $request->validate($rules);
+
+    // Update user
+    if ($request->has('full_name')) {
+        $user->update(['full_name' => $validated['full_name']]);
+    }
+
     if (!$programmer) {
         $programmer = Programmer::create(['user_id' => $user->id]);
     }
 
-    // Update the programmer record
-    $programmer->update([
-        'user_name' => $validated['user_name'] ?? $programmer->user_name,
-        'bio' => $validated['bio'] ?? $programmer->bio,
-        'track' => $validated['track'] ?? $programmer->track,
-    ]);
+    // Update programmer - ONLY fields that were sent
+    $updateData = [];
+    if ($request->has('user_name')) $updateData['user_name'] = $validated['user_name'];
+    if ($request->has('bio')) $updateData['bio'] = $validated['bio'];
+    if ($request->has('track')) $updateData['track'] = $validated['track'];
+    
+    if (!empty($updateData)) {
+        $programmer->update($updateData);
+    }
 
-    // Handle avatar upload
+    // Handle avatar
     if ($request->hasFile('avatar')) {
+        if ($programmer->avatar_url && Storage::disk('public')->exists($programmer->avatar_url)) {
+            Storage::disk('public')->delete($programmer->avatar_url);
+        }
         $path = $request->file('avatar')->store('avatars', 'public');
         $programmer->update(['avatar_url' => $path]);
     }
 
-    // ✅ إعادة تحميل البيانات من قاعدة البيانات
+    // Refresh
     $programmer->refresh();
     $user->refresh();
 
     return response()->json([
         'success' => true,
-        'message' => 'Profile updated successfully',
         'data' => [
             'id' => $programmer->id,
             'user_name' => $programmer->user_name,
