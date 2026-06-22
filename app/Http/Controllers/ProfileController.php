@@ -520,6 +520,7 @@ public function updateProfile(Request $request)
    
     }
 }
+}
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
     public function projectDetails($projectId)
     {
