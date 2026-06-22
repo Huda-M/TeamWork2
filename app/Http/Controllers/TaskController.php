@@ -6,6 +6,7 @@ use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Models\Task;
 use App\Models\Team;
+use App\Models\Project;
 use App\Notifications\TaskCompletedNotification;
 use App\Notifications\TaskCreatedNotification;
 use App\Notifications\TaskUpdatedNotification;
