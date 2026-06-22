@@ -338,11 +338,13 @@ public function updateProfile(Request $request)
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
+            DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Only programmers can update their profile'], 403);
         }
 
         $programmer = $user->programmer;
         if (!$programmer) {
+            DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
@@ -350,27 +352,9 @@ public function updateProfile(Request $request)
             'full_name' => 'sometimes|required|string|max:255',
             'bio'       => 'nullable|string|max:1000',
             'track'     => 'nullable|string|max:100',
+            'user_name' => 'nullable|string|max:255|unique:programmers,user_name,' . $programmer->id,
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
-
-        // user_name validation (فقط إذا أرسله المستخدم)
-        if ($request->filled('user_name')) {
-            $rules['user_name'] = [
-                'required',
-                'string',
-                'max:255',
-                \Illuminate\Validation\Rule::unique('programmers', 'user_name')->ignore($programmer->id)
-            ];
-        }
-
-        // email validation (فقط إذا أرسله المستخدم)
-        if ($request->filled('email')) {
-            $rules['email'] = [
-                'required',
-                'email',
-                \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)
-            ];
-        }
 
         $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
@@ -379,78 +363,71 @@ public function updateProfile(Request $request)
         }
 
         // Update users table
-        $userUpdated = false;
         if ($request->has('full_name')) {
             $user->full_name = $request->full_name;
-            $userUpdated = true;
         }
         if ($request->has('email')) {
             $user->email = $request->email;
-            $userUpdated = true;
         }
-        if ($userUpdated) {
+        
+        if ($user->isDirty()) {
             if (!$user->save()) {
                 DB::rollBack();
-                Log::error('Failed to save user profile updates');
+                Log::error('Failed to save user profile updates for user ID: ' . $user->id);
                 return response()->json(['success' => false, 'message' => 'Failed to save user profile'], 500);
             }
         }
 
         // Update programmers table
-        $programmerUpdated = false;
         if ($request->has('user_name')) {
             $programmer->user_name = $request->user_name;
-            $programmerUpdated = true;
         }
         if ($request->has('bio')) {
             $programmer->bio = $request->bio;
-            $programmerUpdated = true;
         }
         if ($request->has('track')) {
             $programmer->track = $request->track;
-            $programmerUpdated = true;
         }
 
         // Handle avatar upload
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
-            if ($file->isValid()) {
-                // حذف الصورة القديمة
-                if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
-                    $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                    }
-                }
-                $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs('avatars', $fileName, 'public');
-                if (!$path) {
-                    DB::rollBack();
-                    Log::error('Failed to store avatar file');
-                    return response()->json(['success' => false, 'message' => 'Failed to upload avatar'], 500);
-                }
-                $programmer->avatar_url = $path;
-                $programmerUpdated = true;
-            } else {
+            if (!$file->isValid()) {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
             }
+            
+            // Delete old avatar
+            if ($programmer->getRawOriginal('avatar_url') && Storage::disk('public')->exists($programmer->getRawOriginal('avatar_url'))) {
+                Storage::disk('public')->delete($programmer->getRawOriginal('avatar_url'));
+            }
+            
+            $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('avatars', $fileName, 'public');
+            
+            if (!$path) {
+                DB::rollBack();
+                Log::error('Failed to store avatar file for programmer ID: ' . $programmer->id);
+                return response()->json(['success' => false, 'message' => 'Failed to upload avatar'], 500);
+            }
+            
+            $programmer->avatar_url = $path;
         }
 
-        if ($programmerUpdated) {
+        if ($programmer->isDirty()) {
             if (!$programmer->save()) {
                 DB::rollBack();
-                Log::error('Failed to save programmer profile updates');
+                Log::error('Failed to save programmer profile updates for programmer ID: ' . $programmer->id);
                 return response()->json(['success' => false, 'message' => 'Failed to save programmer profile'], 500);
             }
         }
 
-        // Refresh data from database to ensure consistency
-        $programmer->refresh();
-        $user->refresh();
-
-        // Commit the transaction
+        // Commit transaction
         DB::commit();
+
+        // Get fresh data from database without using refresh() to avoid mutator issues
+        $programmer = Programmer::find($programmer->id);
+        $user = $user->fresh();
 
         return response()->json([
             'success' => true,
@@ -462,7 +439,7 @@ public function updateProfile(Request $request)
                 'email' => $user->email,
                 'bio' => $programmer->bio,
                 'track' => $programmer->track,
-                'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+                'avatar_url' => $programmer->getRawOriginal('avatar_url') ? Storage::disk('public')->url($programmer->getRawOriginal('avatar_url')) : null,
             ]
         ]);
     } catch (\Exception $e) {
