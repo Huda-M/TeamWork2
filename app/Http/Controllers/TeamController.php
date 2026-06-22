@@ -96,23 +96,38 @@ class TeamController extends Controller
 
     public function swapProjectLeader(Request $request, $projectId, $programmerId)
 {
-    $project = Project::with('teams')->findOrFail($projectId);
-    $team = $project->teams->first();
-    
-    if (!$team) {
-        return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
-    }
-        try {
-            $user = Auth::user();
-            $currentLeader = $user->programmer;
-            $team = Team::findOrFail($teamId);
-            if (! $team->isLeader($currentLeader->id) && $user->role !== 'admin') return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-            $newLeader = Programmer::findOrFail($programmerId);
-            if (! $team->isMember($newLeader->id)) return response()->json(['success' => false, 'message' => 'Programmer is not a member of this team'], 400);
-            DB::transaction(function () use ($team, $currentLeader, $newLeader) {
-                TeamMember::where('team_id', $team->id)->where('programmer_id', $currentLeader->id)->update(['role' => 'member']);
-                TeamMember::where('team_id', $team->id)->where('programmer_id', $newLeader->id)->update(['role' => 'leader']);
-            });
+    try {
+        $user = Auth::user();
+        $currentLeader = $user->programmer;
+        
+        // جلب المشروع والفريق
+        $project = Project::with('teams')->findOrFail($projectId);
+        $team = $project->teams->first();
+        
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+        }
+        
+        if (!$team->isLeader($currentLeader->id) && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        
+        $newLeader = Programmer::findOrFail($programmerId);
+        
+        if (!$team->isMember($newLeader->id)) {
+            return response()->json(['success' => false, 'message' => 'Programmer is not a member of this team'], 400);
+        }
+        
+        DB::transaction(function () use ($team, $currentLeader, $newLeader) {
+            TeamMember::where('team_id', $team->id)
+                ->where('programmer_id', $currentLeader->id)
+                ->update(['role' => 'member']);
+                
+            TeamMember::where('team_id', $team->id)
+                ->where('programmer_id', $newLeader->id)
+                ->update(['role' => 'leader']);
+        });
+        
             $team->load('activeMembers.programmer.user');
             $tokens = [];
             foreach ($team->activeMembers as $member) {
@@ -145,15 +160,18 @@ class TeamController extends Controller
     if (!$team) {
         return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
     }
-        $user = Auth::user();
-        $team = Team::findOrFail($id);
-        $isLeader = false;
-        if ($user->programmer) $isLeader = $team->isLeader($user->programmer->id);
-        if (! $isLeader && $user->role !== 'admin') return response()->json(['message' => 'Unauthorized'], 403);
-        $team->delete();
-        $team->activeMembers()->update(['left_at' => now()]);
-        return response()->json(['success' => true, 'message' => 'Team soft deleted']);
-    }
+    
+    $user = Auth::user();
+    // ❌ $team = Team::findOrFail($id); ← ده غلط، شيله
+    $isLeader = false;
+    if ($user->programmer) $isLeader = $team->isLeader($user->programmer->id);
+    if (!$isLeader && $user->role !== 'admin') return response()->json(['message' => 'Unauthorized'], 403);
+    
+    $team->delete();
+    $team->activeMembers()->update(['left_at' => now()]);
+    
+    return response()->json(['success' => true, 'message' => 'Team soft deleted']);
+}
 
     public function store(Request $request)
     {
@@ -433,17 +451,20 @@ class TeamController extends Controller
 
     public function updateProjectTeam(Request $request, $projectId)
 {
-    $project = Project::with('teams')->findOrFail($projectId);
-    $team = $project->teams->first();
-    
-    if (!$team) {
-        return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
-    }
-        try {
-            $user = Auth::user();
-            $team = Team::findOrFail($id);
-            $isLeader = $team->isLeader($user->programmer->id);
-            if (! $isLeader && $user->role !== 'admin') return response()->json(['success' => false, 'message' => 'Only team leader can update team settings'], 403);
+    try {
+        $user = Auth::user();
+        
+        $project = Project::with('teams')->findOrFail($projectId);
+        $team = $project->teams->first();
+        
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+        }
+        
+        $isLeader = $team->isLeader($user->programmer->id);
+        if (!$isLeader && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Only team leader can update team settings'], 403);
+        }
             $validated = $request->validate(['name' => 'sometimes|string|max:255', 'description' => 'nullable|string', 'github_url' => 'nullable|url', 'avatar_url' => 'nullable|url', 'is_public' => 'nullable|boolean', 'category' => 'nullable|array', 'required_role' => 'nullable|array', 'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert']);
             $team->update($validated);
             $pushNotification = new PushNotify;
