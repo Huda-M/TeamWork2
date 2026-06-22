@@ -976,5 +976,113 @@ public function getProjectTeamDetails($projectId, Request $request)
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
 }
+    /**
+ * عرض تفاصيل كاملة للفريق المرتبط بمشروع معين
+ * (نفس سلوك getFullTeamDetails لكن بـ projectId)
+ */
+public function getProjectFullDetails($projectId, Request $request)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب الفريق المرتبط بالمشروع
+        $team = Team::with([
+            'project',
+            'activeMembers.programmer.user',
+            'tasks.programmer.user'
+        ])->where('project_id', $projectId)->first();
+
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+        }
+
+        // التحقق من أن المبرمج عضو في هذا الفريق
+        if (!$team->isMember($programmer->id)) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
+        }
+
+        $myTrack = $programmer->track ?? 'general';
+        $projectDescription = $team->project->description ?? null;
+        $githubLink = $team->project->github_url ?? null;
+
+        // أعضاء الفريق
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'id'         => $prog->id,
+                'name'       => $prog->user->full_name,
+                'avatar_url' => $prog->avatar_url ?: null,
+                'track'      => $prog->track ?? 'general',
+                'role'       => $member->role,
+            ];
+        });
+
+        // تجهيز التاسكات حسب الطلب
+        $tasksView = $request->query('tasks_view', 'my');
+        $tasks = [];
+
+        if ($tasksView === 'my') {
+            $tasks = $team->tasks
+                ->where('programmer_id', $programmer->id)
+                ->map(function ($task) {
+                    return [
+                        'id'          => $task->id,
+                        'title'       => $task->title,
+                        'description' => $task->description,
+                        'status'      => $task->status,
+                        'due_date'    => $task->deadline ? $task->deadline->toDateString() : null,
+                        'priority'    => $task->priority,
+                        'created_at'  => $task->created_at->toDateTimeString(),
+                    ];
+                })->values();
+        } else {
+            $tasks = $team->tasks->map(function ($task) {
+                return [
+                    'id'          => $task->id,
+                    'title'       => $task->title,
+                    'description' => $task->description,
+                    'status'      => $task->status,
+                    'due_date'    => $task->deadline ? $task->deadline->toDateString() : null,
+                    'priority'    => $task->priority,
+                    'assigned_to' => [
+                        'id'         => $task->programmer->id,
+                        'name'       => $task->programmer->user->full_name,
+                        'avatar_url' => $task->programmer->avatar_url ?: null,
+                        'track'      => $task->programmer->track ?? 'general',
+                    ],
+                    'created_at'  => $task->created_at->toDateTimeString(),
+                ];
+            })->values();
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project_id'         => (int) $projectId,
+                'project_name'       => $team->project->title,
+                'team_id'            => $team->id,
+                'team_name'          => $team->name,
+                'project_description'=> $projectDescription,
+                'github_link'        => $githubLink,
+                'my_track'           => $myTrack,
+                'members'            => $members,
+                'tasks_view'         => $tasksView,
+                'tasks'              => $tasks,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error in getProjectFullDetails: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+    }
+}
 }
 
