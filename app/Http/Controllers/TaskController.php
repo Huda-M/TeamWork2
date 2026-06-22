@@ -729,7 +729,7 @@ class TaskController extends Controller
             ], 500);
         }
     }
-   public function getProjectTasks(Request $request, $projectId)
+  public function getProjectTasks(Request $request, $projectId)
 {
     try {
         $user = Auth::user();
@@ -756,11 +756,11 @@ class TaskController extends Controller
             ], 403);
         }
 
-        $perPage = $request->get('per_page', 20);
+        $perPage = (int) $request->get('per_page', 10); // افتراضي 10
 
-        // ──────────────────────────────────────────────
+        // ============================================================
         // 1. ACTIVE TASKS (todo, in_progress, review)
-        // ──────────────────────────────────────────────
+        // ============================================================
         $activeQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'review'])
@@ -789,9 +789,9 @@ class TaskController extends Controller
             ];
         });
 
-        // ──────────────────────────────────────────────
+        // ============================================================
         // 2. COMPLETED TASKS (done)
-        // ──────────────────────────────────────────────
+        // ============================================================
         $completedQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
@@ -810,9 +810,9 @@ class TaskController extends Controller
             ];
         });
 
-        // ──────────────────────────────────────────────
-        // 3. الرد النهائي (نظيف ومرتب)
-        // ──────────────────────────────────────────────
+        // ============================================================
+        // 3. الرد النهائي
+        // ============================================================
         return response()->json([
             'success' => true,
             'data' => [
