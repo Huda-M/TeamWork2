@@ -19,6 +19,7 @@ class StoreProgrammerRequest extends FormRequest
             "total_score" => "required|numeric",
             "github_username" => "required|string",
             "behance_url" => "sometimes|string|nullable",
+            "avatar_url" => "sometimes|image|mimes:jpeg,png,jpg,gif|max:2048",
         ];
     }
 }

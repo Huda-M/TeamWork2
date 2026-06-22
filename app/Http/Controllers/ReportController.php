@@ -363,7 +363,7 @@ class ReportController extends Controller
             'id' => $user->id,
             'name' => $user->full_name,
             'track' => $user->role === 'programmer' ? ($user->programmer->track ?? 'غير محدد') : null,
-            'avatar_url' => $user->role === 'programmer' && $user->programmer?->avatar_url ? Storage::disk('public')->url($user->programmer->avatar_url) : null,
+            'avatar_url' => $user->role === 'programmer' ? ($user->programmer?->avatar_url ?: null) : null,
         ];
         
         return response()->json(['success' => true, 'data' => $data]);

@@ -71,14 +71,6 @@ class ProgrammerController extends Controller
     {
         $programmers = Programmer::with('user')->get();
 
-        // Transform programmers to include full avatar URLs
-        $programmers->transform(function ($programmer) {
-            if ($programmer->avatar_url) {
-                $programmer->avatar_url = Storage::disk('public')->url($programmer->avatar_url);
-            }
-            return $programmer;
-        });
-
         return response()->json([
             'status' => 'success',
             'message' => 'Programmer list fetched successfully',
@@ -121,11 +113,6 @@ class ProgrammerController extends Controller
                 'status' => 'error',
                 'message' => 'Programmer not found',
             ], 404);
-        }
-
-        // Transform avatar_url to full URL
-        if ($programmer->avatar_url) {
-            $programmer->avatar_url = Storage::disk('public')->url($programmer->avatar_url);
         }
 
         return response()->json([
@@ -315,17 +302,11 @@ class ProgrammerController extends Controller
     {
         $validated = $request->validated();
 
-        // Handle avatar upload like ProfileController
-        if ($request->hasFile('avatar')) {
+        if ($request->hasFile('avatar_url')) {
             $validated['avatar_url'] = $request->file('avatar')->store('avatars', 'public');
         }
 
         $programmer = Programmer::create($validated);
-
-        // Transform avatar_url to full URL for response
-        if ($programmer->avatar_url) {
-            $programmer->avatar_url = Storage::disk('public')->url($programmer->avatar_url);
-        }
 
         return response()->json([
             'status' => 'success',
@@ -356,7 +337,7 @@ class ProgrammerController extends Controller
             $profileData = [
                 'name'       => $user->full_name,
                 'track'      => $programmer->track ?? 'general',
-                'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+                'avatar_url' => $programmer->avatar_url ?: null,
                 'level'      => $this->getProgrammerLevel($programmer),
             ];
 
@@ -560,7 +541,7 @@ class ProgrammerController extends Controller
                     'id' => $programmer->id,
                     'user_name' => $programmer->user_name,
                     'full_name' => $programmer->user->full_name,
-                    'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+                    'avatar_url' => $programmer->avatar_url ?: null,
                     'track' => $programmer->track,
                 ];
             });

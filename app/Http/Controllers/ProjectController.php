@@ -103,7 +103,7 @@ class ProjectController extends Controller
 
                     $members->push([
                         'name'          => $prog->user->full_name,
-                        'avatar_url'    => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
+                        'avatar_url'    => $prog->avatar_url ?: null,
                         'track'         => $prog->track ?? 'general',
                         'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
                     ]);
@@ -262,7 +262,7 @@ class ProjectController extends Controller
                 return [
                     'id' => $prog->id,
                     'name' => $prog->user->full_name,
-                    'avatar_url' => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
+                    'avatar_url' => $prog->avatar_url ?: null,
                     'role_in_team' => $member->role,
                 ];
             });
@@ -457,26 +457,6 @@ class ProjectController extends Controller
                 ->withCount('activeMembers')
                 ->paginate(15);
 
-            // Transform team members to include full avatar URLs
-            $teams->getCollection()->transform(function ($team) {
-                if ($team->leader && $team->leader->programmer) {
-                    $team->leader->programmer->avatar_url = $team->leader->programmer->avatar_url 
-                        ? Storage::disk('public')->url($team->leader->programmer->avatar_url) 
-                        : null;
-                }
-
-                $team->activeMembers->transform(function ($member) {
-                    if ($member->programmer) {
-                        $member->programmer->avatar_url = $member->programmer->avatar_url 
-                            ? Storage::disk('public')->url($member->programmer->avatar_url) 
-                            : null;
-                    }
-                    return $member;
-                });
-
-                return $team;
-            });
-
             return response()->json([
                 'success' => true,
                 'message' => 'Project teams fetched successfully',
@@ -516,7 +496,7 @@ class ProjectController extends Controller
                         'programmer_id' => $programmer->id,
                         'user_name' => $programmer->user_name,
                         'full_name' => $programmer->user->full_name,
-                        'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+                        'avatar_url' => $programmer->avatar_url ?: null,
                         'role_in_team' => $member->role,
                         'specialization' => $specialization,
                         'team_name' => $team->name,
@@ -786,14 +766,6 @@ class ProjectController extends Controller
             }, 'teams.tasks.programmer.user'])->findOrFail($projectId);
 
             $allTasks = $project->teams->flatMap->tasks;
-
-            // Transform tasks to include full avatar URLs for programmers
-            $allTasks->transform(function ($task) {
-                if ($task->programmer && $task->programmer->avatar_url) {
-                    $task->programmer->avatar_url = Storage::disk('public')->url($task->programmer->avatar_url);
-                }
-                return $task;
-            });
 
             return response()->json([
                 'success' => true,

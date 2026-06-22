@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class Programmer extends Model
 {
@@ -312,5 +313,22 @@ class Programmer extends Model
     public function joinRequests()
     {
         return $this->hasMany(JoinRequest::class);
+    }
+
+    public function getAvatarUrlAttribute($avatar_url)
+    {
+        if (empty($avatar_url)) {
+            return "";
+        }
+
+        if (filter_var($avatar_url, FILTER_VALIDATE_URL) || str_starts_with($avatar_url, 'http')) {
+            return $avatar_url;
+        }
+
+        if (str_contains($avatar_url, '/')) {
+            return Storage::disk('public')->url($avatar_url);
+        }
+
+        return Storage::disk('public')->url('avatars/' . $avatar_url);
     }
 }
