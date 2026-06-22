@@ -353,23 +353,38 @@ public function updateProfile(Request $request)
             'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        // user_name validation (فقط إذا أرسله المستخدم)
+        // user_name validation: only if provided and different from current
         if ($request->filled('user_name')) {
-            $rules['user_name'] = [
-                'required',
-                'string',
-                'max:255',
-                \Illuminate\Validation\Rule::unique('programmers', 'user_name')->ignore($programmer->id)
-            ];
+            $newUserName = $request->user_name;
+            $currentUserName = $programmer->user_name;
+            
+            if ($newUserName !== $currentUserName) {
+                $rules['user_name'] = [
+                    'required',
+                    'string',
+                    'max:255',
+                    Rule::unique('programmers', 'user_name')->ignore($programmer->id)
+                ];
+            } else {
+                // If same as current, no need to validate uniqueness
+                $rules['user_name'] = 'sometimes|string|max:255';
+            }
         }
 
-        // email validation (فقط إذا أرسله المستخدم)
+        // email validation (only if provided and different from current)
         if ($request->filled('email')) {
-            $rules['email'] = [
-                'required',
-                'email',
-                \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)
-            ];
+            $newEmail = $request->email;
+            $currentEmail = $user->email;
+            
+            if ($newEmail !== $currentEmail) {
+                $rules['email'] = [
+                    'required',
+                    'email',
+                    Rule::unique('users', 'email')->ignore($user->id)
+                ];
+            } else {
+                $rules['email'] = 'sometimes|email';
+            }
         }
 
         $validator = Validator::make($request->all(), $rules);
@@ -383,7 +398,7 @@ public function updateProfile(Request $request)
             $user->full_name = $request->full_name;
             $userUpdated = true;
         }
-        if ($request->has('email')) {
+        if ($request->has('email') && $request->email !== $user->email) {
             $user->email = $request->email;
             $userUpdated = true;
         }
@@ -393,7 +408,7 @@ public function updateProfile(Request $request)
 
         // Update programmers table
         $programmerUpdated = false;
-        if ($request->has('user_name')) {
+        if ($request->has('user_name') && $request->user_name !== $programmer->user_name) {
             $programmer->user_name = $request->user_name;
             $programmerUpdated = true;
         }
@@ -410,7 +425,7 @@ public function updateProfile(Request $request)
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                // حذف الصورة القديمة
+                // Delete old avatar
                 if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
                     $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
                     if (Storage::disk('public')->exists($oldPath)) {
@@ -419,7 +434,7 @@ public function updateProfile(Request $request)
                 }
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
                 $path = $file->storeAs('avatars', $fileName, 'public');
-                $programmer->avatar_url = $path; // تخزين المسار النسبي
+                $programmer->avatar_url = $path;
                 $programmerUpdated = true;
             } else {
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
@@ -430,10 +445,11 @@ public function updateProfile(Request $request)
             $programmer->save();
         }
 
+        // Refresh models to get latest data
         $programmer->refresh();
         $user->refresh();
 
-        // تحويل avatar_url إلى رابط كامل للرد
+        // Prepare avatar URL
         $avatarUrl = $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null;
 
         return response()->json([
