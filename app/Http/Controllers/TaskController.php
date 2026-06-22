@@ -729,7 +729,7 @@ class TaskController extends Controller
             ], 500);
         }
     }
-    public function getProjectTasks(Request $request, $projectId)
+   public function getProjectTasks(Request $request, $projectId)
 {
     try {
         $user = Auth::user();
@@ -742,7 +742,7 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // التحقق إن المبرمج عضو في مشروع من المشروع
+        // التحقق إن المبرمج عضو في المشروع
         $team = \App\Models\Team::where('project_id', $projectId)
             ->whereHas('activeMembers', function ($q) use ($programmer) {
                 $q->where('programmer_id', $programmer->id);
@@ -756,78 +756,61 @@ class TaskController extends Controller
             ], 403);
         }
 
-        // ─── Active Tasks (todo, in_progress, review) ───
-        $activeTasks = Task::where('programmer_id', $programmer->id)
+        // ─── Active Tasks (نفس شكل inProgressTasks) ───
+        $activeTasksQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'review'])
             ->with(['team.project'])
-            ->orderBy('priority', 'desc')
-            ->orderBy('deadline')
-            ->get()
-            ->map(function ($task) {
-                $createdAt = $task->created_at;
-                $deadline = $task->deadline;
-                $totalDays = $createdAt->diffInDays($deadline);
-                $passedDays = $createdAt->diffInDays(now());
-                $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
-                if ($percentageTimePassed > 100) $percentageTimePassed = 100;
+            ->orderBy('deadline', 'asc');
 
-                return [
-                    'task_id' => $task->id,
-                    'task_title' => $task->title,
-                    'status' => $task->status,
-                    'priority' => $task->priority,
-                    'due_date' => $task->deadline?->toDateString(),
-                    'days_remaining' => now()->diffInDays($task->deadline, false),
-                    'is_overdue' => $task->deadline?->isPast() ?? false,
-                    'percentage_time_passed' => $percentageTimePassed,
-                    'project_name' => $task->team->project->title ?? null,
-                ];
-            });
+        $activeTasksPaginated = $activeTasksQuery->paginate(20);
 
-        // ─── Completed Tasks ───
-        $completedTasks = Task::where('programmer_id', $programmer->id)
+        $activeTasks = $activeTasksPaginated->map(function ($task) {
+            $createdAt = $task->created_at;
+            $deadline = $task->deadline;
+            $totalDays = $createdAt->diffInDays($deadline);
+            $passedDays = $createdAt->diffInDays(now());
+            $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
+            if ($percentageTimePassed > 100) $percentageTimePassed = 100;
+
+            return [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'project_name' => $task->team->project->title ?? null,
+                'due_date' => $task->deadline?->toDateString(),
+                'priority' => $task->priority,
+                'status' => $task->status,
+                'days_remaining' => now()->diffInDays($task->deadline, false),
+                'is_overdue' => $task->deadline?->isPast() ?? false,
+                'percentage_time_passed' => $percentageTimePassed,
+            ];
+        });
+
+        // ─── Completed Tasks (نفس شكل completedTasks) ───
+        $completedTasksQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
             ->with(['team.project'])
-            ->orderBy('completed_at', 'desc')
-            ->get()
-            ->map(function ($task) {
-                return [
-                    'task_id' => $task->id,
-                    'task_title' => $task->title,
-                    'status' => $task->status,
-                    'completion_date' => $task->completed_at 
-                        ? $task->completed_at->toDateString() 
-                        : $task->updated_at->toDateString(),
-                    'estimated_hours' => $task->estimated_hours,
-                    'actual_hours' => $task->actual_hours,
-                    'project_name' => $task->team->project->title ?? null,
-                ];
-            });
+            ->orderBy('completed_at', 'desc');
 
-        // ─── Stats ───
-        $totalActive = $activeTasks->count();
-        $totalCompleted = $completedTasks->count();
-        $totalTasks = $totalActive + $totalCompleted;
+        $completedTasksPaginated = $completedTasksQuery->paginate(20);
 
-        // نسبة الإنجاز
-        $completionRate = $totalTasks > 0 
-            ? round(($totalCompleted / $totalTasks) * 100) 
-            : 0;
+        $completedTasks = $completedTasksPaginated->map(function ($task) {
+            return [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'completion_date' => $task->completed_at 
+                    ? $task->completed_at->toDateString() 
+                    : $task->updated_at->toDateString(),
+                'project_name' => $task->team->project->title ?? null,
+                'estimated_hours' => $task->estimated_hours,
+                'actual_hours' => $task->actual_hours,
+            ];
+        });
 
         return response()->json([
             'success' => true,
             'data' => [
-                'project_id' => (int) $projectId,
-                'project_name' => $team->project->title ?? null,
-                'team_name' => $team->name,
-                'statistics' => [
-                    'total_tasks' => $totalTasks,
-                    'active_tasks_count' => $totalActive,
-                    'completed_tasks_count' => $totalCompleted,
-                    'completion_rate_percentage' => $completionRate,
-                ],
                 'active_tasks' => $activeTasks,
                 'completed_tasks' => $completedTasks,
             ],
