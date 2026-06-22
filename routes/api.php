@@ -112,8 +112,6 @@ Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
     // 1. كل المشاريع
     Route::get('/', [ProjectController::class, 'myProjects']);
     
-    // 2. تفاصيل مشروع
-    Route::get('/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
     
     // 3. تاسكات المشروع (الجديد)
     Route::get('/{projectId}/tasks', [TaskController::class, 'getProjectTasks']);
@@ -141,6 +139,7 @@ Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
     
 });
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
     Route::get('/projects/{projectId}/tasks', [TaskController::class, 'getProjectTasks']);
     Route::get('/invitations', [TeamController::class, 'getAllMyInvitations']);
     Route::get('/invitations/{invitationId}/details', [TeamController::class, 'getInvitationDetails']);
