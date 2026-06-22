@@ -547,21 +547,48 @@ class TeamController extends Controller
         }
     }
 
-    public function getTeamMembersList($teamId)
-    {
-        try {
-            $team = Team::with('activeMembers.programmer.user')->find($teamId);
-            if (! $team) return response()->json(['success' => false, 'message' => 'Team not found'], 404);
-            $members = $team->activeMembers->map(function ($member) {
-                $prog = $member->programmer;
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url ?: null];
-            });
-            return response()->json(['success' => true, 'data' => $members]);
-        } catch (\Exception $e) {
-            Log::error('Error fetching team members list: '.$e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to fetch team members'], 500);
+   /**
+ * عرض أعضاء الفريق باستخدام معرف المشروع (بدلاً من معرف الفريق)
+ * الراوت: GET /api/teams/{projectId}/members-list
+ */
+public function getTeamMembersList($projectId)
+{
+    try {
+        // جلب الفريق المرتبط بهذا المشروع (يفترض وجود فريق واحد لكل مشروع)
+        $team = Team::with('activeMembers.programmer.user')
+            ->where('project_id', $projectId)
+            ->first();
+
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No team found for this project'
+            ], 404);
         }
+
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'programmer_id' => $prog->id,
+                'name' => $prog->user->full_name,
+                'track' => $prog->track ?? 'general',
+                'avatar_url' => $prog->avatar_url ?: null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $members
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching team members list: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch team members'
+        ], 500);
     }
+}
 
     public function getTeamMembersWithRatings($teamId)
     {
