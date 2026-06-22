@@ -332,75 +332,47 @@ public function softDeleteAccount()
             ]
         ]);
     }
-
 public function updateProfile(Request $request)
 {
     $user = auth()->user();
-    $programmer = $user->programmer;
-
-    // Log all request data for debugging
-    Log::info('Profile update request', [
-        'all_data' => $request->all(),
-        'has_user_name' => $request->has('user_name'),
-        'has_bio' => $request->has('bio'),
-        'has_track' => $request->has('track'),
-        'has_full_name' => $request->has('full_name'),
-        'has_avatar' => $request->hasFile('avatar'),
-        'content_type' => $request->header('Content-Type'),
+    
+    // Validate the input
+    $validated = $request->validate([
+        'user_name' => 'nullable|string|unique:programmers,user_name,' . $user->programmer->id,
+        'full_name' => 'nullable|string',
+        'bio' => 'nullable|string',
+        'track' => 'nullable|string',
+        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
     ]);
 
-    // Validate ALL fields that were sent
-    $rules = [
-        'full_name' => 'sometimes|string|max:255',
-        'bio' => 'sometimes|string|max:1000',
-        'track' => 'sometimes|string|max:100',
-        'user_name' => 'sometimes|string|max:255|unique:programmers,user_name,' . ($programmer ? $programmer->id : 'NULL'),
-        'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048',
-    ];
+    // Update the user record
+    $user->update([
+        'full_name' => $validated['full_name'] ?? $user->full_name,
+    ]);
 
-    $validated = $request->validate($rules);
-
-    // Log validated data
-    Log::info('Profile update validated', ['validated' => $validated]);
-
-    // Update user
-    if ($request->has('full_name')) {
-        $user->update(['full_name' => $validated['full_name']]);
-    }
-
+    // Get or create the programmer record (should only get, never create)
+    $programmer = $user->programmer;
+    
     if (!$programmer) {
         $programmer = Programmer::create(['user_id' => $user->id]);
     }
 
-    // Update programmer - ONLY fields that were sent
-    $updateData = [];
-    if ($request->has('user_name')) $updateData['user_name'] = $validated['user_name'];
-    if ($request->has('bio')) $updateData['bio'] = $validated['bio'];
-    if ($request->has('track')) $updateData['track'] = $validated['track'];
-    
-    // Log update data
-    Log::info('Profile update data', ['updateData' => $updateData]);
+    // Update the programmer record
+    $programmer->update([
+        'user_name' => $validated['user_name'] ?? $programmer->user_name,
+        'bio' => $validated['bio'] ?? $programmer->bio,
+        'track' => $validated['track'] ?? $programmer->track,
+    ]);
 
-    if (!empty($updateData)) {
-        $result = $programmer->update($updateData);
-        Log::info('Profile update result', ['result' => $result]);
-    }
-
-    // Handle avatar
+    // Handle avatar upload
     if ($request->hasFile('avatar')) {
-        if ($programmer->avatar_url && Storage::disk('public')->exists($programmer->avatar_url)) {
-            Storage::disk('public')->delete($programmer->avatar_url);
-        }
         $path = $request->file('avatar')->store('avatars', 'public');
         $programmer->update(['avatar_url' => $path]);
     }
 
-    // Refresh
-    $programmer->refresh();
-    $user->refresh();
-
     return response()->json([
         'success' => true,
+        'message' => 'Profile updated successfully',
         'data' => [
             'id' => $programmer->id,
             'user_name' => $programmer->user_name,
@@ -412,7 +384,6 @@ public function updateProfile(Request $request)
         ]
     ]);
 }
-
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
     public function projectDetails($projectId)
     {
