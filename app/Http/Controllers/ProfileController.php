@@ -462,7 +462,7 @@ public function updateProfile(Request $request)
                 'email' => $user->email,
                 'bio' => $programmer->bio,
                 'track' => $programmer->track,
-                'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+                'avatar_url' => $programmer->avatar_url ?: null,
             ]
         ]);
     } catch (\Exception $e) {
