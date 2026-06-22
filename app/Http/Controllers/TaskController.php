@@ -729,7 +729,7 @@ class TaskController extends Controller
             ], 500);
         }
     }
-  public function getProjectTasks(Request $request, $projectId)
+public function getProjectTasks(Request $request, $projectId)
 {
     try {
         $user = Auth::user();
@@ -742,7 +742,7 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // التحقق من أن المبرمج عضو في المشروع
+        // التحقق إن المبرمج عضو في المشروع
         $team = \App\Models\Team::where('project_id', $projectId)
             ->whereHas('activeMembers', function ($q) use ($programmer) {
                 $q->where('programmer_id', $programmer->id);
@@ -756,85 +756,70 @@ class TaskController extends Controller
             ], 403);
         }
 
-        $perPage = (int) $request->get('per_page', 10);
-
-        // ============================================================
-        // 1. ACTIVE TASKS (todo, in_progress, review)
-        // ============================================================
-        $activeQuery = Task::where('programmer_id', $programmer->id)
+        // ─── Active Tasks (todo, in_progress, review) ───
+        $activeTasks = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'review'])
-            ->orderBy('deadline', 'asc');
+            ->with(['team.project'])
+            ->orderBy('deadline', 'asc')
+            ->get()
+            ->map(function ($task) {
+                $createdAt = $task->created_at;
+                $deadline = $task->deadline;
+                $totalDays = $createdAt->diffInDays($deadline);
+                $passedDays = $createdAt->diffInDays(now());
+                $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
+                if ($percentageTimePassed > 100) $percentageTimePassed = 100;
 
-        $activePaginator = $activeQuery->paginate($perPage);
+                return [
+                    'task_id' => $task->id,
+                    'task_title' => $task->title,
+                    'project_name' => $task->team->project->title ?? null,
+                    'due_date' => $task->deadline?->toDateString(),
+                    'priority' => $task->priority,
+                    'status' => $task->status,
+                    'days_remaining' => now()->diffInDays($task->deadline, false),
+                    'is_overdue' => $task->deadline?->isPast() ?? false,
+                    'percentage_time_passed' => $percentageTimePassed,
+                ];
+            });
 
-        $activeTasks = $activePaginator->map(function ($task) {
-            $createdAt = $task->created_at;
-            $deadline = $task->deadline;
-            $totalDays = $createdAt->diffInDays($deadline);
-            $passedDays = $createdAt->diffInDays(now());
-            $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
-            if ($percentageTimePassed > 100) $percentageTimePassed = 100;
-
-            return [
-                'task_id' => $task->id,
-                'task_title' => $task->title,
-                'project_name' => $task->team->project->title ?? null,
-                'due_date' => $task->deadline?->toDateString(),
-                'priority' => $task->priority,
-                'status' => $task->status,
-                'days_remaining' => now()->diffInDays($task->deadline, false),
-                'is_overdue' => $task->deadline?->isPast() ?? false,
-                'percentage_time_passed' => $percentageTimePassed,
-            ];
-        })->values();
-
-        // ============================================================
-        // 2. COMPLETED TASKS (done)
-        // ============================================================
-        $completedQuery = Task::where('programmer_id', $programmer->id)
+        // ─── Completed Tasks (done) ───
+        $completedTasks = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
-            ->orderBy('completed_at', 'desc');
+            ->with(['team.project'])
+            ->orderBy('completed_at', 'desc')
+            ->get()
+            ->map(function ($task) {
+                return [
+                    'task_id' => $task->id,
+                    'task_title' => $task->title,
+                    'completion_date' => $task->completed_at 
+                        ? $task->completed_at->toDateString() 
+                        : $task->updated_at->toDateString(),
+                    'project_name' => $task->team->project->title ?? null,
+                    'estimated_hours' => $task->estimated_hours,
+                    'actual_hours' => $task->actual_hours,
+                ];
+            });
 
-        $completedPaginator = $completedQuery->paginate($perPage);
-
-        $completedTasks = $completedPaginator->map(function ($task) {
-            return [
-                'task_id' => $task->id,
-                'task_title' => $task->title,
-                'completion_date' => $task->completed_at ? $task->completed_at->toDateString() : $task->updated_at->toDateString(),
-                'project_name' => $task->team->project->title ?? null,
-                'estimated_hours' => $task->estimated_hours,
-                'actual_hours' => $task->actual_hours,
-            ];
-        })->values();
-
-        // ============================================================
-        // 3. الرد النهائي (نظيف جداً)
-        // ============================================================
         return response()->json([
             'success' => true,
             'data' => [
-                'active_tasks' => [
-                    'data' => $activeTasks,
-                    'total' => $activePaginator->total(),
-                    'current_page' => $activePaginator->currentPage(),
-                    'last_page' => $activePaginator->lastPage(),
-                ],
-                'completed_tasks' => [
-                    'data' => $completedTasks,
-                    'total' => $completedPaginator->total(),
-                    'current_page' => $completedPaginator->currentPage(),
-                    'last_page' => $completedPaginator->lastPage(),
-                ],
+                'active_tasks' => $activeTasks,
+                'completed_tasks' => $completedTasks,
             ],
             'message' => 'Project tasks retrieved successfully',
         ]);
 
     } catch (\Exception $e) {
         Log::error('Error fetching project tasks: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to fetch project tasks'], 500);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch project tasks',
+        ], 500);
     }
 }
 }
