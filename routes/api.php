@@ -190,8 +190,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Projects related (authenticated)
     Route::get('/my-projects', [ProjectController::class, 'myProjects']);
-    Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
-    Route::get('/projects/{projectId}/tasks', [ProjectController::class, 'projectTasks']);
+    // Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
+    // Route::get('/projects/{projectId}/tasks', [ProjectController::class, 'projectTasks']);
     Route::get('/users/{userId}/projects', [ProjectController::class, 'getUserProjects']);
     Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
 
