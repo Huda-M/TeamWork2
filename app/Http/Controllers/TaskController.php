@@ -759,7 +759,7 @@ public function getProjectTasks(Request $request, $projectId)
         // ─── Active Tasks (todo, in_progress, review) ───
         $activeTasks = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
-            ->whereIn('status', ['todo', 'in_progress', 'review'])
+            ->whereIn('status', ['todo', 'in_progress', 'active'])
             ->with(['team.project'])
             ->orderBy('deadline', 'asc')
             ->get()
