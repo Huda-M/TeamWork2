@@ -681,30 +681,56 @@ class ProjectController extends Controller
 
     $perPage = (int) $request->get('per_page', 10);
     $page = (int) $request->get('page', 1);
-    $statusFilter = $request->query('status'); // 'ongoing' أو 'completed'
+    $statusFilter = $request->query('status');
 
-    // جلب كل مشاريع المبرمج عبر الفرق
-    $allProjects = Project::whereHas('teams.activeMembers', function($q) use ($programmer) {
-        $q->where('programmer_id', $programmer->id);
-    })->with(['teams.activeMembers.programmer.user', 'teams.tasks'])->get();
+    // ─── جلب المشاريع مع الفرق والأعضاء والمهام ───
+    $allProjects = Project::whereHas('teams', function($q) use ($programmer) {
+            $q->whereHas('activeMembers', function($sub) use ($programmer) {
+                $sub->where('programmer_id', $programmer->id);
+            });
+        })
+        ->with([
+            'teams' => function($q) {
+                $q->with([
+                    'activeMembers.programmer.user',
+                    'tasks'
+                ]);
+            }
+        ])
+        ->get();
 
     $ongoingProjects = [];
     $completedProjects = [];
 
     foreach ($allProjects as $project) {
-        // حساب تقدم المبرمج في هذا المشروع
+        // ─── حساب تقدم المبرمج ───
         $myTasks = $project->teams->flatMap->tasks->where('programmer_id', $programmer->id);
         $completedMyTasks = $myTasks->where('status', 'done')->count();
-        $myCompletion = $myTasks->isEmpty() ? 0 : round(($completedMyTasks / $myTasks->count()) * 100);
+        $totalMyTasks = $myTasks->count();
+        $myCompletion = $totalMyTasks > 0 ? round(($completedMyTasks / $totalMyTasks) * 100) : 0;
 
-        // ─── Your Team (لو أنت الليدر) ───
-        $yourTeam = null;
+        // ─── Check Leader + Your Team ───
         $isLeader = false;
-        
+        $yourTeam = null;
+
         foreach ($project->teams as $team) {
-            // Check if programmer is leader of this team
-            if ($team->leader_id === $programmer->id || $team->created_by === $programmer->id) {
+            // ✅ Check 1: created_by (اللي عمل التيم)
+            // ✅ Check 2: leader_id (اللي هو الليدر الحالي)
+            // ✅ Check 3: isLeader() method لو موجود
+            
+            $teamCreatedBy = $team->created_by;
+            $teamLeaderId = $team->leader_id ?? null;
+            $progId = $programmer->id;
+
+            $isTeamLeader = (
+                $teamCreatedBy == $progId || 
+                $teamLeaderId == $progId ||
+                (method_exists($team, 'isLeader') && $team->isLeader($progId))
+            );
+
+            if ($isTeamLeader) {
                 $isLeader = true;
+
                 $yourTeam = [
                     'team_id' => $team->id,
                     'team_name' => $team->name,
@@ -713,17 +739,21 @@ class ProjectController extends Controller
                         $prog = $member->programmer;
                         return [
                             'programmer_id' => $prog->id,
-                            'name' => $prog->user->full_name,
-                            'avatar_url' => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
-                            'track' => $prog->track,
-                            'role' => $member->role,
+                            'name' => $prog->user->full_name ?? 'Unknown',
+                            'avatar_url' => $prog->avatar_url 
+                                ? Storage::disk('public')->url($prog->avatar_url) 
+                                : null,
+                            'track' => $prog->track ?? 'general',
+                            'role' => $member->role ?? 'member',
                         ];
                     }),
-                    'github_url' => $team->github_url,
+                    'github_url' => $team->github_url ?? null,
                     'tasks_count' => $team->tasks->count(),
                     'completed_tasks_count' => $team->tasks->where('status', 'done')->count(),
                 ];
-                break; // Exit loop once we find the leader's team
+
+                // Exit loop — we found the leader's team
+                break;
             }
         }
 
@@ -734,37 +764,36 @@ class ProjectController extends Controller
             'category' => $project->category_name,
             'status' => $project->status,
             'estimated_duration_days' => $project->estimated_duration_days,
-            'expected_end_date' => $project->expected_end_date->toDateString(),
-            'project_completion_percentage' => $project->completion_percentage,
+            'expected_end_date' => $project->expected_end_date?->toDateString(),
+            'project_completion_percentage' => $project->completion_percentage ?? 0,
             'my_completion_percentage' => $myCompletion,
             'my_specialization' => $programmer->track ?? 'general',
-            'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
+            'image_url' => $project->image_url 
+                ? Storage::disk('public')->url($project->image_url) 
+                : null,
             'is_leader' => $isLeader,
-            'your_team' => $yourTeam, // null if not leader
+            'your_team' => $yourTeam,
         ];
 
-        if ($project->status === 'ongoing') {
+        if ($project->status === 'ongoing' || $project->status === 'active') {
             $ongoingProjects[] = $projectData;
         } else {
-            $projectData['completion_date'] = $project->updated_at->toDateString();
+            $projectData['completion_date'] = $project->updated_at?->toDateString();
             $completedProjects[] = $projectData;
         }
     }
 
-    // الرد حسب الفلتر
-    if ($statusFilter === 'ongoing') {
-        $paginated = $this->paginateCollection(collect($ongoingProjects), $perPage, $page);
-        return response()->json(['success' => true, 'data' => $paginated]);
-    } 
-    elseif ($statusFilter === 'completed') {
-        $paginated = $this->paginateCollection(collect($completedProjects), $perPage, $page);
-        return response()->json(['success' => true, 'data' => $paginated]);
-    } 
-    else {
-        $allProjectsList = array_merge($ongoingProjects, $completedProjects);
-        $paginated = $this->paginateCollection(collect($allProjectsList), $perPage, $page);
-        return response()->json(['success' => true, 'data' => $paginated]);
-    }
+    // ─── Pagination + Response ───
+    $collection = $statusFilter === 'ongoing' || $statusFilter === 'active'
+        ? collect($ongoingProjects)
+        : ($statusFilter === 'completed' ? collect($completedProjects) : collect(array_merge($ongoingProjects, $completedProjects)));
+
+    $paginated = $this->paginateCollection($collection, $perPage, $page);
+
+    return response()->json([
+        'success' => true,
+        'data' => $paginated
+    ]);
 }
 
     private function extractSpecializationFromSkills($programmer)
