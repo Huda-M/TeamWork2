@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserAuth;
 use App\Models\Programmer;
-use App\Models\Company; // تأكد من وجود موديل Company
+use App\Models\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +22,8 @@ class SocialAuthController extends Controller
     public function redirectToProvider($provider)
     {
         $this->validateProvider($provider);
-        return Socialite::driver($provider)->redirect();
+        // ✅ إضافة stateless() لأننا نستخدم API Routes بدون جلسات
+        return Socialite::driver($provider)->stateless()->redirect();
     }
 
     /**
@@ -32,10 +33,13 @@ class SocialAuthController extends Controller
     {
         try {
             $this->validateProvider($provider);
-            $socialUser = Socialite::driver($provider)->user();
+            // ✅ إضافة stateless() هنا أيضاً
+            $socialUser = Socialite::driver($provider)->stateless()->user();
         } catch (\Exception $e) {
             \Log::error("Social auth error for {$provider}: " . $e->getMessage());
-            return response()->json(['error' => 'Invalid credentials'], 401);
+            // في حالة الخطأ، يمكن إعادة توجيه المستخدم إلى صفحة تسجيل الدخول مع رسالة خطأ
+            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            return redirect($frontendUrl . '/login?error=oauth_failed');
         }
 
         DB::beginTransaction();
@@ -43,9 +47,7 @@ class SocialAuthController extends Controller
             // البحث عن مستخدم بنفس البريد الإلكتروني
             $user = User::where('email', $socialUser->getEmail())->first();
 
-            // ============================================================
-            // 1. تحديد الدور بناءً على المزود (Provider)
-            // ============================================================
+            // تحديد الدور بناءً على المزود (Provider)
             $role = $this->getRoleByProvider($provider);
 
             if (!$user) {
@@ -58,9 +60,7 @@ class SocialAuthController extends Controller
                     'email_verified_at' => now(),
                 ]);
 
-                // ============================================================
-                // 2. إنشاء الملف الشخصي المناسب حسب الدور
-                // ============================================================
+                // إنشاء الملف الشخصي المناسب حسب الدور
                 if ($role === 'programmer') {
                     $user->programmer()->create([
                         'user_name' => $this->generateUniqueUsername($socialUser, $provider),
@@ -84,22 +84,12 @@ class SocialAuthController extends Controller
                         'profile_completed' => false,
                     ]);
                 }
-
             } else {
-                // ============================================================
-                // 3. إذا كان المستخدم موجوداً: نتحقق من تطابق الدور
-                // ============================================================
-                // إذا كان المستخدم له دور مختلف عن المزود الحالي، يمكننا تحديثه أو تركه
-                // هنا نترك الدور الحالي كما هو (لا نغيره)
-                $programmer = $user->programmer;
-                if ($programmer && !$programmer->avatar_url && $socialUser->getAvatar()) {
-                    $programmer->update(['avatar_url' => $socialUser->getAvatar()]);
-                }
-
-                // إذا كان المستخدم شركة، نقوم بتحديث الشعار إذا لم يكن موجوداً
-                $company = $user->company;
-                if ($company && !$company->logo && $socialUser->getAvatar()) {
-                    $company->update(['logo' => $socialUser->getAvatar()]);
+                // تحديث الصورة الرمزية للمستخدم الموجود إذا كانت فارغة
+                if ($user->role === 'programmer' && $user->programmer && !$user->programmer->avatar_url && $socialUser->getAvatar()) {
+                    $user->programmer->update(['avatar_url' => $socialUser->getAvatar()]);
+                } elseif ($user->role === 'company' && $user->company && !$user->company->logo && $socialUser->getAvatar()) {
+                    $user->company->update(['logo' => $socialUser->getAvatar()]);
                 }
             }
 
@@ -140,7 +130,8 @@ class SocialAuthController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error("Social auth transaction error: " . $e->getMessage());
-            return response()->json(['error' => 'Authentication failed'], 500);
+            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            return redirect($frontendUrl . '/login?error=auth_failed');
         }
     }
 
@@ -152,13 +143,11 @@ class SocialAuthController extends Controller
         $roleMapping = [
             'github'   => 'programmer',
             'facebook' => 'company',
-            'google'   => 'programmer', // يمكنك تغييره إلى 'company' أو تركه اختياري
+            'google'   => 'programmer', // يمكنك تغييره حسب الحاجة
         ];
 
         return $roleMapping[$provider] ?? 'programmer';
     }
-
-
 
     /**
      * إكمال بيانات التسجيل عبر السوشيال ميديا
@@ -176,7 +165,6 @@ class SocialAuthController extends Controller
                 ], 404);
             }
 
-            // التحقق من البيانات المدخلة
             $validated = $request->validate([
                 'user_name' => 'required|string|max:255|unique:programmers,user_name,' . $programmer->id,
                 'phone' => 'required|string|max:20',
@@ -184,7 +172,6 @@ class SocialAuthController extends Controller
                 'bio' => 'nullable|string|max:1000',
             ]);
 
-            // تحديث بيانات البرمجة
             $programmer->update($validated);
             $programmer->profile_completed = true;
             $programmer->save();
@@ -253,7 +240,6 @@ class SocialAuthController extends Controller
      */
     private function generateUniqueUsername($socialUser, $provider)
     {
-        // حاول استخدام اسم المستخدم من السوشيال ميديا
         $baseUsername = $socialUser->getNickname() ?? 
                        explode('@', $socialUser->getEmail())[0] ?? 
                        $provider . '_' . Str::random(5);
@@ -261,7 +247,6 @@ class SocialAuthController extends Controller
         $username = Str::slug($baseUsername);
         $counter = 1;
 
-        // تحقق من أن اسم المستخدم فريد
         while (Programmer::where('user_name', $username)->exists()) {
             $username = Str::slug($baseUsername) . '_' . $counter;
             $counter++;
@@ -314,4 +299,3 @@ class SocialAuthController extends Controller
         ]);
     }
 }
-
