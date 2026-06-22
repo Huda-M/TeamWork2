@@ -756,18 +756,16 @@ class TaskController extends Controller
             ], 403);
         }
 
-        // ──────────────────────────────────────────────
-        // 1. ACTIVE TASKS (todo, in_progress, review)
-        // ──────────────────────────────────────────────
-        $activeTasksQuery = Task::where('programmer_id', $programmer->id)
+        $perPage = $request->get('per_page', 20);
+
+        // --- Active Tasks (todo, in_progress, review) ---
+        $activeQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'review'])
-            ->with(['team.project'])
             ->orderBy('deadline', 'asc');
 
-        $activeTasks = $activeTasksQuery->get(); // لا نستخدم paginate هنا
-
-        $activeTasksFormatted = $activeTasks->map(function ($task) {
+        $activePaginator = $activeQuery->paginate($perPage);
+        $activeTasks = $activePaginator->map(function ($task) {
             $createdAt = $task->created_at;
             $deadline = $task->deadline;
             $totalDays = $createdAt->diffInDays($deadline);
@@ -788,51 +786,41 @@ class TaskController extends Controller
             ];
         });
 
-        // ──────────────────────────────────────────────
-        // 2. COMPLETED TASKS (done)
-        // ──────────────────────────────────────────────
-        $completedTasksQuery = Task::where('programmer_id', $programmer->id)
+        // --- Completed Tasks (done) ---
+        $completedQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
-            ->with(['team.project'])
             ->orderBy('completed_at', 'desc');
 
-        $completedTasks = $completedTasksQuery->get();
-
-        $completedTasksFormatted = $completedTasks->map(function ($task) {
+        $completedPaginator = $completedQuery->paginate($perPage);
+        $completedTasks = $completedPaginator->map(function ($task) {
             return [
                 'task_id' => $task->id,
                 'task_title' => $task->title,
-                'completion_date' => $task->completed_at
-                    ? $task->completed_at->toDateString()
-                    : $task->updated_at->toDateString(),
+                'completion_date' => $task->completed_at ? $task->completed_at->toDateString() : $task->updated_at->toDateString(),
                 'project_name' => $task->team->project->title ?? null,
                 'estimated_hours' => $task->estimated_hours,
                 'actual_hours' => $task->actual_hours,
             ];
         });
 
-        // ──────────────────────────────────────────────
-        // 3. الرد النهائي (بدون pagination metadata)
-        // ──────────────────────────────────────────────
         return response()->json([
             'success' => true,
             'data' => [
-                'active_tasks' => $activeTasksFormatted,
-                'completed_tasks' => $completedTasksFormatted,
-                'total_active' => $activeTasksFormatted->count(),
-                'total_completed' => $completedTasksFormatted->count(),
+                'active_tasks' => $activeTasks,
+                'active_total' => $activePaginator->total(),
+                'active_current_page' => $activePaginator->currentPage(),
+                'active_last_page' => $activePaginator->lastPage(),
+                'completed_tasks' => $completedTasks,
+                'completed_current_page' => $completedPaginator->currentPage(),
+                'completed_last_page' => $completedPaginator->lastPage(),
             ],
             'message' => 'Project tasks retrieved successfully',
         ]);
 
     } catch (\Exception $e) {
         Log::error('Error fetching project tasks: ' . $e->getMessage());
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to fetch project tasks',
-        ], 500);
+        return response()->json(['success' => false, 'message' => 'Failed to fetch project tasks'], 500);
     }
 }
 }
