@@ -346,34 +346,44 @@ public function updateProfile(Request $request)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // -- تسجيل البيانات الواردة --
-        Log::info('Profile update request received', [
-            'programmer_id' => $programmer->id,
-            'request_all' => $request->all(),
+        // -- تسجيل كل ما يصل من الطلب --
+        Log::info('Profile update - full request', [
+            'all_input' => $request->all(),
+            'all_files' => $request->allFiles(),
+            'method' => $request->method(),
+            'content_type' => $request->header('Content-Type'),
         ]);
 
         // -- بناء مصفوفة التحديث --
         $updateData = [];
 
-        if ($request->has('full_name')) {
-            $updateData['full_name'] = $request->full_name;
+        // الحصول على القيم: نفضل `input` عن `has` لأنه يتعامل مع القيم الفارغة بشكل أفضل
+        $fullName = $request->input('full_name');
+        if ($fullName !== null) {
+            $updateData['full_name'] = $fullName;
         }
 
-        if ($request->has('email')) {
-            $updateData['email'] = $request->email;
+        $email = $request->input('email');
+        if ($email !== null) {
+            $updateData['email'] = $email;
         }
 
-        if ($request->has('user_name')) {
-            $updateData['user_name'] = $request->user_name;
+        $userName = $request->input('user_name');
+        if ($userName !== null) {
+            $updateData['user_name'] = $userName;
         }
 
-        if ($request->has('bio')) {
-            $updateData['bio'] = $request->bio;
+        $bio = $request->input('bio');
+        if ($bio !== null) {
+            $updateData['bio'] = $bio;
         }
 
-        if ($request->has('track')) {
-            $updateData['track'] = $request->track;
+        $track = $request->input('track');
+        if ($track !== null) {
+            $updateData['track'] = $track;
         }
+
+        Log::info('Profile update - data to update', $updateData);
 
         // -- رفع الصورة --
         if ($request->hasFile('avatar')) {
@@ -389,6 +399,7 @@ public function updateProfile(Request $request)
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
                 $path = $file->storeAs('avatars', $fileName, 'public');
                 $updateData['avatar_url'] = $path;
+                Log::info('Avatar uploaded', ['path' => $path]);
             } else {
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
             }
@@ -396,7 +407,11 @@ public function updateProfile(Request $request)
 
         // -- التحقق من وجود بيانات للتحديث --
         if (empty($updateData)) {
-            return response()->json(['success' => true, 'message' => 'No changes detected', 'data' => $programmer], 200);
+            return response()->json([
+                'success' => true,
+                'message' => 'No changes detected',
+                'data' => $programmer
+            ], 200);
         }
 
         // -- تحديث الـ User أولاً (لو فيه تغييرات على full_name أو email) --
