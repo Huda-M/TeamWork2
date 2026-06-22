@@ -668,72 +668,104 @@ class ProjectController extends Controller
     }
 
     public function myProjects(Request $request)
-    {
-        $user = Auth::user();
-        if (!$user || $user->role !== 'programmer') {
-            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-        }
+{
+    $user = Auth::user();
+    if (!$user || $user->role !== 'programmer') {
+        return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+    }
 
-        $programmer = $user->programmer;
-        if (!$programmer) {
-            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-        }
+    $programmer = $user->programmer;
+    if (!$programmer) {
+        return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+    }
 
-        // إعدادات pagination (افتراضي 10 مشاريع لكل صفحة)
-        $perPage = (int) $request->get('per_page', 10);
-        $page = (int) $request->get('page', 1);
-        $statusFilter = $request->query('status'); // 'ongoing' أو 'completed'
+    $perPage = (int) $request->get('per_page', 10);
+    $page = (int) $request->get('page', 1);
+    $statusFilter = $request->query('status'); // 'ongoing' أو 'completed'
 
-        // جلب كل مشاريع المبرمج عبر الفرق (بدون pagination في الاستعلام)
-        $allProjects = Project::whereHas('teams.activeMembers', function($q) use ($programmer) {
-            $q->where('programmer_id', $programmer->id);
-        })->with(['teams.tasks'])->get();
+    // جلب كل مشاريع المبرمج عبر الفرق
+    $allProjects = Project::whereHas('teams.activeMembers', function($q) use ($programmer) {
+        $q->where('programmer_id', $programmer->id);
+    })->with(['teams.activeMembers.programmer.user', 'teams.tasks'])->get();
 
-        $ongoingProjects = [];
-        $completedProjects = [];
+    $ongoingProjects = [];
+    $completedProjects = [];
 
-        foreach ($allProjects as $project) {
-            // حساب تقدم المبرمج في هذا المشروع
-            $myTasks = $project->teams->flatMap->tasks->where('programmer_id', $programmer->id);
-            $completedMyTasks = $myTasks->where('status', 'done')->count();
-            $myCompletion = $myTasks->isEmpty() ? 0 : round(($completedMyTasks / $myTasks->count()) * 100);
+    foreach ($allProjects as $project) {
+        // حساب تقدم المبرمج في هذا المشروع
+        $myTasks = $project->teams->flatMap->tasks->where('programmer_id', $programmer->id);
+        $completedMyTasks = $myTasks->where('status', 'done')->count();
+        $myCompletion = $myTasks->isEmpty() ? 0 : round(($completedMyTasks / $myTasks->count()) * 100);
 
-            $projectData = [
-                'id' => $project->id,
-                'title' => $project->title,
-                'description' => $project->description,
-                'category' => $project->category_name,
-                'estimated_duration_days' => $project->estimated_duration_days,
-                'expected_end_date' => $project->expected_end_date->toDateString(),
-                'project_completion_percentage' => $project->completion_percentage,
-                'my_completion_percentage' => $myCompletion,
-                'my_specialization' => $programmer->track ?? 'general',
-                'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
-            ];
-
-            if ($project->status === 'ongoing') {
-                $ongoingProjects[] = $projectData;
-            } else {
-                $projectData['completion_date'] = $project->updated_at->toDateString();
-                $completedProjects[] = $projectData;
+        // ─── Your Team (لو أنت الليدر) ───
+        $yourTeam = null;
+        $isLeader = false;
+        
+        foreach ($project->teams as $team) {
+            // Check if programmer is leader of this team
+            if ($team->leader_id === $programmer->id || $team->created_by === $programmer->id) {
+                $isLeader = true;
+                $yourTeam = [
+                    'team_id' => $team->id,
+                    'team_name' => $team->name,
+                    'team_size' => $team->activeMembers->count(),
+                    'members' => $team->activeMembers->map(function($member) {
+                        $prog = $member->programmer;
+                        return [
+                            'programmer_id' => $prog->id,
+                            'name' => $prog->user->full_name,
+                            'avatar_url' => $prog->avatar_url ? Storage::disk('public')->url($prog->avatar_url) : null,
+                            'track' => $prog->track,
+                            'role' => $member->role,
+                        ];
+                    }),
+                    'github_url' => $team->github_url,
+                    'tasks_count' => $team->tasks->count(),
+                    'completed_tasks_count' => $team->tasks->where('status', 'done')->count(),
+                ];
+                break; // Exit loop once we find the leader's team
             }
         }
 
-        // الرد حسب الفلتر مع تطبيق pagination
-        if ($statusFilter === 'ongoing') {
-            $paginated = $this->paginateCollection(collect($ongoingProjects), $perPage, $page);
-            return response()->json(['success' => true, 'data' => $paginated]);
-        } 
-        elseif ($statusFilter === 'completed') {
-            $paginated = $this->paginateCollection(collect($completedProjects), $perPage, $page);
-            return response()->json(['success' => true, 'data' => $paginated]);
-        } 
-        else {
-            $allProjectsList = array_merge($ongoingProjects, $completedProjects);
-            $paginated = $this->paginateCollection(collect($allProjectsList), $perPage, $page);
-            return response()->json(['success' => true, 'data' => $paginated]);
+        $projectData = [
+            'id' => $project->id,
+            'title' => $project->title,
+            'description' => $project->description,
+            'category' => $project->category_name,
+            'status' => $project->status,
+            'estimated_duration_days' => $project->estimated_duration_days,
+            'expected_end_date' => $project->expected_end_date->toDateString(),
+            'project_completion_percentage' => $project->completion_percentage,
+            'my_completion_percentage' => $myCompletion,
+            'my_specialization' => $programmer->track ?? 'general',
+            'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
+            'is_leader' => $isLeader,
+            'your_team' => $yourTeam, // null if not leader
+        ];
+
+        if ($project->status === 'ongoing') {
+            $ongoingProjects[] = $projectData;
+        } else {
+            $projectData['completion_date'] = $project->updated_at->toDateString();
+            $completedProjects[] = $projectData;
         }
     }
+
+    // الرد حسب الفلتر
+    if ($statusFilter === 'ongoing') {
+        $paginated = $this->paginateCollection(collect($ongoingProjects), $perPage, $page);
+        return response()->json(['success' => true, 'data' => $paginated]);
+    } 
+    elseif ($statusFilter === 'completed') {
+        $paginated = $this->paginateCollection(collect($completedProjects), $perPage, $page);
+        return response()->json(['success' => true, 'data' => $paginated]);
+    } 
+    else {
+        $allProjectsList = array_merge($ongoingProjects, $completedProjects);
+        $paginated = $this->paginateCollection(collect($allProjectsList), $perPage, $page);
+        return response()->json(['success' => true, 'data' => $paginated]);
+    }
+}
 
     private function extractSpecializationFromSkills($programmer)
     {
