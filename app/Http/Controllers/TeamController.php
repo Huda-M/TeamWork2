@@ -825,5 +825,113 @@ public function getAllMyInvitations()
         return response()->json(['success' => false, 'message' => 'Failed to fetch invitations'], 500);
     }
 }
+
+public function getProjectTeamDetails($projectId, Request $request)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب المشروع مع الفريق
+        $project = Project::with(['teams.activeMembers.programmer.user', 'teams.tasks.programmer.user'])
+            ->find($projectId);
+
+        if (!$project) {
+            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+        }
+
+        // جلب الفريق الأول (أو الفريق اللي فيه المبرمج)
+        $team = $project->teams->first(function ($t) use ($programmer) {
+            return $t->isMember($programmer->id);
+        });
+
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'You are not a member of this project'], 403);
+        }
+
+        $myTrack = $programmer->track ?? 'general';
+        $projectDescription = $project->description;
+        $githubLink = $project->github_url ?? $team->github_url ?? null;
+
+        // أعضاء الفريق
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'id' => $prog->id,
+                'name' => $prog->user->full_name,
+                'avatar_url' => $prog->avatar_url 
+                    ? Storage::disk('public')->url($prog->avatar_url) 
+                    : null,
+                'track' => $prog->track ?? 'general',
+                'role' => $member->role,
+            ];
+        });
+
+        // التاسكات
+        $tasksView = $request->query('tasks_view', 'my');
+        $tasks = [];
+
+        if ($tasksView === 'my') {
+            $tasks = $team->tasks->where('programmer_id', $programmer->id)->map(function ($task) {
+                return [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'description' => $task->description,
+                    'status' => $task->status,
+                    'due_date' => $task->deadline ? $task->deadline->toDateString() : null,
+                    'priority' => $task->priority,
+                    'created_at' => $task->created_at->toDateTimeString(),
+                ];
+            })->values();
+        } else {
+            $tasks = $team->tasks->map(function ($task) {
+                return [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'description' => $task->description,
+                    'status' => $task->status,
+                    'due_date' => $task->deadline ? $task->deadline->toDateString() : null,
+                    'priority' => $task->priority,
+                    'assigned_to' => [
+                        'id' => $task->programmer->id,
+                        'name' => $task->programmer->user->full_name,
+                        'avatar_url' => $task->programmer->avatar_url 
+                            ? Storage::disk('public')->url($task->programmer->avatar_url) 
+                            : null,
+                        'track' => $task->programmer->track ?? 'general',
+                    ],
+                    'created_at' => $task->created_at->toDateTimeString(),
+                ];
+            })->values();
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project_id' => (int) $projectId,
+                'project_name' => $project->title,
+                'team_id' => $team->id,              // ← للـ reference بس
+                'team_name' => $team->name,
+                'project_description' => $projectDescription,
+                'github_link' => $githubLink,
+                'my_track' => $myTrack,
+                'members' => $members,
+                'tasks_view' => $tasksView,
+                'tasks' => $tasks,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error in getProjectTeamDetails: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+    }
+}
 }
 
