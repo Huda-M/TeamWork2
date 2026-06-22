@@ -94,8 +94,14 @@ class TeamController extends Controller
         }
     }
 
-    public function swapLeader(Request $request, $teamId, $programmerId)
-    {
+    public function swapProjectLeader(Request $request, $projectId, $programmerId)
+{
+    $project = Project::with('teams')->findOrFail($projectId);
+    $team = $project->teams->first();
+    
+    if (!$team) {
+        return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+    }
         try {
             $user = Auth::user();
             $currentLeader = $user->programmer;
@@ -131,8 +137,14 @@ class TeamController extends Controller
         }
     }
 
-    public function softDeleteTeam($id)
-    {
+    public function softDeleteProjectTeam($projectId)
+{
+    $project = Project::with('teams')->findOrFail($projectId);
+    $team = $project->teams->first();
+    
+    if (!$team) {
+        return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+    }
         $user = Auth::user();
         $team = Team::findOrFail($id);
         $isLeader = false;
@@ -419,8 +431,14 @@ class TeamController extends Controller
         }
     }
 
-    public function updateTeam(Request $request, $id)
-    {
+    public function updateProjectTeam(Request $request, $projectId)
+{
+    $project = Project::with('teams')->findOrFail($projectId);
+    $team = $project->teams->first();
+    
+    if (!$team) {
+        return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+    }
         try {
             $user = Auth::user();
             $team = Team::findOrFail($id);
