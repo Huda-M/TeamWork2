@@ -822,4 +822,131 @@ public function getProjectTasks(Request $request, $projectId)
         ], 500);
     }
 }
+    /**
+ * @OA\Post(
+ *     path="/api/projects/{projectId}/tasks",
+ *     tags={"Projects"},
+ *     summary="Create task in project",
+ *     security={{"bearerAuth":{}}},
+ *     
+ *     @OA\Parameter(
+ *         name="projectId",
+ *         in="path",
+ *         required=true,
+ *         @OA\Schema(type="integer")
+ *     ),
+ *     
+ *     @OA\Response(
+ *         response=201,
+ *         description="Created"
+ *     ),
+ *     @OA\Response(
+ *         response=403,
+ *         description="Forbidden - not team leader"
+ *     )
+ * )
+ */
+public function storeProjectTask(StoreTaskRequest $request, $projectId)
+{
+    try {
+        $user = $request->user();
+        $programmer = $user->programmer;
+
+        // جلب المشروع والفريق
+        $project = Project::with('teams')->findOrFail($projectId);
+        
+        // جلب الفريق اللي المبرمج فيه
+        $team = $project->teams->first(function ($t) use ($programmer) {
+            return $t->isMember($programmer->id);
+        });
+
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not a member of this project',
+            ], 403);
+        }
+
+        // Check if leader
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader can create tasks',
+            ], 403);
+        }
+
+        // Check if assigned programmer is member
+        if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The assigned programmer is not a member of this team',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+
+        $validated = $request->validated();
+
+        $task = $team->tasks()->create([
+            'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'status' => $validated['status'] ?? 'todo',
+            'estimated_hours' => 0,
+            'deadline' => $validated['deadline'] ?? null,
+            'priority' => $validated['priority'] ?? 5,
+            'git_link' => $validated['git_link'] ?? null,
+            'tags' => $validated['tags'] ?? null,
+        ]);
+
+        Log::info('Task created', [
+            'task_id' => $task->id,
+            'project_id' => $projectId,
+            'team_id' => $team->id,
+            'created_by' => $programmer->id,
+        ]);
+
+        DB::commit();
+
+        $task->load(['programmer.user', 'team']);
+        $assignedUser = $task->programmer?->user;
+        
+        if ($assignedUser) {
+            if ($assignedUser->fcm_token) {
+                try {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $assignedUser->fcm_token,
+                        'New Task Assigned',
+                        "You have been assigned a new task: {$task->title}",
+                        [
+                            'task_id' => (string) $task->id,
+                            'project_id' => (string) $projectId,
+                            'type' => 'new_task_assigned',
+                        ]
+                    );
+                } catch (\Throwable $e) {
+                    Log::error('FCM notification failed: ' . $e->getMessage());
+                }
+            }
+
+            $assignedUser->notify(new TaskCreatedNotification($task));
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $task,
+            'message' => 'Task created successfully',
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error creating task: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create task: ' . $e->getMessage(),
+        ], 500);
+    }
+}
 }
