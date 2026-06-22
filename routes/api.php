@@ -139,6 +139,7 @@ Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
     
 });
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/{projectId}/tasks', [TaskController::class, 'storeProjectTask']);
     Route::post('/projects/{projectId}/evaluate-all', [TeamController::class, 'evaluateProjectTeamMembers']);
     Route::get('/projects/{projectId}/basic-details', [TeamController::class, 'getProjectBasicDetails']);
     Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
