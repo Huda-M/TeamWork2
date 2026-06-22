@@ -331,8 +331,10 @@ public function softDeleteAccount()
             ]
         ]);
     }
+
 public function updateProfile(Request $request)
 {
+    DB::beginTransaction();
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
@@ -372,6 +374,7 @@ public function updateProfile(Request $request)
 
         $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
+            DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
@@ -386,7 +389,11 @@ public function updateProfile(Request $request)
             $userUpdated = true;
         }
         if ($userUpdated) {
-            $user->save();
+            if (!$user->save()) {
+                DB::rollBack();
+                Log::error('Failed to save user profile updates');
+                return response()->json(['success' => false, 'message' => 'Failed to save user profile'], 500);
+            }
         }
 
         // Update programmers table
@@ -417,34 +424,61 @@ public function updateProfile(Request $request)
                 }
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
                 $path = $file->storeAs('avatars', $fileName, 'public');
-                $programmer->avatar_url = $path; // تخزين المسار النسبي
+                if (!$path) {
+                    DB::rollBack();
+                    Log::error('Failed to store avatar file');
+                    return response()->json(['success' => false, 'message' => 'Failed to upload avatar'], 500);
+                }
+                $programmer->avatar_url = $path;
                 $programmerUpdated = true;
             } else {
+                DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
             }
         }
 
         if ($programmerUpdated) {
-            $programmer->save();
+            if (!$programmer->save()) {
+                DB::rollBack();
+                Log::error('Failed to save programmer profile updates');
+                return response()->json(['success' => false, 'message' => 'Failed to save programmer profile'], 500);
+            }
         }
 
+        // Refresh data from database to ensure consistency
         $programmer->refresh();
         $user->refresh();
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Profile updated successfully',
-        'data' => [
-            'id' => $programmer->id,
-            'user_name' => $programmer->user_name,
-            'full_name' => $user->full_name,
-            'email' => $user->email,
-            'bio' => $programmer->bio,
-            'track' => $programmer->track,
-            'avatar_url' => $programmer->avatar_url ?: null,
-        ]
-    ]);
+        // Commit the transaction
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'data' => [
+                'id' => $programmer->id,
+                'user_name' => $programmer->user_name,
+                'full_name' => $user->full_name,
+                'email' => $user->email,
+                'bio' => $programmer->bio,
+                'track' => $programmer->track,
+                'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
+            ]
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Profile update error: ' . $e->getMessage(), [
+            'user_id' => $user->id ?? null,
+            'exception' => $e
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'An error occurred while updating your profile',
+            'error' => $e->getMessage()
+        ], 500);
+    }
 }
+
     // 8. تفاصيل المشروع (لو لسه شغال أو خلص)
     public function projectDetails($projectId)
     {
