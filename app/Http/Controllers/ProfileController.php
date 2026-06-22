@@ -350,7 +350,7 @@ public function updateProfile(Request $request)
         'full_name' => $validated['full_name'] ?? $user->full_name,
     ]);
 
-    // Get or create the programmer record (should only get, never create)
+    // Get programmer record
     $programmer = $user->programmer;
     
     if (!$programmer) {
@@ -369,6 +369,10 @@ public function updateProfile(Request $request)
         $path = $request->file('avatar')->store('avatars', 'public');
         $programmer->update(['avatar_url' => $path]);
     }
+
+    // ✅ إعادة تحميل البيانات من قاعدة البيانات
+    $programmer->refresh();
+    $user->refresh();
 
     return response()->json([
         'success' => true,
