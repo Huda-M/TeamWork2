@@ -108,6 +108,7 @@ require_once __DIR__.'/chat.routes.php';
 require_once __DIR__.'/notifications.routes.php';
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/projects/{projectId}/tasks', [TaskController::class, 'getProjectTasks']);
     Route::get('/invitations', [TeamController::class, 'getAllMyInvitations']);
     Route::get('/invitations/{invitationId}/details', [TeamController::class, 'getInvitationDetails']);
 Route::post('/teams/{team}/join-requests', [JoinRequestController::class, 'store']); 
