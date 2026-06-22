@@ -346,93 +346,40 @@ public function updateProfile(Request $request)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // سجل البيانات الواردة
-        \Log::info('Profile update request', [
-            'user_id' => $user->id,
-            'request_data' => $request->all(),
-            'current_programmer' => $programmer->toArray()
+        // -- تسجيل البيانات الواردة --
+        Log::info('Profile update request received', [
+            'programmer_id' => $programmer->id,
+            'request_all' => $request->all(),
         ]);
 
-        $rules = [
-            'full_name' => 'sometimes|required|string|max:255',
-            'bio'       => 'nullable|string|max:1000',
-            'track'     => 'nullable|string|max:100',
-            'avatar'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ];
+        // -- بناء مصفوفة التحديث --
+        $updateData = [];
 
-        // user_name validation
-        if ($request->filled('user_name')) {
-            $newUserName = $request->user_name;
-            $currentUserName = $programmer->user_name;
-            
-            if ($newUserName !== $currentUserName) {
-                $rules['user_name'] = [
-                    'required',
-                    'string',
-                    'max:255',
-                    Rule::unique('programmers', 'user_name')->ignore($programmer->id)
-                ];
-            } else {
-                $rules['user_name'] = 'sometimes|string|max:255';
-            }
+        if ($request->has('full_name')) {
+            $updateData['full_name'] = $request->full_name;
         }
 
-        // email validation
-        if ($request->filled('email')) {
-            $newEmail = $request->email;
-            $currentEmail = $user->email;
-            
-            if ($newEmail !== $currentEmail) {
-                $rules['email'] = [
-                    'required',
-                    'email',
-                    Rule::unique('users', 'email')->ignore($user->id)
-                ];
-            } else {
-                $rules['email'] = 'sometimes|email';
-            }
+        if ($request->has('email')) {
+            $updateData['email'] = $request->email;
         }
 
-        $validator = Validator::make($request->all(), $rules);
-        if ($validator->fails()) {
-            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        if ($request->has('user_name')) {
+            $updateData['user_name'] = $request->user_name;
         }
 
-        // تحديث جدول users
-        $userUpdated = false;
-        if ($request->has('full_name') && $request->full_name !== $user->full_name) {
-            $user->full_name = $request->full_name;
-            $userUpdated = true;
-        }
-        if ($request->has('email') && $request->email !== $user->email) {
-            $user->email = $request->email;
-            $userUpdated = true;
-        }
-        if ($userUpdated) {
-            $user->save();
-            \Log::info('User updated', ['user_id' => $user->id, 'new_data' => $user->toArray()]);
+        if ($request->has('bio')) {
+            $updateData['bio'] = $request->bio;
         }
 
-        // تحديث جدول programmers
-        $programmerUpdated = false;
-        if ($request->has('user_name') && $request->user_name !== $programmer->user_name) {
-            $programmer->user_name = $request->user_name;
-            $programmerUpdated = true;
-        }
-        if ($request->has('bio') && $request->bio !== $programmer->bio) {
-            $programmer->bio = $request->bio;
-            $programmerUpdated = true;
-        }
-        if ($request->has('track') && $request->track !== $programmer->track) {
-            $programmer->track = $request->track;
-            $programmerUpdated = true;
+        if ($request->has('track')) {
+            $updateData['track'] = $request->track;
         }
 
-        // رفع الصورة
+        // -- رفع الصورة --
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                // حذف الصورة القديمة
+                // حذف القديمة
                 if ($programmer->avatar_url && str_contains($programmer->avatar_url, '/storage/')) {
                     $oldPath = str_replace('/storage/', '', $programmer->avatar_url);
                     if (Storage::disk('public')->exists($oldPath)) {
@@ -441,46 +388,46 @@ public function updateProfile(Request $request)
                 }
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
                 $path = $file->storeAs('avatars', $fileName, 'public');
-                $programmer->avatar_url = $path;
-                $programmerUpdated = true;
+                $updateData['avatar_url'] = $path;
             } else {
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
             }
         }
 
-        // سجل ما إذا تم تحديث البرمجة
-        \Log::info('Programmer update status', [
-            'programmer_id' => $programmer->id,
-            'programmerUpdated' => $programmerUpdated,
-            'fields_to_update' => [
-                'user_name' => $request->user_name ?? 'not sent',
-                'bio' => $request->bio ?? 'not sent',
-                'track' => $request->track ?? 'not sent',
-            ]
-        ]);
+        // -- التحقق من وجود بيانات للتحديث --
+        if (empty($updateData)) {
+            return response()->json(['success' => true, 'message' => 'No changes detected', 'data' => $programmer], 200);
+        }
 
-        if ($programmerUpdated) {
-            $saved = $programmer->save();
-            \Log::info('Programmer save result', [
-                'programmer_id' => $programmer->id,
-                'saved' => $saved,
-                'updated_data' => $programmer->toArray()
+        // -- تحديث الـ User أولاً (لو فيه تغييرات على full_name أو email) --
+        $userUpdate = [];
+        if (isset($updateData['full_name'])) {
+            $userUpdate['full_name'] = $updateData['full_name'];
+            unset($updateData['full_name']);
+        }
+        if (isset($updateData['email'])) {
+            $userUpdate['email'] = $updateData['email'];
+            unset($updateData['email']);
+        }
+        if (!empty($userUpdate)) {
+            $user->update($userUpdate);
+            Log::info('User updated', $userUpdate);
+        }
+
+        // -- تحديث الـ Programmer (الباقي من البيانات) --
+        if (!empty($updateData)) {
+            $updated = $programmer->update($updateData);
+            Log::info('Programmer updated', [
+                'updateData' => $updateData,
+                'affected_rows' => $updated,
             ]);
         }
 
-        // إعادة تحميل البيانات من قاعدة البيانات
+        // -- إعادة تحميل البيانات --
         $programmer->refresh();
         $user->refresh();
 
-        $avatarUrl = $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null;
-
-        \Log::info('Final profile data', [
-            'programmer_id' => $programmer->id,
-            'user_name' => $programmer->user_name,
-            'bio' => $programmer->bio,
-            'track' => $programmer->track,
-        ]);
-
+        // -- إرجاع الرد --
         return response()->json([
             'success' => true,
             'message' => 'Profile updated successfully',
@@ -491,14 +438,14 @@ public function updateProfile(Request $request)
                 'email'      => $user->email,
                 'bio'        => $programmer->bio,
                 'track'      => $programmer->track,
-                'avatar_url' => $avatarUrl,
+                'avatar_url' => $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null,
             ]
         ]);
 
     } catch (\Exception $e) {
-        \Log::error('Profile update error: ' . $e->getMessage(), [
+        Log::error('Profile update error: ' . $e->getMessage(), [
             'user_id' => Auth::id(),
-            'trace' => $e->getTraceAsString(),
+            'request_data' => $request->all(),
         ]);
         return response()->json([
             'success' => false,
