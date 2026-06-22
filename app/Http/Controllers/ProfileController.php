@@ -335,7 +335,6 @@ public function softDeleteAccount()
     
 public function updateProfile(Request $request)
 {
-    
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
@@ -380,11 +379,11 @@ public function updateProfile(Request $request)
 
         // Update users table
         $userUpdated = false;
-        if ($request->has('full_name')) {
+        if ($request->filled('full_name')) {  // ← filled() بدل has()
             $user->full_name = $request->full_name;
             $userUpdated = true;
         }
-        if ($request->has('email')) {
+        if ($request->filled('email')) {
             $user->email = $request->email;
             $userUpdated = true;
         }
@@ -394,15 +393,15 @@ public function updateProfile(Request $request)
 
         // Update programmers table
         $programmerUpdated = false;
-        if ($request->has('user_name')) {
+        if ($request->filled('user_name')) {  // ← filled() بدل has()
             $programmer->user_name = $request->user_name;
             $programmerUpdated = true;
         }
-        if ($request->has('bio')) {
+        if ($request->has('bio')) {  // ← has() عشان يقبل null/empty
             $programmer->bio = $request->bio;
             $programmerUpdated = true;
         }
-        if ($request->has('track')) {
+        if ($request->has('track')) {  // ← has() عشان يقبل null/empty
             $programmer->track = $request->track;
             $programmerUpdated = true;
         }
@@ -420,7 +419,7 @@ public function updateProfile(Request $request)
                 }
                 $fileName = 'avatar_' . time() . '.' . $file->getClientOriginalExtension();
                 $path = $file->storeAs('avatars', $fileName, 'public');
-                $programmer->avatar_url = $path; // تخزين المسار النسبي
+                $programmer->avatar_url = $path;
                 $programmerUpdated = true;
             } else {
                 return response()->json(['success' => false, 'message' => 'Invalid image file'], 400);
@@ -434,7 +433,6 @@ public function updateProfile(Request $request)
         $programmer->refresh();
         $user->refresh();
 
-        // تحويل avatar_url إلى رابط كامل للرد
         $avatarUrl = $programmer->avatar_url ? Storage::disk('public')->url($programmer->avatar_url) : null;
 
         return response()->json([
