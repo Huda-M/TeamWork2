@@ -39,34 +39,29 @@ class LoginController extends Controller
                 $user->update(['fcm_token' => $request->fcm_token]);
             }
 
-            // جلب بيانات الـ Programmer المرتبط
-            $programmer = $user->programmer;
-
-            // حساب is_completed: لازم يكون فيه user_name و track و bio
-            $isCompleted = $programmer && 
-                          !empty($programmer->user_name) && 
-                          !empty($programmer->track) && 
-                          !empty($programmer->bio);
-
             $token = $user->createToken('auth_token')->plainTextToken;
+
+            // ─── جلب بيانات الـ Programmer ───
+            $programmer = $user->programmer;
 
             return response()->json([
                 'message' => 'Login successful.',
                 'user' => [
-                    'id'            => $user->id,
-                    'name'          => $user->full_name,           // ← من users.full_name
-                    'email'         => $user->email,
-                    'user_name'     => $programmer?->user_name,    // ← من programmers.user_name
-                    'role'          => $user->role,
-                    'avatar_url'    => $programmer?->avatar_url 
-                                        ? Storage::disk('public')->url($programmer->avatar_url) 
-                                        : null,
-                    
-                    'is_verified'   => !is_null($user->email_verified_at),
-                    'fcm_token'     => $user->fcm_token,
-                    'is_completed'  => $isCompleted,              // ← جديد
-                    'track'         => $programmer?->track,        // ← جديد (مفيد للـ frontend)
-                    'bio'           => $programmer?->bio,        // ← جديد
+                    'id'                => $user->id,
+                    'name'              => $user->full_name ?? $user->name,
+                    'email'             => $user->email,
+                    'user_name'         => $programmer?->user_name,
+                    'role'              => $user->role,
+                    'avatar_url'        => $programmer && $programmer->avatar_url 
+                                            ? Storage::disk('public')->url($programmer->avatar_url) 
+                                            : null,
+                    'is_verified'       => !is_null($user->email_verified_at),
+                    'fcm_token'         => $user->fcm_token,
+                    'profile_completed' => $programmer?->profile_completed ?? false, // ← من DB
+                    'track'             => $programmer?->track,
+                    'bio'               => $programmer?->bio,
+                    'experience_level'  => $programmer?->experience_level,
+                    'total_score'       => $programmer?->total_score ?? 0,
                 ],
                 'token'      => $token,
                 'token_type' => 'Bearer'
