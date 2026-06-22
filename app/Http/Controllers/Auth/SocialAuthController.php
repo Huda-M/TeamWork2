@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserAuth;
 use App\Models\Programmer;
+use App\Models\Company; // تأكد من وجود موديل Company
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,61 +38,104 @@ class SocialAuthController extends Controller
             return response()->json(['error' => 'Invalid credentials'], 401);
         }
 
-        // استخدام Database Transaction لضمان تخزين جميع البيانات بنجاح
         DB::beginTransaction();
         try {
             // البحث عن مستخدم بنفس البريد الإلكتروني
             $user = User::where('email', $socialUser->getEmail())->first();
 
-            // إذا لم يكن موجوداً، قم بإنشاء مستخدم جديد
+            // ============================================================
+            // 1. تحديد الدور بناءً على المزود (Provider)
+            // ============================================================
+            $role = $this->getRoleByProvider($provider);
+
             if (!$user) {
+                // إنشاء مستخدم جديد بالدور المحدد
                 $user = User::create([
                     'full_name' => $socialUser->getName() ?? $socialUser->getNickname() ?? 'User',
                     'email' => $socialUser->getEmail(),
                     'password' => Hash::make(Str::random(24)),
-                    'role' => 'programmer',
+                    'role' => $role,
                     'email_verified_at' => now(),
                 ]);
 
-                // إنشاء ملف البرمجة (Programmer Profile)
-                $programmer = $user->programmer()->create([
-                    'user_name' => $this->generateUniqueUsername($socialUser, $provider),
-                    'avatar_url' => $socialUser->getAvatar(),
-                    'bio' => null,
-                    'track' => null,
-                    'profile_completed' => false,
-                ]);
+                // ============================================================
+                // 2. إنشاء الملف الشخصي المناسب حسب الدور
+                // ============================================================
+                if ($role === 'programmer') {
+                    $user->programmer()->create([
+                        'user_name' => $this->generateUniqueUsername($socialUser, $provider),
+                        'avatar_url' => $socialUser->getAvatar(),
+                        'bio' => null,
+                        'track' => null,
+                        'profile_completed' => false,
+                    ]);
+                } elseif ($role === 'company') {
+                    $user->company()->create([
+                        'company_name' => $socialUser->getName() ?? $socialUser->getNickname() ?? 'Company',
+                        'phone' => null,
+                        'cr_number' => 'SOCIAL_' . Str::random(10),
+                        'about' => null,
+                        'country' => null,
+                        'location' => null,
+                        'industry' => null,
+                        'size' => null,
+                        'website' => null,
+                        'logo' => $socialUser->getAvatar(),
+                        'profile_completed' => false,
+                    ]);
+                }
+
             } else {
-                // إذا كان المستخدم موجوداً بالفعل
+                // ============================================================
+                // 3. إذا كان المستخدم موجوداً: نتحقق من تطابق الدور
+                // ============================================================
+                // إذا كان المستخدم له دور مختلف عن المزود الحالي، يمكننا تحديثه أو تركه
+                // هنا نترك الدور الحالي كما هو (لا نغيره)
                 $programmer = $user->programmer;
-                
-                // تحديث الصورة الشخصية إذا لم تكن موجودة
-                if (!$programmer->avatar_url && $socialUser->getAvatar()) {
+                if ($programmer && !$programmer->avatar_url && $socialUser->getAvatar()) {
                     $programmer->update(['avatar_url' => $socialUser->getAvatar()]);
+                }
+
+                // إذا كان المستخدم شركة، نقوم بتحديث الشعار إذا لم يكن موجوداً
+                $company = $user->company;
+                if ($company && !$company->logo && $socialUser->getAvatar()) {
+                    $company->update(['logo' => $socialUser->getAvatar()]);
                 }
             }
 
             // حفظ بيانات المصادقة (Social Auth Credentials)
             $this->storeOrUpdateSocialAuth($user, $socialUser, $provider);
 
-            // تسجيل الدخول للمستخدم
+            // تسجيل الدخول
             Auth::login($user);
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            // Commit Transaction
             DB::commit();
 
-            // إعادة التوجيه إلى واجهتك الأمامية (Frontend)
+            // إعادة التوجيه إلى الواجهة الأمامية
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
 
-            return redirect($frontendUrl . '/auth/callback?token=' . $token . '&user=' . urlencode(json_encode([
+            // تجهيز بيانات المستخدم للـ Frontend
+            $userData = [
                 'id' => $user->id,
                 'name' => $user->full_name,
                 'email' => $user->email,
                 'role' => $user->role,
-                'avatar' => $programmer->avatar_url,
-                'profile_completed' => $programmer->profile_completed ?? false,
-            ])));
+                'profile_completed' => $user->role === 'programmer' 
+                    ? ($user->programmer->profile_completed ?? false)
+                    : ($user->company->profile_completed ?? false),
+            ];
+
+            // إضافة بيانات خاصة حسب الدور
+            if ($user->role === 'programmer' && $user->programmer) {
+                $userData['avatar'] = $user->programmer->avatar_url;
+                $userData['user_name'] = $user->programmer->user_name;
+            } elseif ($user->role === 'company' && $user->company) {
+                $userData['avatar'] = $user->company->logo;
+                $userData['company_name'] = $user->company->company_name;
+            }
+
+            return redirect($frontendUrl . '/auth/callback?token=' . $token . '&user=' . urlencode(json_encode($userData)));
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -99,6 +143,22 @@ class SocialAuthController extends Controller
             return response()->json(['error' => 'Authentication failed'], 500);
         }
     }
+
+    /**
+     * تحديد الدور بناءً على مزود الخدمة
+     */
+    private function getRoleByProvider($provider)
+    {
+        $roleMapping = [
+            'github'   => 'programmer',
+            'facebook' => 'company',
+            'google'   => 'programmer', // يمكنك تغييره إلى 'company' أو تركه اختياري
+        ];
+
+        return $roleMapping[$provider] ?? 'programmer';
+    }
+
+
 
     /**
      * إكمال بيانات التسجيل عبر السوشيال ميديا
