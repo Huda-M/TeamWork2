@@ -742,7 +742,7 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // التحقق إن المبرمج عضو في المشروع
+        // التحقق من أن المبرمج عضو في المشروع
         $team = \App\Models\Team::where('project_id', $projectId)
             ->whereHas('activeMembers', function ($q) use ($programmer) {
                 $q->where('programmer_id', $programmer->id);
@@ -756,16 +756,18 @@ class TaskController extends Controller
             ], 403);
         }
 
-        // ─── Active Tasks (نفس شكل inProgressTasks) ───
+        // ──────────────────────────────────────────────
+        // 1. ACTIVE TASKS (todo, in_progress, review)
+        // ──────────────────────────────────────────────
         $activeTasksQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'review'])
             ->with(['team.project'])
             ->orderBy('deadline', 'asc');
 
-        $activeTasksPaginated = $activeTasksQuery->paginate(20);
+        $activeTasks = $activeTasksQuery->get(); // لا نستخدم paginate هنا
 
-        $activeTasks = $activeTasksPaginated->map(function ($task) {
+        $activeTasksFormatted = $activeTasks->map(function ($task) {
             $createdAt = $task->created_at;
             $deadline = $task->deadline;
             $totalDays = $createdAt->diffInDays($deadline);
@@ -786,21 +788,23 @@ class TaskController extends Controller
             ];
         });
 
-        // ─── Completed Tasks (نفس شكل completedTasks) ───
+        // ──────────────────────────────────────────────
+        // 2. COMPLETED TASKS (done)
+        // ──────────────────────────────────────────────
         $completedTasksQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
             ->with(['team.project'])
             ->orderBy('completed_at', 'desc');
 
-        $completedTasksPaginated = $completedTasksQuery->paginate(20);
+        $completedTasks = $completedTasksQuery->get();
 
-        $completedTasks = $completedTasksPaginated->map(function ($task) {
+        $completedTasksFormatted = $completedTasks->map(function ($task) {
             return [
                 'task_id' => $task->id,
                 'task_title' => $task->title,
-                'completion_date' => $task->completed_at 
-                    ? $task->completed_at->toDateString() 
+                'completion_date' => $task->completed_at
+                    ? $task->completed_at->toDateString()
                     : $task->updated_at->toDateString(),
                 'project_name' => $task->team->project->title ?? null,
                 'estimated_hours' => $task->estimated_hours,
@@ -808,11 +812,16 @@ class TaskController extends Controller
             ];
         });
 
+        // ──────────────────────────────────────────────
+        // 3. الرد النهائي (بدون pagination metadata)
+        // ──────────────────────────────────────────────
         return response()->json([
             'success' => true,
             'data' => [
-                'active_tasks' => $activeTasks,
-                'completed_tasks' => $completedTasks,
+                'active_tasks' => $activeTasksFormatted,
+                'completed_tasks' => $completedTasksFormatted,
+                'total_active' => $activeTasksFormatted->count(),
+                'total_completed' => $completedTasksFormatted->count(),
             ],
             'message' => 'Project tasks retrieved successfully',
         ]);
