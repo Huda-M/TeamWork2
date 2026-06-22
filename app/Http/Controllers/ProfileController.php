@@ -335,12 +335,14 @@ public function softDeleteAccount()
     
 public function updateProfile(Request $request)
 {
-    Log::info('Profile update request data', [
-    'all' => $request->all(),
-    'has_user_name' => $request->has('user_name'),
-    'filled_user_name' => $request->filled('user_name'),
-    'input_user_name' => $request->input('user_name'),
-]);
+    \Log::info('=== PROFILE UPDATE DEBUG ===', [
+        'request_all' => $request->all(),
+        'request_has_user_name' => $request->has('user_name'),
+        'request_filled_user_name' => $request->filled('user_name'),
+        'request_input_user_name' => $request->input('user_name'),
+        'request_get_user_name' => $request->get('user_name'),
+        'headers' => $request->headers->all(),
+    ]);
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
