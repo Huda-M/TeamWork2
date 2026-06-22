@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Arr;
 
 class ProfileController extends Controller
 {
@@ -335,53 +336,60 @@ public function softDeleteAccount()
 public function updateProfile(Request $request)
 {
     $user = auth()->user();
-    $programmer = $user->programmer;
-
-    // Validate ALL fields that were sent
-    $rules = [
-        'full_name' => 'sometimes|string|max:255',
-        'bio' => 'sometimes|string|max:1000',
-        'track' => 'sometimes|string|max:100',
-        'user_name' => 'sometimes|string|max:255|unique:programmers,user_name,' . ($programmer ? $programmer->id : 'NULL'),
-        'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048',
-    ];
-
-    $validated = $request->validate($rules);
+    
+    $validated = $request->validate([
+        'user_name' => 'nullable|string|unique:programmers,user_name,' . $user->programmer->id,
+        'full_name' => 'nullable|string',
+        'bio' => 'nullable|string',
+        'track' => 'nullable|string',
+        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
 
     // Update user
-    if ($request->has('full_name')) {
+    if (Arr::has($validated, 'full_name')) {
         $user->update(['full_name' => $validated['full_name']]);
     }
 
+    $programmer = $user->programmer;
+    
     if (!$programmer) {
         $programmer = Programmer::create(['user_id' => $user->id]);
     }
 
-    // Update programmer - ONLY fields that were sent
-    $updateData = [];
-    if ($request->has('user_name')) $updateData['user_name'] = $validated['user_name'];
-    if ($request->has('bio')) $updateData['bio'] = $validated['bio'];
-    if ($request->has('track')) $updateData['track'] = $validated['track'];
+    // Build update data ONLY for fields that exist in validated array
+    $programmerData = [];
     
-    if (!empty($updateData)) {
-        $programmer->update($updateData);
+    if (Arr::has($validated, 'user_name')) {
+        $programmerData['user_name'] = $validated['user_name'];
+    }
+    if (Arr::has($validated, 'bio')) {
+        $programmerData['bio'] = $validated['bio'];
+    }
+    if (Arr::has($validated, 'track')) {
+        $programmerData['track'] = $validated['track'];
+    }
+    
+    if (!empty($programmerData)) {
+        $programmer->update($programmerData);
     }
 
-    // Handle avatar
+    // Handle avatar upload
     if ($request->hasFile('avatar')) {
         if ($programmer->avatar_url && Storage::disk('public')->exists($programmer->avatar_url)) {
             Storage::disk('public')->delete($programmer->avatar_url);
         }
+        
         $path = $request->file('avatar')->store('avatars', 'public');
         $programmer->update(['avatar_url' => $path]);
     }
 
-    // Refresh
+    // Refresh and return
     $programmer->refresh();
     $user->refresh();
 
     return response()->json([
         'success' => true,
+        'message' => 'Profile updated successfully',
         'data' => [
             'id' => $programmer->id,
             'user_name' => $programmer->user_name,
