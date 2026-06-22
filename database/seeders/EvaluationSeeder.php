@@ -32,7 +32,7 @@ class EvaluationSeeder extends Seeder
                             'problem_solving' => fake()->numberBetween(1, 10),
                             'reliability' => fake()->numberBetween(1, 10),
                             'code_quality' => fake()->numberBetween(1, 10),
-                            'average_score' => fake()->randomFloat(2, 5, 10),
+                            'average_score' => fake()->randomFloat(2, 1, 9.99),
                             'strengths' => fake()->sentence(),
                             'areas_for_improvement' => fake()->sentence(),
                             'feedback' => fake()->paragraph(),
