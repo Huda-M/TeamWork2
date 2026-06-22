@@ -756,7 +756,7 @@ class TaskController extends Controller
             ], 403);
         }
 
-        $perPage = (int) $request->get('per_page', 10); // افتراضي 10
+        $perPage = (int) $request->get('per_page', 10);
 
         // ============================================================
         // 1. ACTIVE TASKS (todo, in_progress, review)
@@ -787,7 +787,7 @@ class TaskController extends Controller
                 'is_overdue' => $task->deadline?->isPast() ?? false,
                 'percentage_time_passed' => $percentageTimePassed,
             ];
-        });
+        })->values();
 
         // ============================================================
         // 2. COMPLETED TASKS (done)
@@ -808,10 +808,10 @@ class TaskController extends Controller
                 'estimated_hours' => $task->estimated_hours,
                 'actual_hours' => $task->actual_hours,
             ];
-        });
+        })->values();
 
         // ============================================================
-        // 3. الرد النهائي
+        // 3. الرد النهائي (نظيف جداً)
         // ============================================================
         return response()->json([
             'success' => true,
