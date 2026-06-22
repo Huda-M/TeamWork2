@@ -758,13 +758,16 @@ class TaskController extends Controller
 
         $perPage = $request->get('per_page', 20);
 
-        // --- Active Tasks (todo, in_progress, review) ---
+        // ──────────────────────────────────────────────
+        // 1. ACTIVE TASKS (todo, in_progress, review)
+        // ──────────────────────────────────────────────
         $activeQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'review'])
             ->orderBy('deadline', 'asc');
 
         $activePaginator = $activeQuery->paginate($perPage);
+
         $activeTasks = $activePaginator->map(function ($task) {
             $createdAt = $task->created_at;
             $deadline = $task->deadline;
@@ -786,13 +789,16 @@ class TaskController extends Controller
             ];
         });
 
-        // --- Completed Tasks (done) ---
+        // ──────────────────────────────────────────────
+        // 2. COMPLETED TASKS (done)
+        // ──────────────────────────────────────────────
         $completedQuery = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
             ->orderBy('completed_at', 'desc');
 
         $completedPaginator = $completedQuery->paginate($perPage);
+
         $completedTasks = $completedPaginator->map(function ($task) {
             return [
                 'task_id' => $task->id,
@@ -804,16 +810,24 @@ class TaskController extends Controller
             ];
         });
 
+        // ──────────────────────────────────────────────
+        // 3. الرد النهائي (نظيف ومرتب)
+        // ──────────────────────────────────────────────
         return response()->json([
             'success' => true,
             'data' => [
-                'active_tasks' => $activeTasks,
-                'active_total' => $activePaginator->total(),
-                'active_current_page' => $activePaginator->currentPage(),
-                'active_last_page' => $activePaginator->lastPage(),
-                'completed_tasks' => $completedTasks,
-                'completed_current_page' => $completedPaginator->currentPage(),
-                'completed_last_page' => $completedPaginator->lastPage(),
+                'active_tasks' => [
+                    'data' => $activeTasks,
+                    'total' => $activePaginator->total(),
+                    'current_page' => $activePaginator->currentPage(),
+                    'last_page' => $activePaginator->lastPage(),
+                ],
+                'completed_tasks' => [
+                    'data' => $completedTasks,
+                    'total' => $completedPaginator->total(),
+                    'current_page' => $completedPaginator->currentPage(),
+                    'last_page' => $completedPaginator->lastPage(),
+                ],
             ],
             'message' => 'Project tasks retrieved successfully',
         ]);
