@@ -1,5 +1,43 @@
 <?php
 
+/**
+ * @OA\OpenApi(
+ *
+ *     @OA\Info(
+ *         version="1.0.0",
+ *         title="TeamWork API",
+ *         description="API Documentation for Team Work System",
+ *
+ *         @OA\Contact(
+ *             email="support@teamwork.com"
+ *         ),
+ *
+ *         @OA\License(
+ *             name="Apache 2.0",
+ *             url="https://www.apache.org/licenses/LICENSE-2.0.html"
+ *         )
+ *     ),
+ *
+ *     @OA\Server(
+ *         url="https://teamwork2-main-opmxfq.free.laravel.cloud",
+ *         description="Production Server"
+ *     ),
+ *     @OA\Server(
+ *         url="http://localhost:8000",
+ *         description="Development Server"
+ *     )
+ * )
+ *
+ * @OA\SecurityScheme(
+ *     type="http",
+ *     description="Login with username and password to get the authentication token",
+ *     name="Token",
+ *     in="header",
+ *     scheme="bearer",
+ *     bearerFormat="JWT",
+ *     securityScheme="Bearer"
+ * )
+ */
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -9,7 +47,6 @@ use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyProgrammerController;
 use App\Http\Controllers\EvaluationController;
-use App\Http\Controllers\JoinRequestController;  // ← أضف ده
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProgrammerController;
 use App\Http\Controllers\ProjectController;
@@ -21,10 +58,36 @@ use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\JoinRequestController;
 
-// ─────────────────────────────────────────
-// PUBLIC ROUTES
-// ─────────────────────────────────────────
+/**
+ * @OA\Info(
+ *     version="1.0.0",
+ *     title="Team Work API",
+ *     description="API Documentation for Team Work System",
+ *     contact={
+ *         "email":"support@teamwork.com"
+ *     }
+ * )
+ *
+ * @OA\Server(
+ *     url=L5_SWAGGER_CONST_HOST,
+ *     description="API Server"
+ * )
+ *
+ * @OA\Components(
+ *
+ *     @OA\SecurityScheme(
+ *         type="http",
+ *         description="Login with username and password to get the authentication token",
+ *         name="Token",
+ *         in="header",
+ *         scheme="bearer",
+ *         bearerFormat="JWT",
+ *         securityScheme="Bearer",
+ *     )
+ * )
+ */
 Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::post('/register/verify', [RegisteredUserController::class, 'verifyAndCreate']);
 Route::post('/register/resend-code', [RegisteredUserController::class, 'resendCode']);
@@ -41,91 +104,138 @@ Route::middleware('start.session')->group(function () {
     Route::post('/auth/social/complete', [SocialAuthController::class, 'completeSocialRegistration']);
 });
 
+require_once __DIR__.'/chat.routes.php';
+require_once __DIR__.'/notifications.routes.php';
+// ─── Projects (كل حاجة بـ project_id) ───
+Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
+    
+    // 1. كل المشاريع
+    Route::get('/', [ProjectController::class, 'myProjects']);
+    
+    // 2. تفاصيل مشروع
+    Route::get('/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
+    
+    // 3. تاسكات المشروع (الجديد)
+    Route::get('/{projectId}/tasks', [TaskController::class, 'getProjectTasks']);
+    
+    // 4. تفاصيل فريق المشروع
+    Route::get('/{projectId}/team', [TeamController::class, 'getProjectTeamDetails']);
+    
+    // 5. إنشاء task في المشروع
+    Route::post('/{projectId}/tasks', [TaskController::class, 'storeProjectTask']);
+    
+    // 6. Zero project
+    Route::get('/{projectId}/zero', [ProjectController::class, 'zeroProject']);
+    
+    // 7. تعليم مشروع كمكتمل
+    Route::patch('/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
+    
+    // 8. تغيير قائد الفريق
+    Route::post('/{projectId}/change-leader/{programmerId}', [TeamController::class, 'swapProjectLeader']);
+    
+    // 9. تحديث فريق المشروع
+    Route::put('/{projectId}/team', [TeamController::class, 'updateProjectTeam']);
+    
+    // 10. حذف فريق المشروع
+    Route::delete('/{projectId}/team', [TeamController::class, 'softDeleteProjectTeam']);
+    
+});
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/projects/{projectId}/tasks', [TaskController::class, 'getProjectTasks']);
+    Route::get('/invitations', [TeamController::class, 'getAllMyInvitations']);
+    Route::get('/invitations/{invitationId}/details', [TeamController::class, 'getInvitationDetails']);
+Route::post('/teams/{team}/join-requests', [JoinRequestController::class, 'store']); 
+Route::get('/teams/join-requests', [JoinRequestController::class, 'index']); 
+Route::get('/teams/{team}/join-requests', [JoinRequestController::class, 'teamJoinRequests']); 
+Route::put('/join-requests/{joinRequest}', [JoinRequestController::class, 'update']); 
+    Route::get('/search/programmers', [ProgrammerController::class, 'searchByUsername']);
+    Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
+    Route::get('/teams/{teamId}/my-ratings', [TeamController::class, 'getTeamMembersWithMyRatings']);
+    Route::get('/teams/{id}/basic-details', [TeamController::class, 'getTeamBasicDetails']);
+    Route::get('/my/level-progression', [ProgrammerController::class, 'levelProgression']);
+    Route::get('/my/dashboard', [ProgrammerController::class, 'dashboard']);
+    Route::get('/teams/{teamId}/members-with-ratings', [TeamController::class, 'getTeamMembersWithRatings']);
+    Route::get('/teams/{teamId}/members-list', [TeamController::class, 'getTeamMembersList']);
+    Route::patch('/tasks/{task}/complete', [TaskController::class, 'markAsCompleted']);
+    Route::get('/team/{teamId}/full-details', [TeamController::class, 'getFullTeamDetails']);
+    Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
+    Route::prefix('company')->group(function () {
+        Route::get('/profile', [CompanyController::class, 'showProfile']);
+        Route::put('/profile', [CompanyController::class, 'updateProfile']);
+        Route::delete('/soft-delete', [CompanyController::class, 'softDelete']);
+        Route::get('/programmers', [CompanyProgrammerController::class, 'index']);
+        Route::get('/programmers/{id}', [CompanyProgrammerController::class, 'show']);
+    });
+
+});
 // Public API v1 (Read-only)
 Route::prefix('v1')->group(function () {
+    // Users
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{id}', [UserController::class, 'show']);
+
+    // Programmers
     Route::get('/programmers', [ProgrammerController::class, 'index']);
     Route::get('/programmers/{id}', [ProgrammerController::class, 'show']);
+
+    // Projects
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{id}', [ProjectController::class, 'show']);
     Route::get('/projects/{id}/teams', [ProjectController::class, 'teams']);
+
+    // Skills
     Route::get('/skills', [SkillController::class, 'index']);
     Route::get('/skills/popular', [SkillController::class, 'popular']);
     Route::get('/skills/{id}', [SkillController::class, 'show']);
 });
 
-// ─────────────────────────────────────────
-// AUTHENTICATED ROUTES (Sanctum)
-// ─────────────────────────────────────────
+/*
+|--------------------------------------------------------------------------
+| Authenticated Routes (Sanctum)
+|--------------------------------------------------------------------------
+*/
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/{task}/attachments', [TaskController::class, 'uploadAttachment']);
+    Route::post('/{task}/mark-as-done', [TaskController::class, 'markAsDone']);
+    Route::get('/zero-project/{projectId}', [ProjectController::class, 'zeroProject']);
+    Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
+    Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
+    // User profile & general
+    Route::get('/user', fn (Request $request) => $request->user());
+    Route::post('/logout', [LoginController::class, 'logout']);
+    Route::post('/register/complete-profile', [RegisteredUserController::class, 'completeProfile']);
+    Route::get('/profile/status', [RegisteredUserController::class, 'profileStatus']);
+    Route::post('/change-password', [NewPasswordController::class, 'changePassword']);
 
-    // ─── External route files ───
-    require_once __DIR__.'/chat.routes.php';
-    require_once __DIR__.'/notifications.routes.php';
-
-    // ─── Projects (كل حاجة بـ project_id) ───
-    Route::prefix('projects')->group(function () {
-        // كل المشاريع
-        Route::get('/', [ProjectController::class, 'myProjects']);
-        
-        // تفاصيل مشروع
-        Route::get('/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
-        
-        // تاسكات المشروع
-        Route::get('/{projectId}/tasks', [TaskController::class, 'getProjectTasks']);
-        
-        // تفاصيل فريق المشروع
-        Route::get('/{projectId}/team', [TeamController::class, 'getProjectTeamDetails']);
-        
-        // إنشاء task في المشروع
-        Route::post('/{projectId}/tasks', [TaskController::class, 'storeProjectTask']);
-        
-        // Zero project
-        Route::get('/{projectId}/zero', [ProjectController::class, 'zeroProject']);
-        
-        // تعليم مشروع كمكتمل
-        Route::patch('/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
-        
-        // تغيير قائد الفريق
-        Route::post('/{projectId}/change-leader/{programmerId}', [TeamController::class, 'swapProjectLeader']);
-        
-        // تحديث فريق المشروع
-        Route::put('/{projectId}/team', [TeamController::class, 'updateProjectTeam']);
-        
-        // حذف فريق المشروع
-        Route::delete('/{projectId}/team', [TeamController::class, 'softDeleteProjectTeam']);
-    });
-
-    // ─── Invitations ───
-    Route::get('/invitations', [TeamController::class, 'getAllMyInvitations']);
-    Route::get('/invitations/{invitationId}/details', [TeamController::class, 'getInvitationDetails']);
-
-    // ─── Join Requests ───
-    Route::post('/teams/{team}/join-requests', [JoinRequestController::class, 'store']);
-    Route::get('/teams/join-requests', [JoinRequestController::class, 'index']);
-    Route::get('/teams/{team}/join-requests', [JoinRequestController::class, 'teamJoinRequests']);
-    Route::put('/join-requests/{joinRequest}', [JoinRequestController::class, 'update']);
-
-    // ─── Search ───
-    Route::get('/search/programmers', [ProgrammerController::class, 'searchByUsername']);
-
-    // ─── Evaluations ───
-    Route::post('/teams/{teamId}/evaluate-all', [TeamController::class, 'evaluateTeamMembers']);
-    Route::get('/teams/{teamId}/my-ratings', [TeamController::class, 'getTeamMembersWithMyRatings']);
-    Route::get('/teams/{teamId}/members-with-ratings', [TeamController::class, 'getTeamMembersWithRatings']);
-    Route::get('/teams/{teamId}/members-list', [TeamController::class, 'getTeamMembersList']);
-
-    // ─── Profile & Dashboard ───
-    Route::get('/my/level-progression', [ProgrammerController::class, 'levelProgression']);
-    Route::get('/my/dashboard', [ProgrammerController::class, 'dashboard']);
+    // Programmer specific
     Route::get('/my/statistics', [ProgrammerController::class, 'myStatistics']);
+    Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
 
-    // ─── Tasks (general) ───
+    // // Notifications
+    // Route::prefix('notifications')->group(function () {
+    //     Route::get('/', [UserController::class, 'getNotifications']);
+    //     Route::get('/unread-count', [UserController::class, 'getUnreadCount']);
+    //     Route::post('/{notificationId}/read', [UserController::class, 'markNotificationAsRead']);
+    //     Route::post('/read-all', [UserController::class, 'markAllNotificationsAsRead']);
+    //     Route::delete('/{notificationId}', [UserController::class, 'deleteNotification']);
+    //     Route::delete('/read/all', [UserController::class, 'deleteReadNotifications']);
+    // });
+
+    // Projects related (authenticated)
+    Route::get('/my-projects', [ProjectController::class, 'myProjects']);
+    // Route::get('/my-projects/{projectId}/details', [ProjectController::class, 'myProjectDetails']);
+    // Route::get('/projects/{projectId}/tasks', [ProjectController::class, 'projectTasks']);
+    Route::get('/users/{userId}/projects', [ProjectController::class, 'getUserProjects']);
+    Route::patch('/projects/{projectId}/complete', [ProjectController::class, 'markAsCompleted']);
+
+    // Tasks
     Route::prefix('tasks')->group(function () {
         Route::get('/my', [TaskController::class, 'getMyTasks']);
         Route::get('/completed', [TaskController::class, 'completedTasks']);
         Route::get('/in-progress', [TaskController::class, 'inProgressTasks']);
+        Route::get('/team/{team}', [TaskController::class, 'getTeamTasks']);
+        Route::get('/team/{team}/stats', [TaskController::class, 'getTeamTaskStats']);
+        Route::post('/team/{team}', [TaskController::class, 'store']);
         Route::get('/{task}', [TaskController::class, 'show']);
         Route::get('/{task}/history', [TaskController::class, 'getTaskHistory']);
         Route::put('/{task}', [TaskController::class, 'update']);
@@ -134,14 +244,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{task}/update-status', [TaskController::class, 'updateStatus']);
     });
 
-    // ─── Task actions (outside prefix) ───
-    Route::post('/{task}/attachments', [TaskController::class, 'uploadAttachment']);
-    Route::post('/{task}/mark-as-done', [TaskController::class, 'markAsDone']);
-    Route::patch('/tasks/{task}/complete', [TaskController::class, 'markAsCompleted']);
-
-    // ─── Profile ───
     Route::prefix('profile')->group(function () {
-        Route::get('/', [ProfileController::class, 'myProfile']);
+        Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
         Route::post('/update', [ProfileController::class, 'updateProfile']);
         Route::get('/my-stats', [ProfileController::class, 'myStats']);
         Route::get('/my-evaluations', [ProfileController::class, 'myEvaluations']);
@@ -151,48 +255,51 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/project-details/{projectId}', [ProfileController::class, 'projectDetails']);
     });
 
-    // ─── Teams (legacy — للـ operations اللي لسه محتاجة team_id) ───
+    // Teams
     Route::prefix('teams')->group(function () {
+        // General team operations
         Route::get('/', [TeamController::class, 'index']);
         Route::post('/', [TeamController::class, 'store']);
         Route::get('/{id}', [TeamController::class, 'showTeam']);
+        Route::get('/projects/{projectId}/team-details', [TeamController::class, 'getTeamDetails']);
+        Route::put('/{id}', [TeamController::class, 'updateTeam']);
+        Route::delete('/{id}', [TeamController::class, 'destroyTeam']);               // hard delete
+        Route::delete('/{id}/soft', [TeamController::class, 'softDeleteTeam']);     // soft delete
+
+        // Members management
         Route::get('/{id}/members', [TeamController::class, 'teamMembers']);
         Route::post('/{id}/leave', [TeamController::class, 'leaveTeam']);
         Route::post('/{id}/update-member-role/{programmerId}', [TeamController::class, 'updateMemberRole']);
         Route::delete('/{id}/remove-member/{programmerId}', [TeamController::class, 'removeMember']);
+        Route::post('/{teamId}/swap-leader/{programmerId}', [TeamController::class, 'swapLeader']);
+        Route::post('/{teamId}/change-leader/{programmerId}', [TeamController::class, 'swapLeader']); // alias
+
+        // Invitations
         Route::post('/{id}/invite-by-username', [TeamController::class, 'inviteByUsername']);
         Route::post('/{id}/bulk-invite', [TeamController::class, 'bulkInviteByUsernames']);
         Route::get('/my/invitations', [TeamController::class, 'getMyInvitations']);
         Route::post('/invitations/{invitationId}/accept', [TeamController::class, 'acceptInvitationById']);
         Route::post('/invitations/{invitationId}/decline', [TeamController::class, 'declineInvitationById']);
         Route::get('/{id}/invitations', [TeamController::class, 'invitations']);
+
+        // Join requests
         Route::post('/{id}/request-to-join', [TeamController::class, 'requestToJoin']);
         Route::get('/{id}/join-requests', [TeamController::class, 'joinRequests']);
+
+        // AI & recommendations
         Route::get('/ai/recommendations', [TeamController::class, 'getAIRandomRecommendations']);
         Route::get('/recommendations', [TeamController::class, 'getRecommendations']);
         Route::post('/join/ai', [TeamController::class, 'joinViaAIRecommendation']);
+
+        // Mixed teams
         Route::get('/mixed/options', [TeamController::class, 'mixedTeamJoining']);
         Route::post('/join/mixed', [TeamController::class, 'joinViaMixedMethod']);
+
+        // Statistics
         Route::get('/{id}/statistics', [TeamController::class, 'teamStatistics']);
     });
 
-    // ─── Company ───
-    Route::prefix('company')->group(function () {
-        Route::get('/profile', [CompanyController::class, 'showProfile']);
-        Route::put('/profile', [CompanyController::class, 'updateProfile']);
-        Route::delete('/soft-delete', [CompanyController::class, 'softDelete']);
-        Route::get('/programmers', [CompanyProgrammerController::class, 'index']);
-        Route::get('/programmers/{id}', [CompanyProgrammerController::class, 'show']);
-    });
-
-    // ─── User & Auth ───
-    Route::get('/user', fn (Request $request) => $request->user());
-    Route::post('/logout', [LoginController::class, 'logout']);
-    Route::post('/register/complete-profile', [RegisteredUserController::class, 'completeProfile']);
-    Route::get('/profile/status', [RegisteredUserController::class, 'profileStatus']);
-    Route::post('/change-password', [NewPasswordController::class, 'changePassword']);
-
-    // ─── Evaluations ───
+    // Evaluations
     Route::prefix('evaluations')->group(function () {
         Route::post('/projects/{projectId}/teams/{teamId}/start', [EvaluationController::class, 'startEvaluation']);
         Route::post('/projects/{projectId}/teams/{teamId}', [EvaluationController::class, 'store']);
@@ -202,7 +309,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/programmer/{programmerId}/stats', [EvaluationController::class, 'programmerStats']);
     });
 
-    // ─── Reports ───
+    // Reports (with status check)
     Route::prefix('reports')->group(function () {
         Route::post('/', [ReportController::class, 'store']);
         Route::get('/my', [ReportController::class, 'myReports']);
@@ -210,7 +317,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/check-status', [ReportController::class, 'checkUserStatus']);
     });
 
-    // ─── Admin Reports ───
+    // Admin only reports management
     Route::prefix('reports')->middleware('role:admin')->group(function () {
         Route::get('/', [ReportController::class, 'index']);
         Route::get('/statistics', [ReportController::class, 'statistics']);
@@ -219,28 +326,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{report}', [ReportController::class, 'destroy']);
     });
 
-    // ─── Programmer Stats ───
-    Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
-
-    // ─── User Projects ───
-    Route::get('/users/{userId}/projects', [ProjectController::class, 'getUserProjects']);
-
-    // ─── Report Info ───
-    Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
-
-    // ─── Company Profile ───
-    Route::post('/company/complete-profile', [RegisteredUserController::class, 'completeCompanyProfile']);
-
-    // ─── v1 CRUD (Admin mostly) ───
+    // CRUD operations v1 (mostly for admins or owners)
     Route::prefix('v1')->group(function () {
+        // Users (admin only recommended)
         Route::post('/users', [UserController::class, 'store']);
         Route::put('/users/{id}', [UserController::class, 'update']);
         Route::delete('/users/{id}', [UserController::class, 'destroy']);
+
+        // Programmers
         Route::put('/programmers/{id}', [ProgrammerController::class, 'update']);
         Route::delete('/programmers/{id}', [ProgrammerController::class, 'destroy']);
+
+        // Projects
         Route::post('/projects', [ProjectController::class, 'store']);
         Route::put('/projects/{id}', [ProjectController::class, 'update']);
         Route::delete('/projects/{id}', [ProjectController::class, 'destroy']);
+
+        // Skills
         Route::post('/skills', [SkillController::class, 'store']);
         Route::put('/skills/{id}', [SkillController::class, 'update']);
         Route::delete('/skills/{id}', [SkillController::class, 'destroy']);
