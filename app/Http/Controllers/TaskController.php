@@ -731,11 +731,6 @@ class TaskController extends Controller
     }
 public function getProjectTasks(Request $request, $projectId)
 {
-    return response()->json([
-        'debug' => 'This is getProjectTasks method',
-        'projectId' => $projectId,
-        'method_exists' => method_exists($this, 'getProjectTasks'),
-    ]);
     try {
         $user = Auth::user();
         if (!$user || $user->role !== 'programmer') {
