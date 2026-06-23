@@ -301,7 +301,7 @@ public function show(Task $task)
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'todo',
             'estimated_hours' => $validated['estimated_hours'] ?? 72,  // ✅ CHANGED: من 0 لـ 72
-            'deadline' => $validated['deadline'] ?? null,
+            'deadline' => $validated['deadline'] ?? now()->addDays(3),
             'priority' => $validated['priority'] ?? 5,
             'git_link' => $validated['git_link'] ?? null,
             'tags' => $validated['tags'] ?? null,
@@ -755,7 +755,7 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'todo',
             'estimated_hours' => $validated['estimated_hours'] ?? 72,
-            'deadline' => $validated['deadline'] ?? null,
+            'deadline' => $validated['deadline'] ?? now()->addDays(3),
             'priority' => $validated['priority'] ?? 5,
             'git_link' => $validated['git_link'] ?? null,
             'tags' => $validated['tags'] ?? null,
