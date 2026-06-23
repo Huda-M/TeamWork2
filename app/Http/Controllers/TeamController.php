@@ -712,7 +712,6 @@ public function getInvitationDetails($invitationId)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // جلب الدعوة مع العلاقات
         $invitation = TeamInvitation::with([
             'team.project',
             'team.activeMembers.programmer.user',
@@ -724,7 +723,6 @@ public function getInvitationDetails($invitationId)
             return response()->json(['success' => false, 'message' => 'Invitation not found'], 404);
         }
 
-        // التحقق من أن الدعوة موجهة لهذا المبرمج
         if ($invitation->programmer_id !== $programmer->id) {
             return response()->json(['success' => false, 'message' => 'This invitation is not for you'], 403);
         }
@@ -739,7 +737,9 @@ public function getInvitationDetails($invitationId)
             $inviterData = [
                 'name'       => $inviter->user->full_name ?? 'Deleted User',
                 'track'      => $inviter->track ?? 'general',
-                'avatar_url' => $inviter->avatar_url,
+                'avatar_url' => $inviter->avatar_url 
+                    ? Storage::disk('public')->url($inviter->avatar_url) 
+                    : null,  // ✅ FIXED: full URL
             ];
         } else {
             $inviterData = [
@@ -756,10 +756,11 @@ public function getInvitationDetails($invitationId)
             $leaderData = [
                 'name'       => $leader->user->full_name,
                 'track'      => $leader->track ?? 'general',
-                'avatar_url' => $leader->avatar_url,
+                'avatar_url' => $leader->avatar_url 
+                    ? Storage::disk('public')->url($leader->avatar_url) 
+                    : null,  // ✅ FIXED: full URL
             ];
         } else {
-            // إذا كان القائد محذوفاً، نعرض بيانات جزئية
             $leaderData = [
                 'name'       => 'Deleted Leader',
                 'track'      => 'general',
@@ -776,7 +777,9 @@ public function getInvitationDetails($invitationId)
                 $prog = $member->programmer;
                 return [
                     'name'       => $prog->user->full_name,
-                    'avatar_url' => $prog->avatar_url,
+                    'avatar_url' => $prog->avatar_url 
+                        ? Storage::disk('public')->url($prog->avatar_url) 
+                        : null,  // ✅ FIXED: full URL
                     'track'      => $prog->track ?? 'general',
                 ];
             })->values() : collect();
@@ -847,7 +850,9 @@ public function getAllMyInvitations()
                 $inviterData = [
                     'name'       => $inviter->user->full_name ?? 'Deleted User',
                     'track'      => $inviter->track ?? 'general',
-                    'avatar_url' => $inviter->avatar_url,
+                    'avatar_url' => $inviter->avatar_url 
+                        ? Storage::disk('public')->url($inviter->avatar_url) 
+                        : null,  // ✅ FIXED: full URL
                 ];
             } else {
                 $inviterData = [
@@ -859,7 +864,9 @@ public function getAllMyInvitations()
 
             // --- معالجة القائد بأمان ---
             $leader = $team ? $team->leader?->programmer : null;
-            $leaderAvatar = $leader?->avatar_url ?? null;
+            $leaderAvatar = $leader && $leader->avatar_url 
+                ? Storage::disk('public')->url($leader->avatar_url) 
+                : null;  // ✅ FIXED: full URL
 
             // --- معالجة الأعضاء (تجاهل المحذوفين) ---
             $membersAvatars = $team ? $team->activeMembers
@@ -867,7 +874,10 @@ public function getAllMyInvitations()
                     return $member->programmer && $member->programmer->user;
                 })
                 ->map(function ($member) {
-                    return $member->programmer->avatar_url;
+                    $prog = $member->programmer;
+                    return $prog->avatar_url 
+                        ? Storage::disk('public')->url($prog->avatar_url) 
+                        : null;  // ✅ FIXED: full URL
                 })
                 ->filter()
                 ->values() : collect();
@@ -904,7 +914,6 @@ public function getAllMyInvitations()
         return response()->json(['success' => false, 'message' => 'Failed to fetch invitations'], 500);
     }
 }
-
 public function getProjectTeamDetails($projectId, Request $request)
 {
     try {
