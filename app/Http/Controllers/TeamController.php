@@ -427,7 +427,9 @@ class TeamController extends Controller
             $members = $team->activeMembers()->with(['programmer.user', 'inviter.user', 'invitation'])->orderByRaw("FIELD(role, 'leader', 'member')")->orderBy('joined_at', 'asc')->get();
             return response()->json(['success' => true, 'data' => ['team' => ['id' => $team->id, 'name' => $team->name, 'status' => $team->status, 'current_members' => $members->count(), 'max_members' => $team->max_members], 'members' => $members->map(function ($member) {
                 $prog = $member->programmer;
-                return ['id' => $member->id, 'role' => $member->role, 'joined_at' => $member->joined_at, 'programmer' => $prog ? ['id' => $prog->id, 'name' => $prog->user->name, 'username' => $prog->user->user_name, 'specialty' => $prog->specialty, 'total_score' => $prog->total_score, 'avatar_url' => $prog->avatar_url ?: null] : null, 'invited_by' => $member->inviter ? ['name' => $member->inviter->user->name, 'username' => $member->inviter->user->user_name] : null];
+                return ['id' => $member->id, 'role' => $member->role, 'joined_at' => $member->joined_at, 'programmer' => $prog ? ['id' => $prog->id, 'name' => $prog->user->name, 'username' => $prog->user->user_name, 'specialty' => $prog->specialty, 'total_score' => $prog->total_score, 'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null] : null, 'invited_by' => $member->inviter ? ['name' => $member->inviter->user->name, 'username' => $member->inviter->user->user_name] : null];
             })]]);
         } catch (\Exception $e) {
             Log::error('Failed to fetch team members', ['error' => $e->getMessage()]);
@@ -576,7 +578,9 @@ public function getTeamMembersList($projectId)
                 'programmer_id' => $prog->id,
                 'name' => $prog->user->full_name,
                 'track' => $prog->track ?? 'general',
-                'avatar_url' => $prog->avatar_url ?: null,
+                'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null,
             ];
         });
 
@@ -603,7 +607,9 @@ public function getTeamMembersList($projectId)
                 $avgScore = Evaluation::where('evaluated_id', $prog->id)->where('team_id', $team->id)->avg('average_score') ?? 0;
                 $stars = round($avgScore / 2, 1);
                 $latestFeedback = Evaluation::where('evaluated_id', $prog->id)->where('team_id', $team->id)->whereNotNull('feedback')->orderBy('created_at', 'desc')->value('feedback');
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url ?: null, 'track' => $prog->track ?? 'general', 'average_rating' => $stars, 'latest_feedback' => $latestFeedback];
+                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null, 'track' => $prog->track ?? 'general', 'average_rating' => $stars, 'latest_feedback' => $latestFeedback];
             });
             return response()->json(['success' => true, 'data' => ['project_name' => $team->project->title, 'project_description' => $team->project->description, 'members' => $members]]);
         } catch (\Exception $e) {
@@ -618,7 +624,9 @@ public function getTeamMembersList($projectId)
             $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
             return response()->json(['success' => true, 'data' => ['team_name' => $team->name, 'project_description' => $team->project->description, 'members' => $team->activeMembers->map(function ($member) {
                 $prog = $member->programmer;
-                return ['programmer_id' => $member->programmer_id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url ?: null];
+                return ['programmer_id' => $member->programmer_id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null];
             })]]);
         } catch (\Exception $e) {
             Log::error('Error fetching team basic details: '.$e->getMessage());
@@ -645,7 +653,9 @@ public function getTeamMembersList($projectId)
                     $starsGiven = round($evaluation->average_score / 2, 1);
                     $feedbackGiven = $evaluation->feedback;
                 }
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url ?: null, 'stars_given_to_me' => $starsGiven, 'feedback_from_them' => $feedbackGiven];
+                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null, 'stars_given_to_me' => $starsGiven, 'feedback_from_them' => $feedbackGiven];
             });
             return response()->json(['success' => true, 'data' => ['team_name' => $team->name, 'project_description' => $team->project->description, 'members' => $members]]);
         } catch (\Exception $e) {
