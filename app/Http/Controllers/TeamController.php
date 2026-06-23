@@ -99,34 +99,34 @@ class TeamController extends Controller
         try {
             $user = Auth::user();
             $currentLeader = $user->programmer;
-            
+
             $project = Project::with('teams')->findOrFail($projectId);
             $team = $project->teams->first();
-            
+
             if (!$team) {
                 return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
             }
-            
+
             if (!$team->isLeader($currentLeader->id) && $user->role !== 'admin') {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
-            
+
             $newLeader = Programmer::findOrFail($programmerId);
-            
+
             if (!$team->isMember($newLeader->id)) {
                 return response()->json(['success' => false, 'message' => 'Programmer is not a member of this team'], 400);
             }
-            
+
             DB::transaction(function () use ($team, $currentLeader, $newLeader) {
                 TeamMember::where('team_id', $team->id)
                     ->where('programmer_id', $currentLeader->id)
                     ->update(['role' => 'member']);
-                    
+
                 TeamMember::where('team_id', $team->id)
                     ->where('programmer_id', $newLeader->id)
                     ->update(['role' => 'leader']);
             });
-            
+
             $team->load('activeMembers.programmer.user');
             $tokens = [];
             foreach ($team->activeMembers as $member) {
@@ -139,15 +139,15 @@ class TeamController extends Controller
                     }
                 }
             }
-            
+
             $tokens = array_unique($tokens);
             if (! empty($tokens)) {
                 $pushNotify = new PushNotify;
                 $pushNotify->sendBulkNotification($tokens, 'New Team Leader', "{$newLeader->user->full_name} is now the leader of team {$team->name}.", ['team_id' => $team->id, 'new_leader_id' => $newLeader->id]);
             }
-            
+
             return response()->json(['success' => true, 'message' => "Leader role transferred from {$currentLeader->user->full_name} to {$newLeader->user->full_name}"]);
-            
+
         } catch (\Exception $e) {
             Log::error('Error swapping leader: '.$e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to swap leader'], 500);
@@ -158,19 +158,19 @@ class TeamController extends Controller
     {
         $project = Project::with('teams')->findOrFail($projectId);
         $team = $project->teams->first();
-        
+
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
-        
+
         $user = Auth::user();
         $isLeader = false;
         if ($user->programmer) $isLeader = $team->isLeader($user->programmer->id);
         if (! $isLeader && $user->role !== 'admin') return response()->json(['message' => 'Unauthorized'], 403);
-        
+
         $team->delete();
         $team->activeMembers()->update(['left_at' => now()]);
-        
+
         return response()->json(['success' => true, 'message' => 'Team soft deleted']);
     }
 
@@ -427,8 +427,8 @@ class TeamController extends Controller
             $members = $team->activeMembers()->with(['programmer.user', 'inviter.user', 'invitation'])->orderByRaw("FIELD(role, 'leader', 'member')")->orderBy('joined_at', 'asc')->get();
             return response()->json(['success' => true, 'data' => ['team' => ['id' => $team->id, 'name' => $team->name, 'status' => $team->status, 'current_members' => $members->count(), 'max_members' => $team->max_members], 'members' => $members->map(function ($member) {
                 $prog = $member->programmer;
-                return ['id' => $member->id, 'role' => $member->role, 'joined_at' => $member->joined_at, 'programmer' => $prog ? ['id' => $prog->id, 'name' => $prog->user->name, 'username' => $prog->user->user_name, 'specialty' => $prog->specialty, 'total_score' => $prog->total_score, 'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                return ['id' => $member->id, 'role' => $member->role, 'joined_at' => $member->joined_at, 'programmer' => $prog ? ['id' => $prog->id, 'name' => $prog->user->name, 'username' => $prog->user->user_name, 'specialty' => $prog->specialty, 'total_score' => $prog->total_score, 'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null] : null, 'invited_by' => $member->inviter ? ['name' => $member->inviter->user->name, 'username' => $member->inviter->user->user_name] : null];
             })]]);
         } catch (\Exception $e) {
@@ -456,19 +456,19 @@ class TeamController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             $project = Project::with('teams')->findOrFail($projectId);
             $team = $project->teams->first();
-            
+
             if (!$team) {
                 return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
             }
-            
+
             $isLeader = $team->isLeader($user->programmer->id);
             if (!$isLeader && $user->role !== 'admin') {
                 return response()->json(['success' => false, 'message' => 'Only team leader can update team settings'], 403);
             }
-            
+
             $validated = $request->validate(['name' => 'sometimes|string|max:255', 'description' => 'nullable|string', 'github_url' => 'nullable|url', 'avatar_url' => 'nullable|url', 'is_public' => 'nullable|boolean', 'category' => 'nullable|array', 'required_role' => 'nullable|array', 'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert']);
             $team->update($validated);
             $pushNotification = new PushNotify;
@@ -488,7 +488,7 @@ class TeamController extends Controller
         }
     }
 
-    
+
 
     public function getFullTeamDetails($teamId, Request $request)
     {
@@ -506,8 +506,8 @@ class TeamController extends Controller
             $members = $team->activeMembers->map(function ($member) {
                 $prog = $member->programmer;
                 return ['id' => $prog->id, 'name' => $prog->user->full_name,
-                    'avatar_url' => $prog->avatar_url 
-                       ? Storage::disk('public')->url($prog->avatar_url) 
+                    'avatar_url' => $prog->avatar_url
+                       ? Storage::disk('public')->url($prog->avatar_url)
                         : null,
                     'track' => $prog->track ?? 'general', 'role' => $member->role];
             });
@@ -578,8 +578,8 @@ public function getTeamMembersList($projectId)
                 'programmer_id' => $prog->id,
                 'name' => $prog->user->full_name,
                 'track' => $prog->track ?? 'general',
-                'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null,
             ];
         });
@@ -607,8 +607,8 @@ public function getTeamMembersList($projectId)
                 $avgScore = Evaluation::where('evaluated_id', $prog->id)->where('team_id', $team->id)->avg('average_score') ?? 0;
                 $stars = round($avgScore / 2, 1);
                 $latestFeedback = Evaluation::where('evaluated_id', $prog->id)->where('team_id', $team->id)->whereNotNull('feedback')->orderBy('created_at', 'desc')->value('feedback');
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null, 'track' => $prog->track ?? 'general', 'average_rating' => $stars, 'latest_feedback' => $latestFeedback];
             });
             return response()->json(['success' => true, 'data' => ['project_name' => $team->project->title, 'project_description' => $team->project->description, 'members' => $members]]);
@@ -624,8 +624,8 @@ public function getTeamMembersList($projectId)
             $team = Team::with(['project', 'activeMembers.programmer.user'])->findOrFail($id);
             return response()->json(['success' => true, 'data' => ['team_name' => $team->name, 'project_description' => $team->project->description, 'members' => $team->activeMembers->map(function ($member) {
                 $prog = $member->programmer;
-                return ['programmer_id' => $member->programmer_id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                return ['programmer_id' => $member->programmer_id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null];
             })]]);
         } catch (\Exception $e) {
@@ -653,8 +653,8 @@ public function getTeamMembersList($projectId)
                     $starsGiven = round($evaluation->average_score / 2, 1);
                     $feedbackGiven = $evaluation->feedback;
                 }
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null, 'stars_given_to_me' => $starsGiven, 'feedback_from_them' => $feedbackGiven];
             });
             return response()->json(['success' => true, 'data' => ['team_name' => $team->name, 'project_description' => $team->project->description, 'members' => $members]]);
@@ -744,7 +744,9 @@ public function getInvitationDetails($invitationId)
             $inviterData = [
                 'name'       => $inviter->user->full_name ?? 'Deleted User',
                 'track'      => $inviter->track ?? 'general',
-                'avatar_url' => $inviter->avatar_url,
+                'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
+    : null,
             ];
         } else {
             $inviterData = [
@@ -852,7 +854,9 @@ public function getAllMyInvitations()
                 $inviterData = [
                     'name'       => $inviter->user->full_name ?? 'Deleted User',
                     'track'      => $inviter->track ?? 'general',
-                    'avatar_url' => $inviter->avatar_url,
+                    'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
+    : null,
                 ];
             } else {
                 $inviterData = [
@@ -950,8 +954,8 @@ public function getProjectTeamDetails($projectId, Request $request)
             return [
                 'id' => $prog->id,
                 'name' => $prog->user->full_name,
-                'avatar_url' => $prog->avatar_url 
-                    ? Storage::disk('public')->url($prog->avatar_url) 
+                'avatar_url' => $prog->avatar_url
+                    ? Storage::disk('public')->url($prog->avatar_url)
                     : null,
                 'track' => $prog->track ?? 'general',
                 'role' => $member->role,
@@ -986,8 +990,8 @@ public function getProjectTeamDetails($projectId, Request $request)
                     'assigned_to' => [
                         'id' => $task->programmer->id,
                         'name' => $task->programmer->user->full_name,
-                        'avatar_url' => $task->programmer->avatar_url 
-                            ? Storage::disk('public')->url($task->programmer->avatar_url) 
+                        'avatar_url' => $task->programmer->avatar_url
+                            ? Storage::disk('public')->url($task->programmer->avatar_url)
                             : null,
                         'track' => $task->programmer->track ?? 'general',
                     ],
@@ -1060,8 +1064,8 @@ public function getProjectFullDetails($projectId, Request $request)
             return [
                 'id'         => $prog->id,
                 'name'       => $prog->user->full_name,
-                'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null,
                 'track'      => $prog->track ?? 'general',
                 'role'       => $member->role,
@@ -1148,8 +1152,8 @@ public function getProjectBasicDetails($projectId)
                         'programmer_id' => $member->programmer_id,
                         'name' => $prog->user->full_name,
                         'track' => $prog->track ?? 'general',
-                        'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                        'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null,
                     ];
                 }),
@@ -1212,8 +1216,8 @@ public function getProjectMembersWithMyRatings($projectId)
                 'programmer_id' => $prog->id,
                 'name'          => $prog->user->full_name,
                 'track'         => $prog->track ?? 'general',
-                'avatar_url' => $prog->avatar_url 
-    ? Storage::disk('public')->url($prog->avatar_url) 
+                'avatar_url' => $prog->avatar_url
+    ? Storage::disk('public')->url($prog->avatar_url)
     : null,
                 'stars_given_to_me' => $starsGiven,
                 'feedback_from_them' => $feedbackGiven,
@@ -1359,4 +1363,3 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
     }
 }
 }
-
