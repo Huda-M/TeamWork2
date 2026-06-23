@@ -234,6 +234,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Tasks
     Route::prefix('tasks')->group(function () {
+        Route::post('/{task}/mark-as-done', [TaskController::class, 'markAsDone']);
         Route::get('/my', [TaskController::class, 'getMyTasks']);
         Route::get('/completed', [TaskController::class, 'completedTasks']);
         Route::get('/in-progress', [TaskController::class, 'inProgressTasks']);
