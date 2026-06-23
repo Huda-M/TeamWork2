@@ -177,60 +177,6 @@ class TaskController extends Controller
     }
 }
 
-    public function getTeamTasks(Team $team, Request $request)
-    {
-        try {
-            $user = $request->user();
-            $programmer = $user->programmer;
-
-            if (! $team->isMember($programmer->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You are not a member of this team',
-                ], 403);
-            }
-
-            $query = $team->tasks()->with('programmer.user');
-
-            if ($request->has('status')) {
-                $query->where('status', $request->status);
-            }
-
-            if ($request->has('programmer_id')) {
-                $query->where('programmer_id', $request->programmer_id);
-            }
-
-            if ($request->has('priority')) {
-                $query->where('priority', $request->priority);
-            }
-
-            if ($request->has('search')) {
-                $query->where(function ($q) use ($request) {
-                    $q->where('title', 'like', '%'.$request->search.'%')
-                        ->orWhere('description', 'like', '%'.$request->description.'%');
-                });
-            }
-
-            $tasks = $query->orderBy('priority', 'desc')
-                ->orderBy('deadline')
-                ->paginate(20);
-
-            return response()->json([
-                'success' => true,
-                'data' => $tasks,
-                'message' => 'Tasks retrieved successfully',
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error getting team tasks: '.$e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve tasks',
-            ], 500);
-        }
-    }
-
     public function show(Task $task)
     {
         try {
@@ -577,79 +523,114 @@ public function getProjectTasks(Request $request, $projectId)
 {
     try {
         $user = Auth::user();
-        if (!$user || $user->role !== 'programmer') {
-            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-        }
-
         $programmer = $user->programmer;
-        if (!$programmer) {
-            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-        }
 
-        $team = \App\Models\Team::where('project_id', $projectId)
-            ->whereHas('activeMembers', function ($q) use ($programmer) {
+        $userTeam = Team::where('project_id', $projectId)
+            ->whereHas('members', function ($q) use ($programmer) {
                 $q->where('programmer_id', $programmer->id);
             })
             ->first();
 
-        if (!$team) {
+        if (!$userTeam) {
             return response()->json([
                 'success' => false,
                 'message' => 'You are not a member of this project'
             ], 403);
         }
 
-        $activeTasks = Task::where('programmer_id', $programmer->id)
-            ->where('team_id', $team->id)
-            ->whereIn('status', ['todo', 'in_progress', 'active'])
-            ->with(['team.project'])
-            ->orderBy('deadline', 'asc')
-            ->get()
-            ->map(function ($task) {
-                $createdAt = $task->created_at;
-                $deadline = $task->deadline;
-                $totalDays = $createdAt->diffInDays($deadline);
-                $passedDays = $createdAt->diffInDays(now());
-                $percentageTimePassed = ($totalDays > 0) ? round(($passedDays / $totalDays) * 100) : 0;
-                if ($percentageTimePassed > 100) $percentageTimePassed = 100;
+        $projectTeamIds = Team::where('project_id', $projectId)
+            ->pluck('id');
 
-                return [
-                    'task_id' => $task->id,
-                    'task_title' => $task->title,
-                    'project_name' => $task->team->project->title ?? null,
-                    'due_date' => $task->deadline?->toDateString(),
-                    'priority' => $task->priority,
-                    'status' => $task->status,
-                    'days_remaining' => now()->diffInDays($task->deadline, false),
-                    'is_overdue' => $task->deadline?->isPast() ?? false,
-                    'percentage_time_passed' => $percentageTimePassed,
-                ];
-            });
+        $query = Task::whereIn('team_id', $projectTeamIds)
+            ->with(['programmer.user', 'team', 'creator.user']);
 
-        $completedTasks = Task::where('programmer_id', $programmer->id)
-            ->where('team_id', $team->id)
-            ->where('status', 'done')
-            ->with(['team.project'])
-            ->orderBy('completed_at', 'desc')
-            ->get()
-            ->map(function ($task) {
-                return [
-                    'task_id' => $task->id,
-                    'task_title' => $task->title,
-                    'completion_date' => $task->completed_at 
-                        ? $task->completed_at->toDateString() 
-                        : $task->updated_at->toDateString(),
-                    'project_name' => $task->team->project->title ?? null,
-                    'estimated_hours' => $task->estimated_hours,
-                    'actual_hours' => $task->actual_hours,
-                ];
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('programmer_id')) {
+            $query->where('programmer_id', $request->programmer_id);
+        }
+
+        if ($request->has('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', '%' . $search . '%')
+                  ->orWhere('description', 'like', '%' . $search . '%');
             });
+        }
+
+        if ($request->has('team_id')) {
+            $query->where('team_id', $request->team_id);
+        }
+
+        if ($request->has('my_tasks') && $request->boolean('my_tasks')) {
+            $query->where('programmer_id', $programmer->id);
+        }
+
+        $tasks = $query->orderBy('priority', 'desc')
+            ->orderBy('deadline')
+            ->paginate(20);
+
+        $result = $tasks->map(function ($task) {
+            $priorityMap = [1 => 'low', 2 => 'medium', 3 => 'high'];
+            $priorityName = $priorityMap[$task->priority] ?? 'medium';
+
+            return [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'status' => $task->status,
+                'priority' => $priorityName,
+                'priority_value' => $task->priority,
+                'deadline' => $task->deadline?->toDateString(),
+                'created_at' => $task->created_at?->toDateString(),
+                
+                'team' => [
+                    'id' => $task->team?->id,
+                    'name' => $task->team?->name,
+                ],
+                
+                'assigned_to' => [
+                    'id' => $task->programmer?->id,
+                    'name' => $task->programmer?->user?->full_name,
+                    'avatar_url' => $task->programmer?->avatar_url ?: null,
+                ],
+                
+                'created_by' => [
+                    'id' => $task->creator?->id,
+                    'name' => $task->creator?->user?->full_name,
+                ],
+                
+                'is_overdue' => $task->deadline?->isPast() ?? false,
+                'days_remaining' => $task->deadline ? now()->diffInDays($task->deadline, false) : null,
+            ];
+        });
 
         return response()->json([
             'success' => true,
             'data' => [
-                'active_tasks' => $activeTasks,
-                'completed_tasks' => $completedTasks,
+                'tasks' => $result,
+                'total' => $tasks->total(),
+                'current_page' => $tasks->currentPage(),
+                'last_page' => $tasks->lastPage(),
+            ],
+            'meta' => [
+                'project_id' => $projectId,
+                'user_team_id' => $userTeam->id,
+                'available_teams' => $projectTeamIds,
+                'filters_applied' => [
+                    'status' => $request->status,
+                    'programmer_id' => $request->programmer_id,
+                    'priority' => $request->priority,
+                    'search' => $request->search,
+                    'team_id' => $request->team_id,
+                    'my_tasks' => $request->boolean('my_tasks'),
+                ],
             ],
             'message' => 'Project tasks retrieved successfully',
         ]);
