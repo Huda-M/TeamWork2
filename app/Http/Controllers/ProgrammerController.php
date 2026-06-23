@@ -337,7 +337,9 @@ class ProgrammerController extends Controller
             $profileData = [
                 'name'       => $user->full_name,
                 'track'      => $programmer->track ?? 'general',
-                'avatar_url' => $programmer->avatar_url ?: null,
+                'avatar_url' => $programmer->avatar_url 
+    ? Storage::disk('public')->url($programmer->avatar_url) 
+    : null,
                 'level'      => $this->getProgrammerLevel($programmer),
             ];
 
