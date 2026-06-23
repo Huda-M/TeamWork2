@@ -16,6 +16,108 @@ use OpenApi\Annotations as OA;
 
 class ProjectController extends Controller
 {
+
+public function changeProjectLeader($projectId, $programmerId)
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json([
+                'success' => false, 
+                'message' => 'Only programmers can access'
+            ], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        $project = Project::with('teams')->find($projectId);
+        if (!$project) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'Project not found'
+            ], 404);
+        }
+
+        // جلب الفريق بتاع المشروع (نفترض مشروع = فريق واحد)
+        $team = $project->teams->first();
+        if (!$team) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'No team found for this project'
+            ], 404);
+        }
+
+        // ✅ التحقق: اللي بيغير لازم يكون الليدر الحالي أو الكرييتور
+        $isCurrentLeader = $team->isLeader($programmer->id);
+        $isCreator = $team->created_by === $programmer->id;
+
+        if (!$isCurrentLeader && !$isCreator) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'Only the current team leader or creator can transfer leadership'
+            ], 403);
+        }
+
+        // ✅ التحقق: اللي هيتنقل له لازم يكون ميمبر في الفريق
+        if (!$team->isMember($programmerId)) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'The selected programmer is not a member of this team'
+            ], 400);
+        }
+
+        // ❌ مينفعش ينقل لنفسه
+        if ($team->leader_id == $programmerId) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'This programmer is already the team leader'
+            ], 400);
+        }
+
+        DB::beginTransaction();
+
+        $oldLeaderId = $team->leader_id;
+
+        // ✅ تحديث الليدر الجديد
+        $team->update(['leader_id' => $programmerId]);
+
+
+        Log::info('Team leader changed via project', [
+            'project_id' => $projectId,
+            'team_id' => $team->id,
+            'old_leader_id' => $oldLeaderId,
+            'new_leader_id' => $programmerId,
+            'changed_by' => $programmer->id,
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team leader transferred successfully',
+            'data' => [
+                'project_id' => $projectId,
+                'team_id' => $team->id,
+                'new_leader_id' => $programmerId,
+                'previous_leader_id' => $oldLeaderId,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error changing project leader: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to transfer leadership: ' . $e->getMessage()
+        ], 500);
+    }
+}
     public function index(Request $request)
     {
         try {
