@@ -237,40 +237,48 @@ class TaskController extends Controller
     }
 
     public function store(StoreTaskRequest $request, Team $team)
-    {
-        try {
-            $user = $request->user();
-            $programmer = $user->programmer;
+{
+    try {
+        $user = $request->user();
+        $programmer = $user->programmer;
 
-            if (! $team->isLeader($programmer->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only team leader can create tasks',
-                ], 403);
-            }
+        if (! $team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader can create tasks',
+            ], 403);
+        }
 
-            if ($request->has('programmer_id') && ! $team->isMember($request->programmer_id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The assigned programmer is not a member of this team',
-                ], 400);
-            }
+        // ✅ NEW: منع إنشاء task لو المشروع completed
+        if ($team->project && $team->project->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot create tasks for a completed project',
+            ], 403);
+        }
 
-            DB::beginTransaction();
+        if ($request->has('programmer_id') && ! $team->isMember($request->programmer_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The assigned programmer is not a member of this team',
+            ], 400);
+        }
 
-            $validated = $request->validated();
+        DB::beginTransaction();
 
-            $task = $team->tasks()->create([
-                'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'status' => $validated['status'] ?? 'todo',
-                'estimated_hours' => 0,  
-                'deadline' => $validated['deadline'] ?? null,
-                'priority' => $validated['priority'] ?? 5,
-                'git_link' => $validated['git_link'] ?? null,
-                'tags' => $validated['tags'] ?? null,
-            ]);
+        $validated = $request->validated();
+
+        $task = $team->tasks()->create([
+            'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'status' => $validated['status'] ?? 'todo',
+            'estimated_hours' => $validated['estimated_hours'] ?? 72,  // ✅ CHANGED: من 0 لـ 72
+            'deadline' => $validated['deadline'] ?? null,
+            'priority' => $validated['priority'] ?? 5,
+            'git_link' => $validated['git_link'] ?? null,
+            'tags' => $validated['tags'] ?? null,
+        ]);
 
             Log::info('Task created', [
                 'task_id' => $task->id,
@@ -322,32 +330,39 @@ class TaskController extends Controller
     }
 
     public function markAsDone(Request $request, Task $task)
-    {
-        try {
-            $user = auth()->user();
-            $programmer = $user->programmer;
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
 
-            if ($task->programmer_id !== $programmer->id && ! $task->team->isLeader($programmer->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only the assigned programmer or team leader can mark task as done',
-                ], 403);
-            }
+        if ($task->programmer_id !== $programmer->id && ! $task->team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the assigned programmer or team leader can mark task as done',
+            ], 403);
+        }
 
-            if ($task->status === 'done') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Task is already completed',
-                ], 400);
-            }
+        if ($task->status === 'done') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task is already completed',
+            ], 400);
+        }
 
-            DB::beginTransaction();
+        if ($task->deadline && $task->deadline->isPast()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot mark task as completed. Deadline has passed.',
+            ], 400);
+        }
 
-            $task->update([
-                'status' => 'done',
-                'completed_at' => now(),
-                'progress_percentage' => 100,
-            ]);
+        DB::beginTransaction();
+
+        $task->update([
+            'status' => 'done',
+            'completed_at' => now(),
+            'progress_percentage' => 100,
+        ]);
 
             Log::info('Task marked as done', [
                 'task_id' => $task->id,
@@ -444,42 +459,69 @@ class TaskController extends Controller
     }
 
     public function update(UpdateTaskRequest $request, Task $task)
-    {
-        try {
-            $user = auth()->user();
-            $programmer = $user->programmer;
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
 
-            $isLeader = $task->team->isLeader($programmer->id);
-            $isAssigned = ($task->programmer_id === $programmer->id);
+        $isLeader = $task->team->isLeader($programmer->id);
+        $isAssigned = ($task->programmer_id === $programmer->id);
 
-            if (! $isLeader && ! $isAssigned && $user->role !== 'admin') {
+        if (! $isLeader && ! $isAssigned && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader, assigned programmer, or admin can update this task',
+            ], 403);
+        }
+
+        if ($task->team->project && $task->team->project->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot update tasks in a completed project',
+            ], 403);
+        }
+
+        $validated = $request->validated();
+
+        if ($isAssigned && ! $isLeader && $user->role !== 'admin') {
+            $allowedFields = ['status'];
+            $data = array_intersect_key($validated, array_flip($allowedFields));
+            
+            if (empty($data) && $request->has('status') === false) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Only team leader, assigned programmer, or admin can update this task',
+                    'message' => 'Assigned programmer can only update the task status',
                 ], 403);
             }
 
-            $validated = $request->validated();
-
-            if ($isAssigned && ! $isLeader && $user->role !== 'admin') {
-                $allowedFields = ['status'];
-                $data = array_intersect_key($validated, array_flip($allowedFields));
-                if (empty($data) && $request->has('status') === false) {
+            if (isset($data['status']) && $data['status'] === 'done') {
+                if ($task->deadline && $task->deadline->isPast()) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Assigned programmer can only update the task status',
-                    ], 403);
-                }
-                $task->update($data);
-            } else {
-                if ($request->has('programmer_id') && ! $task->team->isMember($request->programmer_id)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'The new assigned programmer is not a member of this team',
+                        'message' => 'Cannot mark task as completed. Deadline has passed.',
                     ], 400);
                 }
-                $task->update($validated);
             }
+
+            $task->update($data);
+        } else {
+            if (isset($validated['status']) && $validated['status'] === 'done') {
+                if ($task->deadline && $task->deadline->isPast()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot mark task as completed. Deadline has passed.',
+                    ], 400);
+                }
+            }
+
+            if ($request->has('programmer_id') && ! $task->team->isMember($request->programmer_id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The new assigned programmer is not a member of this team',
+                ], 400);
+            }
+            $task->update($validated);
+        }
 
             Log::info('Task updated', [
                 'task_id' => $task->id,
