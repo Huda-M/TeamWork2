@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/Auth/RegisteredUserController.php
 
 namespace App\Http\Controllers\Auth;
 
@@ -130,7 +129,6 @@ class RegisteredUserController extends Controller
             DB::commit();
 
             $responseData = [
-                'id' => $user->id,
                 'full_name' => $user->full_name,
                 'email' => $user->email,
                 'role' => $user->role,
@@ -303,7 +301,6 @@ class RegisteredUserController extends Controller
             'profile_completed' => $completed,
             'role' => $user->role,
             'user' => [
-                'id' => $user->id,
                 'full_name' => $user->full_name,
                 'email' => $user->email,
                 'role' => $user->role,
