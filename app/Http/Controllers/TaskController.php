@@ -182,7 +182,6 @@ public function show(Task $task)
         $user = auth()->user();
         $programmer = $user->programmer;
 
-        // ✅ NEW: Check if task has a team before checking membership
         if (!$task->team) {
             return response()->json(['success' => false, 'message' => 'Task has no associated team'], 404);
         }
@@ -191,12 +190,23 @@ public function show(Task $task)
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
+        // ✅ CHANGED: Load creator relation with user
         $task->load([
             'programmer.user',      
             'creator.user',         
             'team.project',         
             'attachments',           
         ]);
+
+        // ✅ NEW: Debug - check if creator exists
+        $creator = $task->creator;
+        if (!$creator) {
+            Log::warning('Task creator not found', [
+                'task_id' => $task->id,
+                'created_by' => $task->created_by ?? 'null',
+                'programmer_id' => $task->programmer_id,
+            ]);
+        }
 
         $priorityMap = [1 => 'low', 2 => 'medium', 3 => 'high'];
         $priorityName = $priorityMap[$task->priority] ?? 'medium';
@@ -214,14 +224,16 @@ public function show(Task $task)
                 'created_by' => [
                     'id' => $task->creator?->id,
                     'name' => $task->creator?->user?->full_name,
-                    'avatar_url' => $task->creator?->avatar_url ?: null,  // ❌ غلط - محتاج Storage::url()
+                    'avatar_url' => $task->creator?->avatar_url 
+                        ? Storage::disk('public')->url($task->creator->avatar_url) 
+                        : null,
                 ],
                 'assigned_to' => [
                     'id' => $task->programmer?->id,
                     'name' => $task->programmer?->user?->full_name,
                     'avatar_url' => $task->programmer?->avatar_url 
-    ? Storage::disk('public')->url($task->programmer->avatar_url) 
-    : null, 
+                        ? Storage::disk('public')->url($task->programmer->avatar_url) 
+                        : null,
                 ],
                 'attachments' => $task->attachments->map(function ($attachment) {
                     return [
@@ -241,7 +253,6 @@ public function show(Task $task)
         return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
     }
 }
-
     public function store(StoreTaskRequest $request, Team $team)
 {
     try {
