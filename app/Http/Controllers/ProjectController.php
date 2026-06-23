@@ -103,7 +103,9 @@ class ProjectController extends Controller
 
                     $members->push([
                         'name'          => $prog->user->full_name,
-                        'avatar_url'    => $prog->avatar_url ?: null,
+                        'avatar_url' => $programmer->avatar_url 
+    ? Storage::disk('public')->url($programmer->avatar_url) 
+    : null,
                         'track'         => $prog->track ?? 'general',
                         'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
                     ]);
