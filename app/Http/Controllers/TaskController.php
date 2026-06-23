@@ -611,18 +611,36 @@ public function getProjectTasks(Request $request, $projectId)
         $projectTeamIds = Team::where('project_id', $projectId)
             ->pluck('id');
 
-        // ✅ NEW: Check if project has teams
-        if ($projectTeamIds->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No teams found for this project'
-            ], 404);
-        }
-
         $query = Task::whereIn('team_id', $projectTeamIds)
             ->with(['programmer.user', 'team', 'creator.user']);
 
-        // ... filters ...
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('programmer_id')) {
+            $query->where('programmer_id', $request->programmer_id);
+        }
+
+        if ($request->has('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', '%' . $search . '%')
+                  ->orWhere('description', 'like', '%' . $search . '%');
+            });
+        }
+
+        if ($request->has('team_id')) {
+            $query->where('team_id', $request->team_id);
+        }
+
+        if ($request->has('my_tasks') && $request->boolean('my_tasks')) {
+            $query->where('programmer_id', $programmer->id);
+        }
 
         $tasks = $query->orderBy('priority', 'desc')
             ->orderBy('deadline')
@@ -650,15 +668,14 @@ public function getProjectTasks(Request $request, $projectId)
                 'assigned_to' => [
                     'id' => $task->programmer?->id,
                     'name' => $task->programmer?->user?->full_name,
-                    'avatar_url' => $task->programmer?->avatar_url 
-                        ? Storage::disk('public')->url($task->programmer->avatar_url) 
+                    'avatar_url' => $task->programmer?->avatar_url
+                        ? Storage::disk('public')->url($task->programmer->avatar_url)
                         : null,
                 ],
                 
-                // ✅ NEW: Safe creator with fallback
                 'created_by' => [
-                    'id' => $task->creator?->id ?? $task->programmer?->id,
-                    'name' => $task->creator?->user?->full_name ?? $task->programmer?->user?->full_name,
+                    'id' => $task->creator?->id,
+                    'name' => $task->creator?->user?->full_name,
                 ],
                 
                 'is_overdue' => $task->deadline?->isPast() ?? false,
@@ -674,17 +691,28 @@ public function getProjectTasks(Request $request, $projectId)
                 'current_page' => $tasks->currentPage(),
                 'last_page' => $tasks->lastPage(),
             ],
+            'meta' => [
+                'project_id' => $projectId,
+                'user_team_id' => $userTeam->id,
+                'available_teams' => $projectTeamIds,
+                'filters_applied' => [
+                    'status' => $request->status,
+                    'programmer_id' => $request->programmer_id,
+                    'priority' => $request->priority,
+                    'search' => $request->search,
+                    'team_id' => $request->team_id,
+                    'my_tasks' => $request->boolean('my_tasks'),
+                ],
+            ],
             'message' => 'Project tasks retrieved successfully',
         ]);
 
     } catch (\Exception $e) {
         Log::error('Error fetching project tasks: ' . $e->getMessage());
-        
-        // ✅ NEW: Return error message for debugging
+
         return response()->json([
             'success' => false,
             'message' => 'Failed to fetch project tasks',
-            'error' => $e->getMessage(),  // For debugging
         ], 500);
     }
 }
