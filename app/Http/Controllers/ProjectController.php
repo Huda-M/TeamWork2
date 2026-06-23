@@ -262,7 +262,9 @@ class ProjectController extends Controller
                 return [
                     'id' => $prog->id,
                     'name' => $prog->user->full_name,
-                    'avatar_url' => $prog->avatar_url ?: null,
+                    'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null,
                     'role_in_team' => $member->role,
                 ];
             });
