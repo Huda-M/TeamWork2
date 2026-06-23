@@ -18,7 +18,7 @@ public function rules(): array
         'title' => 'required|string|max:255',
         'description' => 'nullable|string',
         'programmer_id' => 'nullable|exists:programmers,id',
-        'deadline' => 'nullable|date',
+        'deadline' => 'nullable|date|after:today',  
         'priority' => 'nullable|string|in:low,medium,high',
         'git_link' => 'nullable|url',
         'tags' => 'nullable|array',
