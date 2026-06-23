@@ -222,11 +222,13 @@ public function show(Task $task)
                 'deadline' => $task->deadline?->toDateString(),
                 'project_name' => $task->team->project->title ?? null,
                 'created_by' => [
-                    'id' => $task->creator?->id,
-                    'name' => $task->creator?->user?->full_name,
-                    'avatar_url' => $task->creator?->avatar_url 
-                        ? Storage::disk('public')->url($task->creator->avatar_url) 
-                        : null,
+                    'id' => $task->creator?->id ?? $task->programmer?->id,
+                    'name' => $task->creator?->user?->full_name ?? $task->programmer?->user?->full_name,
+                    'avatar_url' => ($task->creator?->avatar_url
+                        ? Storage::disk('public')->url($task->creator->avatar_url)
+                        : null) ?? ($task->programmer?->avatar_url
+                        ? Storage::disk('public')->url($task->programmer->avatar_url)
+                        : null),
                 ],
                 'assigned_to' => [
                     'id' => $task->programmer?->id,
@@ -432,6 +434,14 @@ public function show(Task $task)
                 return response()->json([
                     'success' => false,
                     'message' => 'You are not a member of this team',
+                ], 403);
+            }
+
+            // ✅ NEW: Prevent uploading attachments if project is completed
+            if ($task->team->project && $task->team->project->status === 'completed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot upload attachments to tasks in a completed project',
                 ], 403);
             }
 
@@ -658,7 +668,9 @@ public function getProjectTasks(Request $request, $projectId)
                 'assigned_to' => [
                     'id' => $task->programmer?->id,
                     'name' => $task->programmer?->user?->full_name,
-                    'avatar_url' => $task->programmer?->avatar_url ?: null,
+                    'avatar_url' => $task->programmer?->avatar_url
+                        ? Storage::disk('public')->url($task->programmer->avatar_url)
+                        : null,
                 ],
                 
                 'created_by' => [
@@ -748,7 +760,7 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'todo',
-            'estimated_hours' => 0,
+            'estimated_hours' => $validated['estimated_hours'] ?? 72,
             'deadline' => $validated['deadline'] ?? null,
             'priority' => $validated['priority'] ?? 5,
             'git_link' => $validated['git_link'] ?? null,
@@ -789,9 +801,19 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             $assignedUser->notify(new TaskCreatedNotification($task));
         }
        $task->load(['programmer.user', 'creator.user', 'team']);
+
+        // ✅ Format avatar_url in response
+        $taskData = $task->toArray();
+        if ($task->programmer && $task->programmer->avatar_url) {
+            $taskData['programmer']['avatar_url'] = Storage::disk('public')->url($task->programmer->avatar_url);
+        }
+        if ($task->creator && $task->creator->avatar_url) {
+            $taskData['creator']['avatar_url'] = Storage::disk('public')->url($task->creator->avatar_url);
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $task,
+            'data' => $taskData,
             'message' => 'Task created successfully',
         ], 201);
 
