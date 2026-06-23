@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/Auth/RegisteredUserController.php
 
 namespace App\Http\Controllers\Auth;
 
@@ -136,7 +137,9 @@ class RegisteredUserController extends Controller
             ];
 
             if ($user->role === 'programmer' && $user->programmer) {
-                $responseData['programmer'] = $user->programmer;
+                $programmerData = $user->programmer->toArray();
+                unset($programmerData['user_id']);  // ✅ Remove user_id
+                $responseData['programmer'] = $programmerData;
             }
             if ($user->role === 'company' && $user->company) {
                 $responseData['company'] = $user->company;
