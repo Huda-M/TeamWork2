@@ -287,6 +287,7 @@ public function show(Task $task)
 
         $task = $team->tasks()->create([
             'programmer_id' => $validated['programmer_id'] ?? $programmer->id,
+             'created_by' => $programmer->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'todo',
