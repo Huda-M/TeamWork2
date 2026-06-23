@@ -164,9 +164,18 @@ class TeamController extends Controller
         }
         
         $user = Auth::user();
-        $isLeader = false;
-        if ($user->programmer) $isLeader = $team->isLeader($user->programmer->id);
-        if (! $isLeader && $user->role !== 'admin') return response()->json(['message' => 'Unauthorized'], 403);
+        $programmer = $user->programmer;
+
+        // ✅ FIXED: Check leader OR creator OR admin
+        $isLeader = $team->isLeader($programmer->id);
+        $isCreator = $team->created_by === $programmer->id;
+
+        if (!$isLeader && !$isCreator && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only team leader, creator, or admin can delete team'
+            ], 403);
+        }
         
         $team->delete();
         $team->activeMembers()->update(['left_at' => now()]);
