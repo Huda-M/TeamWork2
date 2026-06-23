@@ -268,7 +268,14 @@ public function show(Task $task)
             ], 403);
         }
 
-        // ✅ NEW: منع إنشاء task لو المشروع completed
+        // ✅ FIXED: Check team status (and project status if available)
+        if ($team->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot create tasks for a completed team',
+            ], 403);
+        }
+
         if ($team->project && $team->project->status === 'completed') {
             return response()->json([
                 'success' => false,
@@ -694,7 +701,15 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
         $programmer = $user->programmer;
 
         $project = Project::with('teams')->findOrFail($projectId);
-        
+
+        // ✅ FIXED: Check project status BEFORE finding team
+        if ($project->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot create tasks for a completed project',
+            ], 403);
+        }
+
         $team = $project->teams->first(function ($t) use ($programmer) {
             return $t->isMember($programmer->id);
         });
@@ -706,12 +721,21 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             ], 403);
         }
 
+        // ✅ FIXED: Also check team status
+        if ($team->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot create tasks for a completed team',
+            ], 403);
+        }
+
         if (!$team->isLeader($programmer->id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only team leader can create tasks',
             ], 403);
         }
+
 
         if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
             return response()->json([
