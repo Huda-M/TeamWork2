@@ -261,10 +261,14 @@ public function show(Task $task)
         $user = $request->user();
         $programmer = $user->programmer;
 
-        if (! $team->isLeader($programmer->id)) {
+        // ✅ FIXED: Check if leader OR creator
+        $isLeader = $team->isLeader($programmer->id);
+        $isCreator = $team->created_by === $programmer->id;
+
+        if (! $isLeader && ! $isCreator) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only team leader can create tasks',
+                'message' => 'Only team leader or creator can create tasks',
             ], 403);
         }
 
@@ -362,10 +366,14 @@ public function show(Task $task)
         $user = auth()->user();
         $programmer = $user->programmer;
 
-        if ($task->programmer_id !== $programmer->id && ! $task->team->isLeader($programmer->id)) {
+        $isLeader = $task->team->isLeader($programmer->id);
+        $isAssigned = ($task->programmer_id === $programmer->id);
+        $isCreator = $task->team->created_by === $programmer->id;
+
+        if (! $isAssigned && ! $isLeader && ! $isCreator) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the assigned programmer or team leader can mark task as done',
+                'message' => 'Only the assigned programmer, team leader, or creator can mark task as done',
             ], 403);
         }
 
@@ -501,11 +509,12 @@ public function show(Task $task)
 
         $isLeader = $task->team->isLeader($programmer->id);
         $isAssigned = ($task->programmer_id === $programmer->id);
+        $isCreator = $task->team->created_by === $programmer->id;
 
-        if (! $isLeader && ! $isAssigned && $user->role !== 'admin') {
+        if (! $isLeader && ! $isAssigned && ! $isCreator && $user->role !== 'admin') {
             return response()->json([
                 'success' => false,
-                'message' => 'Only team leader, assigned programmer, or admin can update this task',
+                'message' => 'Only team leader, creator, assigned programmer, or admin can update this task',
             ], 403);
         }
 
@@ -729,10 +738,14 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             ], 403);
         }
 
-        if (!$team->isLeader($programmer->id)) {
+        // ✅ FIXED: Check if leader OR creator
+        $isLeader = $team->isLeader($programmer->id);
+        $isCreator = $team->created_by === $programmer->id;
+
+        if (!$isLeader && !$isCreator) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only team leader can create tasks',
+                'message' => 'Only team leader or creator can create tasks',
             ], 403);
         }
 
