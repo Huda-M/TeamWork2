@@ -18,54 +18,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use OpenApi\Annotations as OA;
 
-/**
- * @OA\Info(
- *     version="1.0.0",
- *     title="TeamWork API",
- *     description="API Documentation"
- * )
- *
- * @OA\SecurityScheme(
- *     securityScheme="bearerAuth",
- *     type="http",
- *     scheme="bearer"
- * )
- */
+
 class TaskController extends Controller
 {
-    /**
-     * @OA\Get(
-     *     path="/api/tasks/my",
-     *     tags={"Tasks"},
-     *     summary="Get my tasks",
-     *     security={{"bearerAuth":{}}},
-     *
-     *     @OA\Parameter(
-     *         name="status",
-     *         in="query",
-     *         required=false,
-     *
-     *         @OA\Schema(type="string")
-     *     ),
-     *
-     *     @OA\Parameter(
-     *         name="team_id",
-     *         in="query",
-     *         required=false,
-     *
-     *         @OA\Schema(type="integer")
-     *     ),
-     *
-     *     @OA\Response(
-     *         response=200,
-     *         description="Success"
-     *     ),
-     *     @OA\Response(
-     *         response=401,
-     *         description="Unauthorized"
-     *     )
-     * )
-     */
     public function getMyTasks(Request $request)
     {
         try {
@@ -103,23 +58,6 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/tasks/completed",
-     *     tags={"Tasks"},
-     *     summary="Get completed tasks",
-     *     security={{"bearerAuth":{}}},
-     *
-     *     @OA\Response(
-     *         response=200,
-     *         description="Success"
-     *     ),
-     *     @OA\Response(
-     *         response=403,
-     *         description="Forbidden"
-     *     )
-     * )
-     */
     public function completedTasks(Request $request)
     {
         try {
@@ -181,19 +119,6 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/tasks/in-progress",
-     *     tags={"Tasks"},
-     *     summary="Get in-progress tasks",
-     *     security={{"bearerAuth":{}}},
-     *
-     *     @OA\Response(
-     *         response=200,
-     *         description="Success"
-     *     )
-     * )
-     */
     public function inProgressTasks(Request $request)
 {
     try {
@@ -208,7 +133,7 @@ class TaskController extends Controller
         }
 
         $query = Task::where('programmer_id', $programmer->id)
-            ->where('status', 'active') // ✅ تم التعديل
+            ->where('status', 'active') 
             ->with(['team.project'])
             ->orderBy('deadline', 'asc');
 
@@ -238,12 +163,12 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'active_tasks' => $result, // ✅ تغيير المفتاح من in_progress_tasks إلى active_tasks
+                'active_tasks' => $result, 
                 'total' => $tasks->total(),
                 'current_page' => $tasks->currentPage(),
                 'last_page' => $tasks->lastPage(),
             ],
-            'message' => 'Active tasks fetched successfully', // ✅ تحديث الرسالة
+            'message' => 'Active tasks fetched successfully', 
         ]);
     } catch (\Exception $e) {
         Log::error('Error fetching active tasks: ' . $e->getMessage());
@@ -252,39 +177,6 @@ class TaskController extends Controller
     }
 }
 
-    /**
-     * @OA\Get(
-     *     path="/api/teams/{team}/tasks",
-     *     tags={"Tasks"},
-     *     summary="Get team tasks",
-     *     security={{"bearerAuth":{}}},
-     *
-     *     @OA\Parameter(
-     *         name="team",
-     *         in="path",
-     *         required=true,
-     *
-     *         @OA\Schema(type="integer")
-     *     ),
-     *
-     *     @OA\Parameter(
-     *         name="status",
-     *         in="query",
-     *         required=false,
-     *
-     *         @OA\Schema(type="string")
-     *     ),
-     *
-     *     @OA\Response(
-     *         response=200,
-     *         description="Success"
-     *     ),
-     *     @OA\Response(
-     *         response=403,
-     *         description="Forbidden"
-     *     )
-     * )
-     */
     public function getTeamTasks(Team $team, Request $request)
     {
         try {
@@ -339,31 +231,6 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/tasks/{task}",
-     *     tags={"Tasks"},
-     *     summary="Get single task",
-     *     security={{"bearerAuth":{}}},
-     *
-     *     @OA\Parameter(
-     *         name="task",
-     *         in="path",
-     *         required=true,
-     *
-     *         @OA\Schema(type="integer")
-     *     ),
-     *
-     *     @OA\Response(
-     *         response=200,
-     *         description="Success"
-     *     ),
-     *     @OA\Response(
-     *         response=403,
-     *         description="Forbidden"
-     *     )
-     * )
-     */
     public function show(Task $task)
     {
         try {
@@ -375,13 +242,12 @@ class TaskController extends Controller
             }
 
             $task->load([
-                'programmer.user',      // المبرمج المسند إليه المهمة
-                'creator.user',         // منشئ المهمة (created_by)
-                'team.project',         // الفريق والمشروع
-                'attachments',           // المرفقات
+                'programmer.user',      
+                'creator.user',         
+                'team.project',         
+                'attachments',           
             ]);
 
-            // تحويل priority إلى نص (إذا كان العمود لا يزال integer)
             $priorityMap = [1 => 'low', 2 => 'medium', 3 => 'high'];
             $priorityName = $priorityMap[$task->priority] ?? 'medium';
 
@@ -392,7 +258,7 @@ class TaskController extends Controller
                     'title' => $task->title,
                     'description' => $task->description,
                     'status' => $task->status,
-                    'priority' => $priorityName,  // low, medium, high
+                    'priority' => $priorityName,  
                     'deadline' => $task->deadline?->toDateString(),
                     'project_name' => $task->team->project->title ?? null,
                     'created_by' => [
@@ -453,7 +319,7 @@ class TaskController extends Controller
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
                 'status' => $validated['status'] ?? 'todo',
-                'estimated_hours' => 0,  // 👈 أضف هذا السطر (قيمة افتراضية)
+                'estimated_hours' => 0,  
                 'deadline' => $validated['deadline'] ?? null,
                 'priority' => $validated['priority'] ?? 5,
                 'git_link' => $validated['git_link'] ?? null,
@@ -509,19 +375,12 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * تحديث حالة المهمة إلى "done" (مكتملة)
-     */
-    /**
-     * وضع علامة "مكتمل" على المهمة
-     */
     public function markAsDone(Request $request, Task $task)
     {
         try {
             $user = auth()->user();
             $programmer = $user->programmer;
 
-            // فقط المبرمج المسند إليه المهمة أو قائد الفريق يمكنه إنهاء المهمة
             if ($task->programmer_id !== $programmer->id && ! $task->team->isLeader($programmer->id)) {
                 return response()->json([
                     'success' => false,
@@ -548,8 +407,6 @@ class TaskController extends Controller
                 'task_id' => $task->id,
                 'marked_by' => $programmer->id,
             ]);
-
-            // TODO:notification
 
             $assigner = $task->assignedBy;
             if ($assigner && $assigner->user) {
@@ -586,16 +443,12 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * رفع مرفق لمهمة معينة
-     */
     public function uploadAttachment(Request $request, Task $task)
     {
         try {
             $user = auth()->user();
             $programmer = $user->programmer;
 
-            // التحقق من أن المستخدم عضو في الفريق
             if (! $task->team->isMember($programmer->id)) {
                 return response()->json([
                     'success' => false,
@@ -604,7 +457,7 @@ class TaskController extends Controller
             }
 
             $request->validate([
-                'attachment' => 'required|file|max:10240', // max 10MB
+                'attachment' => 'required|file|max:10240', 
             ]);
 
             $file = $request->file('attachment');
@@ -612,7 +465,6 @@ class TaskController extends Controller
             $fileSize = $file->getSize();
             $fileType = $file->getMimeType();
 
-            // تخزين الملف
             $path = $file->store('task_attachments/'.$task->id, 'public');
 
             $attachment = $task->attachments()->create([
@@ -645,18 +497,12 @@ class TaskController extends Controller
         }
     }
 
-    /**
-     * تحديث مهمة موجودة
-     * - القائد/الأدمن: كل الحقول
-     * - المبرمج المُسند إليه: الحالة (status) فقط
-     */
     public function update(UpdateTaskRequest $request, Task $task)
     {
         try {
             $user = auth()->user();
             $programmer = $user->programmer;
 
-            // التحقق من الصلاحية الأساسية: قائد الفريق أو أدمن أو المبرمج المسند إليه
             $isLeader = $task->team->isLeader($programmer->id);
             $isAssigned = ($task->programmer_id === $programmer->id);
 
@@ -669,9 +515,7 @@ class TaskController extends Controller
 
             $validated = $request->validated();
 
-            // حالة خاصة: إذا كان المبرمج المسند إليه (وليس قائداً ولا أدمن)
             if ($isAssigned && ! $isLeader && $user->role !== 'admin') {
-                // يسمح له فقط بتعديل حقل 'status'
                 $allowedFields = ['status'];
                 $data = array_intersect_key($validated, array_flip($allowedFields));
                 if (empty($data) && $request->has('status') === false) {
@@ -682,7 +526,6 @@ class TaskController extends Controller
                 }
                 $task->update($data);
             } else {
-                // القائد أو الأدمن: يمكنه تعديل كل الحقول (بما فيها إعادة التعيين programmer_id)
                 if ($request->has('programmer_id') && ! $task->team->isMember($request->programmer_id)) {
                     return response()->json([
                         'success' => false,
@@ -743,7 +586,6 @@ public function getProjectTasks(Request $request, $projectId)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // التحقق إن المبرمج عضو في المشروع
         $team = \App\Models\Team::where('project_id', $projectId)
             ->whereHas('activeMembers', function ($q) use ($programmer) {
                 $q->where('programmer_id', $programmer->id);
@@ -757,7 +599,6 @@ public function getProjectTasks(Request $request, $projectId)
             ], 403);
         }
 
-        // ─── Active Tasks (todo, in_progress, review) ───
         $activeTasks = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->whereIn('status', ['todo', 'in_progress', 'active'])
@@ -785,7 +626,6 @@ public function getProjectTasks(Request $request, $projectId)
                 ];
             });
 
-        // ─── Completed Tasks (done) ───
         $completedTasks = Task::where('programmer_id', $programmer->id)
             ->where('team_id', $team->id)
             ->where('status', 'done')
@@ -823,40 +663,15 @@ public function getProjectTasks(Request $request, $projectId)
         ], 500);
     }
 }
-    /**
- * @OA\Post(
- *     path="/api/projects/{projectId}/tasks",
- *     tags={"Projects"},
- *     summary="Create task in project",
- *     security={{"bearerAuth":{}}},
- *     
- *     @OA\Parameter(
- *         name="projectId",
- *         in="path",
- *         required=true,
- *         @OA\Schema(type="integer")
- *     ),
- *     
- *     @OA\Response(
- *         response=201,
- *         description="Created"
- *     ),
- *     @OA\Response(
- *         response=403,
- *         description="Forbidden - not team leader"
- *     )
- * )
- */
+   
 public function storeProjectTask(StoreTaskRequest $request, $projectId)
 {
     try {
         $user = $request->user();
         $programmer = $user->programmer;
 
-        // جلب المشروع والفريق
         $project = Project::with('teams')->findOrFail($projectId);
         
-        // جلب الفريق اللي المبرمج فيه
         $team = $project->teams->first(function ($t) use ($programmer) {
             return $t->isMember($programmer->id);
         });
@@ -868,7 +683,6 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             ], 403);
         }
 
-        // Check if leader
         if (!$team->isLeader($programmer->id)) {
             return response()->json([
                 'success' => false,
@@ -876,7 +690,6 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
             ], 403);
         }
 
-        // Check if assigned programmer is member
         if ($request->has('programmer_id') && !$team->isMember($request->programmer_id)) {
             return response()->json([
                 'success' => false,
