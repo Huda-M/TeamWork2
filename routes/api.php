@@ -108,7 +108,7 @@ require_once __DIR__.'/chat.routes.php';
 require_once __DIR__.'/notifications.routes.php';
 // ─── Projects (كل حاجة بـ project_id) ───
 Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
-    
+    Route::post('/{projectId}/change-leader/{programmerId}', [ProjectController::class, 'changeProjectLeader']);
     // 1. كل المشاريع
     Route::get('/', [ProjectController::class, 'myProjects']);
     
