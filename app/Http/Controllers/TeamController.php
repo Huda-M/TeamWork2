@@ -503,7 +503,11 @@ class TeamController extends Controller
             $githubLink = $team->project->github_url ?? null;
             $members = $team->activeMembers->map(function ($member) {
                 $prog = $member->programmer;
-                return ['id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url ?: null, 'track' => $prog->track ?? 'general', 'role' => $member->role];
+                return ['id' => $prog->id, 'name' => $prog->user->full_name,
+                    'avatar_url' => $prog->avatar_url 
+                       ? Storage::disk('public')->url($prog->avatar_url) 
+                        : null,
+                    'track' => $prog->track ?? 'general', 'role' => $member->role];
             });
             $tasksView = $request->query('tasks_view', 'my');
             $tasks = [];
@@ -1046,7 +1050,9 @@ public function getProjectFullDetails($projectId, Request $request)
             return [
                 'id'         => $prog->id,
                 'name'       => $prog->user->full_name,
-                'avatar_url' => $prog->avatar_url ?: null,
+                'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null,
                 'track'      => $prog->track ?? 'general',
                 'role'       => $member->role,
             ];
@@ -1132,7 +1138,9 @@ public function getProjectBasicDetails($projectId)
                         'programmer_id' => $member->programmer_id,
                         'name' => $prog->user->full_name,
                         'track' => $prog->track ?? 'general',
-                        'avatar_url' => $prog->avatar_url ?: null,
+                        'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null,
                     ];
                 }),
             ]
@@ -1194,7 +1202,9 @@ public function getProjectMembersWithMyRatings($projectId)
                 'programmer_id' => $prog->id,
                 'name'          => $prog->user->full_name,
                 'track'         => $prog->track ?? 'general',
-                'avatar_url'    => $prog->avatar_url ?: null,
+                'avatar_url' => $prog->avatar_url 
+    ? Storage::disk('public')->url($prog->avatar_url) 
+    : null,
                 'stars_given_to_me' => $starsGiven,
                 'feedback_from_them' => $feedbackGiven,
             ];
