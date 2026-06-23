@@ -176,65 +176,71 @@ class TaskController extends Controller
         return response()->json(['success' => false, 'message' => 'Failed to fetch active tasks'], 500);
     }
 }
+public function show(Task $task)
+{
+    try {
+        $user = auth()->user();
+        $programmer = $user->programmer;
 
-    public function show(Task $task)
-    {
-        try {
-            $user = auth()->user();
-            $programmer = $user->programmer;
-
-            if (! $task->team->isMember($programmer->id) && $user->role !== 'admin') {
-                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-            }
-
-            $task->load([
-                'programmer.user',      
-                'creator.user',         
-                'team.project',         
-                'attachments',           
-            ]);
-
-            $priorityMap = [1 => 'low', 2 => 'medium', 3 => 'high'];
-            $priorityName = $priorityMap[$task->priority] ?? 'medium';
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'id' => $task->id,
-                    'title' => $task->title,
-                    'description' => $task->description,
-                    'status' => $task->status,
-                    'priority' => $priorityName,  
-                    'deadline' => $task->deadline?->toDateString(),
-                    'project_name' => $task->team->project->title ?? null,
-                    'created_by' => [
-                        'id' => $task->creator?->id,
-                        'name' => $task->creator?->user?->full_name,
-                        'avatar_url' => $task->creator?->avatar_url ?: null,
-                    ],
-                    'assigned_to' => [
-                        'id' => $task->programmer?->id,
-                        'name' => $task->programmer?->user?->full_name,
-                        'avatar_url' => $task->programmer?->avatar_url ?: null,
-                    ],
-                    'attachments' => $task->attachments->map(function ($attachment) {
-                        return [
-                            'id' => $attachment->id,
-                            'file_name' => $attachment->file_name,
-                            'file_path' => $attachment->file_path,
-                            'file_size' => $attachment->file_size,
-                            'uploaded_by' => $attachment->uploadedBy?->user?->full_name,
-                            'uploaded_at' => $attachment->created_at,
-                        ];
-                    }),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error showing task: '.$e->getMessage());
-
-            return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
+        // ✅ NEW: Check if task has a team before checking membership
+        if (!$task->team) {
+            return response()->json(['success' => false, 'message' => 'Task has no associated team'], 404);
         }
+
+        if (! $task->team->isMember($programmer->id) && $user->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $task->load([
+            'programmer.user',      
+            'creator.user',         
+            'team.project',         
+            'attachments',           
+        ]);
+
+        $priorityMap = [1 => 'low', 2 => 'medium', 3 => 'high'];
+        $priorityName = $priorityMap[$task->priority] ?? 'medium';
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'status' => $task->status,
+                'priority' => $priorityName,  
+                'deadline' => $task->deadline?->toDateString(),
+                'project_name' => $task->team->project->title ?? null,
+                'created_by' => [
+                    'id' => $task->creator?->id,
+                    'name' => $task->creator?->user?->full_name,
+                    'avatar_url' => $task->creator?->avatar_url ?: null,  // ❌ غلط - محتاج Storage::url()
+                ],
+                'assigned_to' => [
+                    'id' => $task->programmer?->id,
+                    'name' => $task->programmer?->user?->full_name,
+                    'avatar_url' => $task->programmer?->avatar_url 
+    ? Storage::disk('public')->url($task->programmer->avatar_url) 
+    : null, 
+                ],
+                'attachments' => $task->attachments->map(function ($attachment) {
+                    return [
+                        'id' => $attachment->id,
+                        'file_name' => $attachment->file_name,
+                        'file_path' => $attachment->file_path,
+                        'file_size' => $attachment->file_size,
+                        'uploaded_by' => $attachment->uploadedBy?->user?->full_name,
+                        'uploaded_at' => $attachment->created_at,
+                    ];
+                }),
+            ],
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error showing task: '.$e->getMessage());
+
+        return response()->json(['success' => false, 'message' => 'Failed to fetch task'], 500);
     }
+}
 
     public function store(StoreTaskRequest $request, Team $team)
 {
