@@ -595,8 +595,9 @@ public function getProjectTasks(Request $request, $projectId)
         $user = Auth::user();
         $programmer = $user->programmer;
 
+        // ✅ FIXED: Use 'activeMembers' instead of 'members'
         $userTeam = Team::where('project_id', $projectId)
-            ->whereHas('members', function ($q) use ($programmer) {
+            ->whereHas('activeMembers', function ($q) use ($programmer) {
                 $q->where('programmer_id', $programmer->id);
             })
             ->first();
@@ -611,7 +612,6 @@ public function getProjectTasks(Request $request, $projectId)
         $projectTeamIds = Team::where('project_id', $projectId)
             ->pluck('id');
 
-        // ✅ NEW: Check if project has teams
         if ($projectTeamIds->isEmpty()) {
             return response()->json([
                 'success' => false,
@@ -655,7 +655,6 @@ public function getProjectTasks(Request $request, $projectId)
                         : null,
                 ],
                 
-                // ✅ NEW: Safe creator with fallback
                 'created_by' => [
                     'id' => $task->creator?->id ?? $task->programmer?->id,
                     'name' => $task->creator?->user?->full_name ?? $task->programmer?->user?->full_name,
@@ -680,11 +679,10 @@ public function getProjectTasks(Request $request, $projectId)
     } catch (\Exception $e) {
         Log::error('Error fetching project tasks: ' . $e->getMessage());
         
-        // ✅ NEW: Return error message for debugging
         return response()->json([
             'success' => false,
             'message' => 'Failed to fetch project tasks',
-            'error' => $e->getMessage(),  // For debugging
+            'error' => $e->getMessage(),
         ], 500);
     }
 }
