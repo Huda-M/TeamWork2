@@ -329,7 +329,7 @@ public function show(Task $task)
 
                 $assignedUser->notify(new TaskCreatedNotification($task));
             }
-
+          $task->load(['programmer.user', 'creator.user', 'team']);
             return response()->json([
                 'success' => true,
                 'data' => $task,
@@ -788,7 +788,7 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
 
             $assignedUser->notify(new TaskCreatedNotification($task));
         }
-
+       $task->load(['programmer.user', 'creator.user', 'team']);
         return response()->json([
             'success' => true,
             'data' => $task,
