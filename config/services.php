@@ -44,6 +44,9 @@ return [
     'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
     'redirect' => env('FACEBOOK_REDIRECT_URI', 'https://your-api.com/api/auth/facebook/callback'),
 ],
+    'ai_evaluation' => [
+    'url' => env('AI_EVALUATION_URL', 'https://arabicsoft-teamevaluationapi.hf.space'),
+],
 
 
     'linkedin' => [
