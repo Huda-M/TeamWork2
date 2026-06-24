@@ -252,4 +252,8 @@ class Task extends Model
                 return 0;
         }
     }
+    public function taskHistories()
+{
+    return $this->hasMany(TaskHistory::class, 'task_id');
+}
 }
