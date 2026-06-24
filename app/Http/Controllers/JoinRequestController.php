@@ -2,8 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Team;
+use App\Models\Evaluation;
 use App\Models\JoinRequest;
+use App\Models\Programmer;
+use App\Models\Project;
+use App\Models\Team;
+use App\Models\TeamMember;
+use App\Notifications\JoinRequestAcceptedNotification;
+use App\Notifications\JoinRequestRejectedNotification;
+use App\Notifications\NewJoinRequestNotification;
+use App\Services\FCM\PushNotify;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +20,342 @@ use Illuminate\Support\Facades\Log;
 class JoinRequestController extends Controller
 {
     /**
-     * إرسال طلب انضمام إلى فريق
+     * ✅ NEW: إرسال طلب انضمام باستخدام project_id
+     */
+    public function storeByProject(Request $request, $projectId)
+    {
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            if ($user->role !== 'programmer') {
+                return response()->json(['success' => false, 'message' => 'Only programmers can send join requests'], 403);
+            }
+
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+            }
+
+            // جلب المشروع والتيم المرتبط
+            $project = Project::with('teams')->find($projectId);
+            if (!$project) {
+                return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+            }
+
+            $team = $project->teams->first();
+            if (!$team) {
+                return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+            }
+
+            // التحققات
+            if ($team->status !== 'active') {
+                return response()->json(['success' => false, 'message' => 'Team is not active'], 400);
+            }
+
+            if (!$team->is_public) {
+                return response()->json(['success' => false, 'message' => 'This team is private'], 400);
+            }
+
+            if (!$team->hasVacancy()) {
+                return response()->json(['success' => false, 'message' => 'Team is full'], 400);
+            }
+
+            if ($team->isMember($programmer->id)) {
+                return response()->json(['success' => false, 'message' => 'You are already a member of this team'], 400);
+            }
+
+            // التحقق من وجود request سابق
+            $existing = JoinRequest::where('team_id', $team->id)
+                ->where('programmer_id', $programmer->id)
+                ->where('status', 'pending')
+                ->first();
+
+            if ($existing) {
+                return response()->json(['success' => false, 'message' => 'You already have a pending join request'], 400);
+            }
+
+            $joinRequest = JoinRequest::create([
+                'team_id' => $team->id,
+                'programmer_id' => $programmer->id,
+                'status' => 'pending',
+                'message' => $request->message ?? null,
+            ]);
+
+            // إشعار لليدر
+            $leader = $team->leader?->programmer;
+            if ($leader && $leader->user) {
+                $leader->user->notify(new NewJoinRequestNotification($joinRequest, $programmer));
+                
+                if ($leader->user->fcm_token) {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $leader->user->fcm_token,
+                        'New Join Request',
+                        "{$programmer->user->full_name} wants to join your team '{$team->name}'",
+                        ['join_request_id' => $joinRequest->id, 'project_id' => $projectId]
+                    );
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Join request sent successfully',
+                'data' => [
+                    'join_request_id' => $joinRequest->id,
+                    'team_id' => $team->id,
+                    'project_id' => (int) $projectId,
+                    'project_name' => $project->title,
+                    'status' => 'pending',
+                    'created_at' => $joinRequest->created_at,
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error sending join request: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to send join request: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * ✅ NEW: الليدر يشوف كل join requests اللي جاتله مع كل التفاصيل
+     */
+    public function myJoinRequests(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if ($user->role !== 'programmer') {
+                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+            }
+
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+            }
+
+            // جلب التيمات اللي المبرمج هو ليدر فيها
+            $leaderTeamIds = TeamMember::where('programmer_id', $programmer->id)
+                ->where('role', 'leader')
+                ->whereNull('left_at')
+                ->pluck('team_id');
+
+            if ($leaderTeamIds->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'message' => 'You are not a leader of any team'
+                ]);
+            }
+
+            $status = $request->query('status', 'pending');
+
+            $joinRequests = JoinRequest::with(['programmer.user', 'programmer.skills', 'team.project'])
+                ->whereIn('team_id', $leaderTeamIds)
+                ->when($status !== 'all', function ($query) use ($status) {
+                    $query->where('status', $status);
+                })
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($joinRequest) {
+                    $prog = $joinRequest->programmer;
+                    $project = $joinRequest->team?->project;
+
+                    // حساب متوسط النجوم والنسبة
+                    $avgStars = $this->calculateAverageStars($prog->id);
+
+                    return [
+                        'join_request_id' => $joinRequest->id,
+                        'status' => $joinRequest->status,
+                        'message' => $joinRequest->message,
+                        'created_at' => $joinRequest->created_at,
+                        'responded_at' => $joinRequest->responded_at,
+                        
+                        // ✅ بيانات المبرمج بالتفصيل
+                        'programmer' => [
+                            'id' => $prog->id,
+                            'name' => $prog->user?->full_name ?? 'Unknown',
+                            'username' => $prog->user?->user_name ?? 'unknown',
+                            'avatar_url' => $prog->avatar_url 
+                                ? asset('storage/' . $prog->avatar_url) 
+                                : null,
+                            'track' => $prog->track ?? 'general',
+                            'bio' => $prog->bio ?? null,
+                            'skills' => $prog->skills?->pluck('name') ?? [],
+                            'average_stars' => $avgStars['stars'],
+                            'total_evaluations' => $avgStars['total'],
+                            'stars_percentage' => $avgStars['percentage'], // نسبة من 5
+                        ],
+                        
+                        // ✅ بيانات المشروع
+                        'project' => [
+                            'id' => $project?->id,
+                            'name' => $project?->title ?? 'Unknown Project',
+                            'description' => $project?->description ?? null,
+                        ],
+                        
+                        // ✅ بيانات التيم
+                        'team' => [
+                            'id' => $joinRequest->team?->id,
+                            'name' => $joinRequest->team?->name,
+                        ],
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $joinRequests,
+                'count' => $joinRequests->count(),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching join requests: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to fetch join requests: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * ✅ NEW: الليدر يقبل أو يرفض join request
+     */
+    public function respond(Request $request, $joinRequestId)
+    {
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            if ($user->role !== 'programmer') {
+                return response()->json(['success' => false, 'message' => 'Only programmers can respond'], 403);
+            }
+
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+            }
+
+            $joinRequest = JoinRequest::with(['team', 'programmer.user'])->find($joinRequestId);
+            if (!$joinRequest) {
+                return response()->json(['success' => false, 'message' => 'Join request not found'], 404);
+            }
+
+            // التحقق إن المبرمج هو ليدر التيم
+            if (!$joinRequest->team->isLeader($programmer->id)) {
+                return response()->json(['success' => false, 'message' => 'Only team leader can respond'], 403);
+            }
+
+            if ($joinRequest->status !== 'pending') {
+                return response()->json(['success' => false, 'message' => 'This request has already been ' . $joinRequest->status], 400);
+            }
+
+            $validated = $request->validate([
+                'status' => 'required|in:accepted,rejected',
+            ]);
+
+            $status = $validated['status'];
+
+            if ($status === 'accepted') {
+                // التحقق من المساحة
+                if (!$joinRequest->team->hasVacancy()) {
+                    return response()->json(['success' => false, 'message' => 'Team is now full'], 400);
+                }
+
+                // إضافة العضو
+                TeamMember::create([
+                    'team_id' => $joinRequest->team_id,
+                    'programmer_id' => $joinRequest->programmer_id,
+                    'role' => 'member',
+                    'joined_at' => now(),
+                    'joined_by' => $programmer->id,
+                ]);
+
+                // إشعار للمبرمج
+                $joinRequest->programmer->user?->notify(new JoinRequestAcceptedNotification($joinRequest->team));
+                
+                if ($joinRequest->programmer->user?->fcm_token) {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $joinRequest->programmer->user->fcm_token,
+                        'Join Request Accepted',
+                        "You have been accepted to join '{$joinRequest->team->name}'",
+                        ['team_id' => $joinRequest->team_id]
+                    );
+                }
+
+            } else {
+                // rejected
+                $joinRequest->programmer->user?->notify(new JoinRequestRejectedNotification($joinRequest->team));
+                
+                if ($joinRequest->programmer->user?->fcm_token) {
+                    $pushNotify = new PushNotify;
+                    $pushNotify->sendPushNotification(
+                        $joinRequest->programmer->user->fcm_token,
+                        'Join Request Rejected',
+                        "Your request to join '{$joinRequest->team->name}' was rejected",
+                        ['team_id' => $joinRequest->team_id]
+                    );
+                }
+            }
+
+            $joinRequest->update([
+                'status' => $status,
+                'responded_at' => now(),
+                'responded_by' => $programmer->id,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Join request {$status} successfully",
+                'data' => [
+                    'join_request_id' => $joinRequest->id,
+                    'status' => $status,
+                    'programmer_name' => $joinRequest->programmer->user?->full_name,
+                    'team_name' => $joinRequest->team->name,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error responding to join request: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to respond: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * ✅ NEW: حساب متوسط النجوم للمبرمج
+     */
+    private function calculateAverageStars($programmerId)
+    {
+        $evaluations = Evaluation::where('evaluated_id', $programmerId)
+            ->whereNotNull('average_score')
+            ->get();
+
+        $total = $evaluations->count();
+        
+        if ($total === 0) {
+            return [
+                'stars' => 0,
+                'total' => 0,
+                'percentage' => 0,
+            ];
+        }
+
+        // average_score من 10، نحول لـ 5
+        $avgScore = $evaluations->avg('average_score');
+        $starsOutOf5 = round($avgScore / 2, 1);
+
+        // نسبة النجوم من 5
+        $percentage = round(($starsOutOf5 / 5) * 100, 1);
+
+        return [
+            'stars' => $starsOutOf5,
+            'total' => $total,
+            'percentage' => $percentage,
+        ];
+    }
+
+    /**
+     * ⬇️ OLD: إرسال طلب انضمام إلى فريق (by team_id) - سيبه زي ما هو
      */
     public function store(Request $request, Team $team)
     {
@@ -27,12 +370,10 @@ class JoinRequestController extends Controller
                 return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
             }
 
-            // التحقق من العضوية الحالية
             if ($team->isMember($programmer->id)) {
                 return response()->json(['success' => false, 'message' => 'You are already a member of this team'], 400);
             }
 
-            // التحقق من وجود طلب معلق
             $existing = JoinRequest::where('team_id', $team->id)
                 ->where('programmer_id', $programmer->id)
                 ->where('status', 'pending')
@@ -63,7 +404,7 @@ class JoinRequestController extends Controller
     }
 
     /**
-     * عرض طلبات الانضمام التي أرسلها المبرمج الحالي
+     * ⬇️ OLD: عرض طلبات الانضمام التي أرسلها المبرمج الحالي
      */
     public function index()
     {
@@ -82,7 +423,7 @@ class JoinRequestController extends Controller
     }
 
     /**
-     * عرض طلبات الانضمام لفريق معين (للقائد فقط)
+     * ⬇️ OLD: عرض طلبات الانضمام لفريق معين (للقائد فقط)
      */
     public function teamJoinRequests(Team $team)
     {
@@ -110,7 +451,7 @@ class JoinRequestController extends Controller
     }
 
     /**
-     * قبول أو رفض طلب الانضمام (للقائد فقط)
+     * ⬇️ OLD: قبول أو رفض طلب الانضمام (للقائد فقط)
      */
     public function update(Request $request, JoinRequest $joinRequest)
     {
@@ -138,7 +479,6 @@ class JoinRequestController extends Controller
             DB::beginTransaction();
 
             if ($validated['status'] === 'approved') {
-                // إضافة المبرمج إلى الفريق كعضو عادي
                 $team->members()->attach($joinRequest->programmer_id, [
                     'role' => 'member',
                     'joined_at' => now(),
