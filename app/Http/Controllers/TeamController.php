@@ -1233,9 +1233,13 @@ public function getProjectMembersWithMyRatings($projectId)
         ]);
 
     } catch (\Exception $e) {
-        Log::error('Error in getProjectMembersWithMyRatings: ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to fetch ratings'], 500);
-    }
+    Log::error('Error in getProjectMembersWithMyRatings: ' . $e->getMessage());
+    Log::error('Stack trace: ' . $e->getTraceAsString());
+    return response()->json([
+        'success' => false, 
+        'message' => 'Failed to fetch ratings: ' . $e->getMessage()
+    ], 500);
+}
 }
     
 public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $request)
