@@ -132,7 +132,7 @@ class ReportController extends Controller
         ], 500);
     }
 }
-    }
+    
     public function show(Report $report)
     {
         try {
