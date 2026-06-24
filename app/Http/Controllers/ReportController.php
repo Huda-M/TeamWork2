@@ -367,34 +367,59 @@ class ReportController extends Controller
             ], 500);
         }
     }
-    public function getUserReportInfo($id)
+   public function getUserReportInfo($programmerId)
 {
     try {
-        $user = User::findOrFail($id);
+        // ✅ جلب الـ programmer بالـ programmer_id
+        $programmer = \App\Models\Programmer::find($programmerId);
         
-        // منع الإبلاغ عن الذات أو عن الأدمن (اختياري)
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'المبرمج غير موجود'
+            ], 404);
+        }
+
+        $user = $programmer->user;
+
+        // منع الإبلاغ عن الذات
         if ($user->id === auth()->id()) {
-            return response()->json(['success' => false, 'message' => 'لا يمكنك الإبلاغ عن نفسك'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'لا يمكنك الإبلاغ عن نفسك'
+            ], 400);
         }
+
+        // منع الإبلاغ عن الأدمن
         if ($user->role === 'admin') {
-            return response()->json(['success' => false, 'message' => 'لا يمكن الإبلاغ عن المشرفين'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'لا يمكن الإبلاغ عن المشرفين'
+            ], 400);
         }
-        
+
         $data = [
-            'id' => $user->id,
+            'programmer_id' => $programmer->id,
+            'user_id' => $user->id,
             'name' => $user->full_name,
-            'track' => $user->role === 'programmer' ? ($user->programmer->track ?? 'غير محدد') : null,
-            'avatar_url' => $user->role === 'programmer' && $user->programmer?->avatar_url 
-    ? \Illuminate\Support\Facades\Storage::disk('public')->url($user->programmer->avatar_url) 
-    : null,
+            'track' => $programmer->track ?? 'غير محدد',
+            'avatar_url' => $programmer->avatar_url 
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($programmer->avatar_url) 
+                : null,
         ];
-        
-        return response()->json(['success' => true, 'data' => $data]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
+
     } catch (\Exception $e) {
-        return response()->json(['success' => false, 'message' => 'المستخدم غير موجود'], 404);
+        return response()->json([
+            'success' => false,
+            'message' => 'المبرمج غير موجود'
+        ], 404);
     }
 }
-
     public function checkUserStatus()
     {
         try {
