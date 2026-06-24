@@ -12,6 +12,7 @@ class JoinRequest extends Model
     protected $fillable = [
         'team_id',
         'programmer_id',
+        'message', 
         'status',
         'responded_at',
         'responded_by',
