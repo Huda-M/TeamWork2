@@ -410,58 +410,58 @@ class JoinRequestController extends Controller
      * ⬇️ OLD: قبول أو رفض طلب الانضمام (للقائد فقط)
      */
     public function update(Request $request, JoinRequest $joinRequest)
-    {
-        try {
-            $user = Auth::user();
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
-
-            $team = $joinRequest->team;
-            if (!$team->isLeader($programmer->id)) {
-                return response()->json(['success' => false, 'message' => 'Only the team leader can approve or reject join requests'], 403);
-            }
-
-            $validated = $request->validate([
-                'status' => 'required|in:approved,rejected',
-                'rejection_reason' => 'nullable|string|max:255',
-            ]);
-
-            if ($joinRequest->status !== 'pending') {
-                return response()->json(['success' => false, 'message' => 'This request has already been processed'], 400);
-            }
-
-            DB::beginTransaction();
-
-            if ($validated['status'] === 'approved') {
-                $team->members()->attach($joinRequest->programmer_id, [
-                    'role' => 'member',
-                    'joined_at' => now(),
-                    'joined_by' => $programmer->id,
-                ]);
-                $joinRequest->update(['status' => 'approved']);
-                $message = 'Join request approved. You are now a member of the team.';
-            } else {
-                $joinRequest->update([
-                    'status' => 'rejected',
-                    'rejection_reason' => $validated['rejection_reason'] ?? null
-                ]);
-                $message = 'Join request rejected.';
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => $message,
-                'data' => $joinRequest->fresh()
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error updating join request: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to update join request'], 500);
+{
+    try {
+        $user = Auth::user();
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
+
+        $team = $joinRequest->team;
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json(['success' => false, 'message' => 'Only the team leader can approve or reject join requests'], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:accepted,rejected',  // ✅ غيّر approved لـ accepted
+            'rejection_reason' => 'nullable|string|max:255',
+        ]);
+
+        if ($joinRequest->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'This request has already been processed'], 400);
+        }
+
+        DB::beginTransaction();
+
+        if ($validated['status'] === 'accepted') {  // ✅ غيّر approved لـ accepted
+            $team->members()->attach($joinRequest->programmer_id, [
+                'role' => 'member',
+                'joined_at' => now(),
+                'joined_by' => $programmer->id,
+            ]);
+            $joinRequest->update(['status' => 'accepted']);  // ✅ غيّر approved لـ accepted
+            $message = 'Join request accepted. You are now a member of the team.';  // ✅ غيّر approved لـ accepted
+        } else {
+            $joinRequest->update([
+                'status' => 'rejected',
+                'rejection_reason' => $validated['rejection_reason'] ?? null
+            ]);
+            $message = 'Join request rejected.';
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $joinRequest->fresh()
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error updating join request: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to update join request'], 500);
     }
+}
 }
