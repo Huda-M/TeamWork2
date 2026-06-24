@@ -1366,7 +1366,7 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
         return response()->json(['success' => false, 'message' => 'Failed to submit evaluations: ' . $e->getMessage()], 500);
     }
 }
-    public function getTeamDetails($projectId)
+    public function getProjectTeamMembers($projectId)
 {
     try {
         $team = Team::with(['activeMembers.programmer.user'])
