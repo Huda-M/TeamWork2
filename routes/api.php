@@ -1,43 +1,5 @@
 <?php
 
-/**
- * @OA\OpenApi(
- *
- *     @OA\Info(
- *         version="1.0.0",
- *         title="TeamWork API",
- *         description="API Documentation for Team Work System",
- *
- *         @OA\Contact(
- *             email="support@teamwork.com"
- *         ),
- *
- *         @OA\License(
- *             name="Apache 2.0",
- *             url="https://www.apache.org/licenses/LICENSE-2.0.html"
- *         )
- *     ),
- *
- *     @OA\Server(
- *         url="https://teamwork2-main-opmxfq.free.laravel.cloud",
- *         description="Production Server"
- *     ),
- *     @OA\Server(
- *         url="http://localhost:8000",
- *         description="Development Server"
- *     )
- * )
- *
- * @OA\SecurityScheme(
- *     type="http",
- *     description="Login with username and password to get the authentication token",
- *     name="Token",
- *     in="header",
- *     scheme="bearer",
- *     bearerFormat="JWT",
- *     securityScheme="Bearer"
- * )
- */
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -60,34 +22,7 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\JoinRequestController;
 
-/**
- * @OA\Info(
- *     version="1.0.0",
- *     title="Team Work API",
- *     description="API Documentation for Team Work System",
- *     contact={
- *         "email":"support@teamwork.com"
- *     }
- * )
- *
- * @OA\Server(
- *     url=L5_SWAGGER_CONST_HOST,
- *     description="API Server"
- * )
- *
- * @OA\Components(
- *
- *     @OA\SecurityScheme(
- *         type="http",
- *         description="Login with username and password to get the authentication token",
- *         name="Token",
- *         in="header",
- *         scheme="bearer",
- *         bearerFormat="JWT",
- *         securityScheme="Bearer",
- *     )
- * )
- */
+
 Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::post('/register/verify', [RegisteredUserController::class, 'verifyAndCreate']);
 Route::post('/register/resend-code', [RegisteredUserController::class, 'resendCode']);
@@ -106,6 +41,18 @@ Route::middleware('start.session')->group(function () {
 
 require_once __DIR__.'/chat.routes.php';
 require_once __DIR__.'/notifications.routes.php';
+
+// ─── Join Requests (by project_id) ───
+Route::middleware('auth:sanctum')->group(function () {
+    // إرسال join request لمشروع (التيم المرتبط بالمشروع)
+    Route::post('/projects/{projectId}/join-request', [JoinRequestController::class, 'storeByProject']);
+    
+    // الليدر يشوف كل join requests اللي جاتله (للتيمات اللي هو ليدر فيها)
+    Route::get('/my/join-requests', [JoinRequestController::class, 'myJoinRequests']);
+    
+    // الليدر يقبل/يرفض join request
+    Route::put('/join-requests/{joinRequestId}/respond', [JoinRequestController::class, 'respond']);
+});
 // ─── Projects (كل حاجة بـ project_id) ───
 Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
     Route::post('/{projectId}/change-leader/{programmerId}', [ProjectController::class, 'changeProjectLeader']);
