@@ -1160,10 +1160,6 @@ public function getProjectBasicDetails($projectId)
         return response()->json(['success' => false, 'message' => 'Failed to fetch project basic details'], 500);
     }
 }
-    /**
- * عرض تقييمات أعضاء الفريق للمبرمج الحالي باستخدام معرف المشروع
- * نسخة my-ratings لكن بـ projectId
- */
 public function getProjectMembersWithMyRatings($projectId)
 {
     try {
@@ -1186,44 +1182,53 @@ public function getProjectMembersWithMyRatings($projectId)
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
 
-        // التحقق من أن المستخدم عضو في هذا الفريق
+        // التحقق من أن المستخدم عضو في الفريق
         if (!$team->isMember($currentProgrammer->id)) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
         }
 
-        // تجهيز بيانات الأعضاء مع تقييماتهم للمبرمج الحالي
-        $members = $team->activeMembers->map(function ($member) use ($currentProgrammer) {
-            $prog = $member->programmer;
+        // ✅ تجهيز الأعضاء مع استبعاد نفسه
+        $members = $team->activeMembers
+            ->filter(function ($member) use ($currentProgrammer) {
+                // ❌ استبعد المستخدم نفسه
+                return $member->programmer_id !== $currentProgrammer->id;
+            })
+            ->map(function ($member) use ($currentProgrammer) {
+                $prog = $member->programmer;
 
-            // جلب تقييم هذا العضو للمبرمج الحالي (إذا وجد)
-            $evaluation = Evaluation::where('evaluator_id', $prog->id)
-                ->where('evaluated_id', $currentProgrammer->id)
-                ->first();
+                // جلب تقييم هذا العضو للمستخدم الحالي
+                $evaluation = Evaluation::where('evaluator_id', $prog->id)
+                    ->where('evaluated_id', $currentProgrammer->id)
+                    ->where('project_id', $projectId)
+                    ->first();
 
-            $starsGiven = null;
-            $feedbackGiven = null;
+                $starsGiven = null;
+                $feedbackGiven = null;
 
-            if ($evaluation) {
-                $starsGiven = round($evaluation->average_score / 2, 1);
-                $feedbackGiven = $evaluation->feedback;
-            }
+                if ($evaluation) {
+                    $starsGiven = round($evaluation->average_score / 2, 1);
+                    $feedbackGiven = $evaluation->feedback;
+                }
 
-            return [
-                'programmer_id' => $prog->id,
-                'name'          => $prog->user->full_name,
-                'track'         => $prog->track ?? 'general',
-                'avatar_url'    => $prog->avatar_url ?: null,
-                'stars_given_to_me' => $starsGiven,
-                'feedback_from_them' => $feedbackGiven,
-            ];
-        });
+                return [
+                    'programmer_id' => $prog->id,
+                    'name' => $prog->user->full_name,
+                    'track' => $prog->track ?? 'general',
+                    // ✅ FIXED: full URL
+                    'avatar_url' => $prog->avatar_url 
+                        ? Storage::disk('public')->url($prog->avatar_url) 
+                        : null,
+                    'stars_given_to_me' => $starsGiven,
+                    'feedback_from_them' => $feedbackGiven,
+                ];
+            });
 
         return response()->json([
             'success' => true,
             'data' => [
-                'team_name'           => $team->name,
+                'team_name' => $team->name,
                 'project_description' => $team->project->description,
-                'members'             => $members,
+                'members' => $members,
             ]
         ]);
 
@@ -1232,10 +1237,7 @@ public function getProjectMembersWithMyRatings($projectId)
         return response()->json(['success' => false, 'message' => 'Failed to fetch ratings'], 500);
     }
 }
-    /**
- * تقييم جميع أعضاء الفريق في مشروع معين (بعد اكتمال المشروع)
- * نسخة evaluate-all لكن بـ projectId
- */
+    
 public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $request)
 {
     try {
