@@ -46,7 +46,7 @@ require_once __DIR__.'/notifications.routes.php';
 Route::middleware('auth:sanctum')->group(function () {
     // إرسال join request لمشروع (التيم المرتبط بالمشروع)
     Route::post('/projects/{projectId}/join-request', [JoinRequestController::class, 'storeByProject']);
-    
+    Route::get('/join-requests/{joinRequestId}', [JoinRequestController::class, 'show']);
     // الليدر يشوف كل join requests اللي جاتله (للتيمات اللي هو ليدر فيها)
     Route::get('/my/join-requests', [JoinRequestController::class, 'myJoinRequests']);
     
