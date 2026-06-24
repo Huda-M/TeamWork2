@@ -17,6 +17,7 @@ class ProgrammerScoreLog extends Model
         'metadata',
         'source_type',
         'source_id',
+    'evaluator_id',
     ];
 
     protected $casts = [
