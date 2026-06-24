@@ -333,20 +333,12 @@ class Programmer extends Model
         return $this->hasMany(JoinRequest::class);
     }
 
-    // public function getAvatarUrlAttribute($avatar_url)
-    // {
-    //     if (empty($avatar_url)) {
-    //         return "";
-    //     }
-
-    //     if (filter_var($avatar_url, FILTER_VALIDATE_URL) || str_starts_with($avatar_url, 'http')) {
-    //         return $avatar_url;
-    //     }
-
-    //     if (str_contains($avatar_url, '/')) {
-    //         return Storage::disk('public')->url($avatar_url);
-    //     }
-
-    //     return Storage::disk('public')->url('avatars/' . $avatar_url);
-    // }
+    public function isLeader($programmerId)
+{
+    return $this->activeMembers()
+        ->where('programmer_id', $programmerId)
+        ->where('role', 'leader')
+        ->whereNull('left_at')
+        ->exists();
+}
 }
