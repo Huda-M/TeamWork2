@@ -15,8 +15,6 @@ class ProgrammerScoreLog extends Model
         'points',
         'reason',
         'metadata',
-        'source_type',
-        'source_id',
     'evaluator_id',
     ];
 
