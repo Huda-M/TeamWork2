@@ -1173,7 +1173,6 @@ public function getProjectMembersWithMyRatings($projectId)
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
 
-        // جلب الفريق المرتبط بالمشروع
         $team = Team::with(['project', 'activeMembers.programmer.user'])
             ->where('project_id', $projectId)
             ->first();
@@ -1182,21 +1181,17 @@ public function getProjectMembersWithMyRatings($projectId)
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
 
-        // التحقق من أن المستخدم عضو في الفريق
         if (!$team->isMember($currentProgrammer->id)) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
         }
 
-        // ✅ تجهيز الأعضاء مع استبعاد نفسه
         $members = $team->activeMembers
             ->filter(function ($member) use ($currentProgrammer) {
-                // ❌ استبعد المستخدم نفسه
                 return $member->programmer_id !== $currentProgrammer->id;
             })
-            ->map(function ($member) use ($currentProgrammer) {
+            ->map(function ($member) use ($currentProgrammer, $projectId) {  // ✅ FIXED
                 $prog = $member->programmer;
 
-                // جلب تقييم هذا العضو للمستخدم الحالي
                 $evaluation = Evaluation::where('evaluator_id', $prog->id)
                     ->where('evaluated_id', $currentProgrammer->id)
                     ->where('project_id', $projectId)
@@ -1214,9 +1209,8 @@ public function getProjectMembersWithMyRatings($projectId)
                     'programmer_id' => $prog->id,
                     'name' => $prog->user->full_name,
                     'track' => $prog->track ?? 'general',
-                    // ✅ FIXED: full URL
                     'avatar_url' => $prog->avatar_url 
-                        ? Storage::disk('public')->url($prog->avatar_url) 
+                        ? asset('storage/' . $prog->avatar_url) 
                         : null,
                     'stars_given_to_me' => $starsGiven,
                     'feedback_from_them' => $feedbackGiven,
@@ -1233,13 +1227,9 @@ public function getProjectMembersWithMyRatings($projectId)
         ]);
 
     } catch (\Exception $e) {
-    Log::error('Error in getProjectMembersWithMyRatings: ' . $e->getMessage());
-    Log::error('Stack trace: ' . $e->getTraceAsString());
-    return response()->json([
-        'success' => false, 
-        'message' => 'Failed to fetch ratings: ' . $e->getMessage()
-    ], 500);
-}
+        Log::error('Error in getProjectMembersWithMyRatings: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch ratings: ' . $e->getMessage()], 500);
+    }
 }
     
 public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $request)
