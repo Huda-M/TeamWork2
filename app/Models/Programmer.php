@@ -100,9 +100,27 @@ class Programmer extends Model
         return $this->hasMany(TeamInvitation::class, 'invited_by');
     }
 
-    public function scoreLogs(): HasMany
+    public function scoreLogs()
     {
         return $this->hasMany(ProgrammerScoreLog::class);
+    }
+
+    /**
+     * ✅ محسّن: بيدعم polymorphic source
+     */
+    public function addScore($points, $reason, $metadata = [], $source = null, $evaluatorId = null)
+    {
+        $log = $this->scoreLogs()->create([
+            'points' => $points,
+            'reason' => $reason,
+            'metadata' => $metadata,
+            'evaluator_id' => $evaluatorId,
+        ]);
+
+        // حدّث الـ total_score
+        $this->increment('total_score', $points);
+
+        return $log;
     }
 
     public function statistics(): HasOne
