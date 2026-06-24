@@ -99,9 +99,9 @@ class JoinRequestController extends Controller
             ->with('programmer.user')
             ->first();
             
-        // if ($leaderMember && $leaderMember->programmer && $leaderMember->programmer->user) {
-        //     $leader = $leaderMember->programmer;
-        //     $leader->user->notify(new NewJoinRequestNotification($joinRequest, $programmer));
+        if ($leaderMember && $leaderMember->programmer && $leaderMember->programmer->user) {
+            $leader = $leaderMember->programmer;
+            $leader->user->notify(new NewJoinRequestNotification($joinRequest, $programmer));
             
             if ($leader->user->fcm_token) {
                 $pushNotify = new PushNotify;
