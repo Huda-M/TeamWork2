@@ -1366,4 +1366,35 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
         return response()->json(['success' => false, 'message' => 'Failed to submit evaluations: ' . $e->getMessage()], 500);
     }
 }
+    public function getTeamDetails($projectId)
+{
+    try {
+        $team = Team::with(['project', 'activeMembers.programmer.user'])
+            ->where('project_id', $projectId)
+            ->firstOrFail();
+
+        return response()->json(['success' => true, 'data' => [
+            'project_id' => $team->project_id,
+            'project_name' => $team->project->title ?? null,
+            'team_id' => $team->id,
+            'team_name' => $team->name,
+            'github_link' => $team->project->github_url ?? null,
+            'project_description' => $team->project->description,
+            'members' => $team->activeMembers->map(function ($member) {
+                $prog = $member->programmer;
+                return [
+                    'programmer_id' => $member->programmer_id,
+                    'name' => $prog->user->full_name,
+                    'track' => $prog->track ?? 'general',
+                    'avatar_url' => $prog->avatar_url 
+                        ? asset('storage/' . $prog->avatar_url) 
+                        : null,
+                ];
+            }),
+        ]]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching team details: '.$e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+    }
+}
 }
