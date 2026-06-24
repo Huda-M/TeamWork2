@@ -23,102 +23,123 @@ class JoinRequestController extends Controller
      * ✅ NEW: إرسال طلب انضمام باستخدام project_id
      */
     public function storeByProject(Request $request, $projectId)
-    {
-        DB::beginTransaction();
-        try {
-            $user = Auth::user();
-            if ($user->role !== 'programmer') {
-                return response()->json(['success' => false, 'message' => 'Only programmers can send join requests'], 403);
-            }
-
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
-
-            // جلب المشروع والتيم المرتبط
-            $project = Project::with('teams')->find($projectId);
-            if (!$project) {
-                return response()->json(['success' => false, 'message' => 'Project not found'], 404);
-            }
-
-            $team = $project->teams->first();
-            if (!$team) {
-                return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
-            }
-
-            // التحققات
-            if ($team->status !== 'active') {
-                return response()->json(['success' => false, 'message' => 'Team is not active'], 400);
-            }
-
-            if (!$team->is_public) {
-                return response()->json(['success' => false, 'message' => 'This team is private'], 400);
-            }
-
-            if (!$team->hasVacancy()) {
-                return response()->json(['success' => false, 'message' => 'Team is full'], 400);
-            }
-
-            if ($team->isMember($programmer->id)) {
-                return response()->json(['success' => false, 'message' => 'You are already a member of this team'], 400);
-            }
-
-            // التحقق من وجود request سابق
-            $existing = JoinRequest::where('team_id', $team->id)
-                ->where('programmer_id', $programmer->id)
-                ->where('status', 'pending')
-                ->first();
-
-            if ($existing) {
-                return response()->json(['success' => false, 'message' => 'You already have a pending join request'], 400);
-            }
-
-            $joinRequest = JoinRequest::create([
-                'team_id' => $team->id,
-                'programmer_id' => $programmer->id,
-                'status' => 'pending',
-                'message' => $request->message ?? null,
-            ]);
-
-            // إشعار لليدر
-            $leader = $team->leader?->programmer;
-            if ($leader && $leader->user) {
-                $leader->user->notify(new NewJoinRequestNotification($joinRequest, $programmer));
-                
-                if ($leader->user->fcm_token) {
-                    $pushNotify = new PushNotify;
-                    $pushNotify->sendPushNotification(
-                        $leader->user->fcm_token,
-                        'New Join Request',
-                        "{$programmer->user->full_name} wants to join your team '{$team->name}'",
-                        ['join_request_id' => $joinRequest->id, 'project_id' => $projectId]
-                    );
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Join request sent successfully',
-                'data' => [
-                    'join_request_id' => $joinRequest->id,
-                    'team_id' => $team->id,
-                    'project_id' => (int) $projectId,
-                    'project_name' => $project->title,
-                    'status' => 'pending',
-                    'created_at' => $joinRequest->created_at,
-                ]
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error sending join request: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to send join request: ' . $e->getMessage()], 500);
+{
+    DB::beginTransaction();
+    try {
+        $user = Auth::user();
+        if ($user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can send join requests'], 403);
         }
-    }
 
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب المشروع والتيم المرتبط
+        $project = Project::with('teams')->find($projectId);
+        if (!$project) {
+            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+        }
+
+        $team = $project->teams->first();
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+        }
+
+        // ✅ FIXED: Check status بأمان
+        if (isset($team->status) && $team->status !== 'active') {
+            return response()->json(['success' => false, 'message' => 'Team is not active'], 400);
+        }
+
+        // ✅ FIXED: Check is_public بأمان
+        if (isset($team->is_public) && !$team->is_public) {
+            return response()->json(['success' => false, 'message' => 'This team is private'], 400);
+        }
+
+        // ✅ FIXED: Check vacancy يدوياً
+        $currentMembers = TeamMember::where('team_id', $team->id)
+            ->whereNull('left_at')
+            ->count();
+        
+        if (isset($team->max_members) && $currentMembers >= $team->max_members) {
+            return response()->json(['success' => false, 'message' => 'Team is full'], 400);
+        }
+
+        // ✅ FIXED: Check membership يدوياً
+        $isMember = TeamMember::where('team_id', $team->id)
+            ->where('programmer_id', $programmer->id)
+            ->whereNull('left_at')
+            ->exists();
+            
+        if ($isMember) {
+            return response()->json(['success' => false, 'message' => 'You are already a member of this team'], 400);
+        }
+
+        // التحقق من وجود request سابق
+        $existing = JoinRequest::where('team_id', $team->id)
+            ->where('programmer_id', $programmer->id)
+            ->where('status', 'pending')
+            ->first();
+
+        if ($existing) {
+            return response()->json(['success' => false, 'message' => 'You already have a pending join request'], 400);
+        }
+
+        $joinRequest = JoinRequest::create([
+            'team_id' => $team->id,
+            'programmer_id' => $programmer->id,
+            'status' => 'pending',
+            'message' => $request->message ?? null,
+        ]);
+
+        // ✅ FIXED: إشعار لليدر بأمان (بدون $team->leader)
+        $leaderMember = TeamMember::where('team_id', $team->id)
+            ->where('role', 'leader')
+            ->whereNull('left_at')
+            ->with('programmer.user')
+            ->first();
+            
+        if ($leaderMember && $leaderMember->programmer && $leaderMember->programmer->user) {
+            $leader = $leaderMember->programmer;
+            $leader->user->notify(new NewJoinRequestNotification($joinRequest, $programmer));
+            
+            if ($leader->user->fcm_token) {
+                $pushNotify = new PushNotify;
+                $pushNotify->sendPushNotification(
+                    $leader->user->fcm_token,
+                    'New Join Request',
+                    "{$programmer->user->full_name} wants to join your team '{$team->name}'",
+                    ['join_request_id' => $joinRequest->id, 'project_id' => $projectId]
+                );
+            }
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Join request sent successfully',
+            'data' => [
+                'join_request_id' => $joinRequest->id,
+                'team_id' => $team->id,
+                'project_id' => (int) $projectId,
+                'project_name' => $project->title,
+                'status' => 'pending',
+                'created_at' => $joinRequest->created_at,
+            ]
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error sending join request: ' . $e->getMessage());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
+        return response()->json([
+            'success' => false, 
+            'message' => 'Failed to send join request: ' . $e->getMessage()
+        ], 500);
+    }
+}
     public function myJoinRequests(Request $request)
 {
     try {
