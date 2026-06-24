@@ -108,7 +108,7 @@ Route::put('/join-requests/{joinRequest}', [JoinRequestController::class, 'updat
     Route::get('/teams/{teamId}/members-list', [TeamController::class, 'getTeamMembersList']);
     Route::patch('/tasks/{task}/complete', [TaskController::class, 'markAsCompleted']);
     Route::get('/team/{teamId}/full-details', [TeamController::class, 'getFullTeamDetails']);
-    Route::get('/user/{id}/report-info', [ReportController::class, 'getUserReportInfo']);
+    Route::get('/programmer/{programmerId}/report-info', [ReportController::class, 'getUserReportInfo']);
     Route::prefix('company')->group(function () {
         Route::get('/profile', [CompanyController::class, 'showProfile']);
         Route::put('/profile', [CompanyController::class, 'updateProfile']);
