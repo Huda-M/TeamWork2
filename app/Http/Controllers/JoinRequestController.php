@@ -90,6 +90,7 @@ class JoinRequestController extends Controller
             'team_id' => $team->id,
             'programmer_id' => $programmer->id,
             'status' => 'pending',
+            'message' => $request->message ?? null,
         ]);
 
         // ✅ FIXED: إشعار لليدر بأمان (بدون $team->leader)
