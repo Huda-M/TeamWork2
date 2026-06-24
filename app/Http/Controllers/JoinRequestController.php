@@ -17,8 +17,83 @@ use Illuminate\Support\Facades\Log;
 class JoinRequestController extends Controller
 {
     /**
-     * ✅ NEW: إرسال طلب انضمام باستخدام project_id
-     */
+ * ✅ NEW: تفاصيل join request واحد
+ */
+public function show($joinRequestId)
+{
+    try {
+        $user = Auth::user();
+        if ($user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        $joinRequest = JoinRequest::with(['programmer.user', 'programmer.skills', 'team.project'])
+            ->find($joinRequestId);
+
+        if (!$joinRequest) {
+            return response()->json(['success' => false, 'message' => 'Join request not found'], 404);
+        }
+
+        // التحقق إن المبرمج هو ليدر التيم
+        $isLeader = TeamMember::where('team_id', $joinRequest->team_id)
+            ->where('programmer_id', $programmer->id)
+            ->where('role', 'leader')
+            ->whereNull('left_at')
+            ->exists();
+
+        if (!$isLeader) {
+            return response()->json(['success' => false, 'message' => 'Only team leader can view this request'], 403);
+        }
+
+        $prog = $joinRequest->programmer;
+        $project = $joinRequest->team?->project;
+        $avgStars = $this->calculateAverageStars($prog->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'join_request_id' => $joinRequest->id,
+                'status' => $joinRequest->status,
+                'created_at' => $joinRequest->created_at,
+                'responded_at' => $joinRequest->responded_at,
+                
+                'programmer' => [
+                    'programmer_id' => $prog->id,
+                    'name' => $prog->user?->full_name ?? 'Unknown',
+                    'username' => $prog->user?->user_name ?? 'unknown',
+                    'avatar_url' => $prog->avatar_url 
+                        ? asset('storage/' . $prog->avatar_url) 
+                        : null,
+                    'track' => $prog->track ?? 'general',
+                    'bio' => $prog->bio ?? null,
+                    'skills' => $prog->skills?->pluck('name') ?? [],
+                    'average_stars' => $avgStars['stars'],
+                ],
+                
+                'project' => [
+                    'project_id' => $project?->id,
+                    'name' => $project?->title ?? 'Unknown Project',
+                    'description' => $project?->description ?? null,
+                ],
+                
+                'team' => [
+                    'team_id' => $joinRequest->team?->id,
+                    'name' => $joinRequest->team?->name,
+                ],
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching join request: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch join request: ' . $e->getMessage()], 500);
+    }
+}
+    
     public function storeByProject(Request $request, $projectId)
     {
         DB::beginTransaction();
@@ -116,95 +191,89 @@ class JoinRequestController extends Controller
     }
 
     public function myJoinRequests(Request $request)
-    {
-        try {
-            $user = Auth::user();
-            if ($user->role !== 'programmer') {
-                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-            }
+{
+    try {
+        $user = Auth::user();
+        if ($user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
+        }
 
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
 
-            // جلب التيمات اللي المبرمج هو ليدر فيها
-            $leaderTeamIds = TeamMember::where('programmer_id', $programmer->id)
-                ->where('role', 'leader')
-                ->whereNull('left_at')
-                ->pluck('team_id');
+        // جلب التيمات اللي المبرمج هو ليدر فيها
+        $leaderTeamIds = TeamMember::where('programmer_id', $programmer->id)
+            ->where('role', 'leader')
+            ->whereNull('left_at')
+            ->pluck('team_id');
 
-            if ($leaderTeamIds->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [],
-                    'message' => 'You are not a leader of any team'
-                ]);
-            }
-
-            $status = $request->query('status', 'pending');
-
-            $joinRequests = JoinRequest::with(['programmer.user', 'programmer.skills', 'team.project'])
-                ->whereIn('team_id', $leaderTeamIds)
-                ->when($status !== 'all', function ($query) use ($status) {
-                    $query->where('status', $status);
-                })
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($joinRequest) {
-                    $prog = $joinRequest->programmer;
-                    $project = $joinRequest->team?->project;
-
-                    // حساب متوسط النجوم فقط
-                    $avgStars = $this->calculateAverageStars($prog->id);
-
-                    return [
-                        'join_request_id' => $joinRequest->id,
-                        'status' => $joinRequest->status,
-                        'created_at' => $joinRequest->created_at,
-                        'responded_at' => $joinRequest->responded_at,
-                        
-                        // بيانات المبرمج
-                        'programmer' => [
-                            'programmer_id' => $prog->id,
-                            'name' => $prog->user?->full_name ?? 'Unknown',
-                            'username' => $prog->user?->user_name ?? 'unknown',
-                            'avatar_url' => $prog->avatar_url 
-                                ? asset('storage/' . $prog->avatar_url) 
-                                : null,
-                            'track' => $prog->track ?? 'general',
-                            'bio' => $prog->bio ?? null,
-                            'skills' => $prog->skills?->pluck('name') ?? [],
-                            'average_stars' => $avgStars['stars'],
-                        ],
-                        
-                        // بيانات المشروع
-                        'project' => [
-                            'project_id' => $project?->id,
-                            'name' => $project?->title ?? 'Unknown Project',
-                            'description' => $project?->description ?? null,
-                        ],
-                        
-                        // بيانات التيم
-                        'team' => [
-                            'team_id' => $joinRequest->team?->id,
-                            'name' => $joinRequest->team?->name,
-                        ],
-                    ];
-                });
-
+        if ($leaderTeamIds->isEmpty()) {
             return response()->json([
                 'success' => true,
-                'data' => $joinRequests,
-                'count' => $joinRequests->count(),
+                'data' => [],
+                'message' => 'You are not a leader of any team'
             ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error fetching join requests: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to fetch join requests: ' . $e->getMessage()], 500);
         }
-    }
 
+        $status = $request->query('status', 'all');  // ✅ غيّر default لـ 'all'
+
+        $joinRequests = JoinRequest::with(['programmer.user', 'programmer.skills', 'team.project'])
+            ->whereIn('team_id', $leaderTeamIds)
+            ->when($status !== 'all', function ($query) use ($status) {
+                $query->where('status', $status);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($joinRequest) {
+                $prog = $joinRequest->programmer;
+                $project = $joinRequest->team?->project;
+
+                return [
+                    'join_request_id' => $joinRequest->id,
+                    'status' => $joinRequest->status,
+                    'responded_at' => $joinRequest->responded_at,
+                    
+                    // ✅ بيانات المبرمج (بدون average_stars)
+                    'programmer' => [
+                        'programmer_id' => $prog->id,
+                        'name' => $prog->user?->full_name ?? 'Unknown',
+                        'username' => $prog->user?->user_name ?? 'unknown',
+                        'avatar_url' => $prog->avatar_url 
+                            ? asset('storage/' . $prog->avatar_url) 
+                            : null,
+                        'track' => $prog->track ?? 'general',
+                        'bio' => $prog->bio ?? null,
+                        'skills' => $prog->skills?->pluck('name') ?? [],
+                    ],
+                    
+                    // بيانات المشروع
+                    'project' => [
+                        'project_id' => $project?->id,
+                        'name' => $project?->title ?? 'Unknown Project',
+                        'description' => $project?->description ?? null,
+                    ],
+                    
+                    // بيانات التيم
+                    'team' => [
+                        'team_id' => $joinRequest->team?->id,
+                        'name' => $joinRequest->team?->name,
+                    ],
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $joinRequests,
+            'count' => $joinRequests->count(),
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching join requests: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'Failed to fetch join requests: ' . $e->getMessage()], 500);
+    }
+}
     /**
      * ✅ NEW: الليدر يقبل أو يرفض join request
      */
