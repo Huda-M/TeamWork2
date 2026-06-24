@@ -44,6 +44,7 @@ require_once __DIR__.'/notifications.routes.php';
 
 // ─── Join Requests (by project_id) ───
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/projects/{projectId}/ai-evaluate', [TeamController::class, 'evaluateProjectWithAI']);
     Route::get('/project/{projectId}/team', [TeamController::class, 'getProjectTeamMembers']);
     // إرسال join request لمشروع (التيم المرتبط بالمشروع)
     Route::post('/projects/{projectId}/join-request', [JoinRequestController::class, 'storeByProject']);
