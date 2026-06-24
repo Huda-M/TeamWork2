@@ -1369,32 +1369,42 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
     public function getTeamDetails($projectId)
 {
     try {
-        $team = Team::with(['project', 'activeMembers.programmer.user'])
+        $team = Team::with(['activeMembers.programmer.user'])
             ->where('project_id', $projectId)
-            ->firstOrFail();
+            ->first();
 
-        return response()->json(['success' => true, 'data' => [
-            'project_id' => $team->project_id,
-            'project_name' => $team->project->title ?? null,
-            'team_id' => $team->id,
-            'team_name' => $team->name,
-            'github_link' => $team->project->github_url ?? null,
-            'project_description' => $team->project->description,
-            'members' => $team->activeMembers->map(function ($member) {
-                $prog = $member->programmer;
-                return [
-                    'programmer_id' => $member->programmer_id,
-                    'name' => $prog->user->full_name,
-                    'track' => $prog->track ?? 'general',
-                    'avatar_url' => $prog->avatar_url 
-                        ? asset('storage/' . $prog->avatar_url) 
-                        : null,
-                ];
-            }),
-        ]]);
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No team found for this project'
+            ], 404);
+        }
+
+        $members = $team->activeMembers->map(function ($member) {
+            $prog = $member->programmer;
+            return [
+                'programmer_id' => $prog->id,
+                'name' => $prog->user?->full_name ?? 'Unknown',
+                'track' => $prog->track ?? 'general',
+                'avatar_url' => $prog->avatar_url 
+                    ? asset('storage/' . $prog->avatar_url) 
+                    : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'members' => $members
+            ]
+        ]);
+
     } catch (\Exception $e) {
         Log::error('Error fetching team details: '.$e->getMessage());
-        return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
+        return response()->json([
+            'success' => false, 
+            'message' => 'Failed to fetch team details'
+        ], 500);
     }
 }
 }
