@@ -58,15 +58,27 @@ class ReportController extends Controller
         $validated = $request->validated();
         $reporter = auth()->user();
 
-        // ✅ منع الإبلاغ عن نفسك
-        if ($reporter->id == $validated['target_user_id']) {
+        // ✅ تحويل programmer_id لـ user_id
+        $targetProgrammer = \App\Models\Programmer::find($validated['target_programmer_id']);
+        
+        if (!$targetProgrammer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'المبرمج المستهدف غير موجود'
+            ], 404);
+        }
+
+        $targetUserId = $targetProgrammer->user_id;
+
+        // منع الإبلاغ عن نفسك
+        if ($reporter->id == $targetUserId) {
             return response()->json([
                 'success' => false,
                 'message' => 'لا يمكنك الإبلاغ عن نفسك'
             ], 400);
         }
 
-        $targetUser = User::find($validated['target_user_id']);
+        $targetUser = User::find($targetUserId);
         if ($targetUser->role === 'admin') {
             return response()->json([
                 'success' => false,
@@ -75,7 +87,7 @@ class ReportController extends Controller
         }
 
         $existingReport = Report::where('reporter_user_id', $reporter->id)
-            ->where('target_user_id', $validated['target_user_id'])
+            ->where('target_user_id', $targetUserId)
             ->where('admin_action', 'pending')
             ->first();
 
@@ -89,7 +101,7 @@ class ReportController extends Controller
         DB::beginTransaction();
 
         $report = Report::create([
-            'target_user_id'   => $validated['target_user_id'],
+            'target_user_id'   => $targetUserId,
             'reporter_user_id' => $reporter->id,
             'description'      => $validated['description'],
             'admin_action'     => 'warning',
@@ -100,12 +112,11 @@ class ReportController extends Controller
         Log::info('New report created', [
             'report_id' => $report->id,
             'reporter' => $reporter->id,
-            'target' => $validated['target_user_id']
+            'target' => $targetUserId
         ]);
 
         DB::commit();
 
-        // ✅ رجّع programmer_id بدل user_id
         $report = $report->fresh(['targetUser.programmer', 'reporterUser.programmer']);
 
         return response()->json([
