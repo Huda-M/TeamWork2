@@ -162,8 +162,7 @@ class JoinRequestController extends Controller
                 // حساب متوسط النجوم فقط
                 $avgStars = $this->calculateAverageStars($prog->id);
 
-                // ✅ بناء الـ response array
-                $response = [
+                return [
                     'join_request_id' => $joinRequest->id,
                     'status' => $joinRequest->status,
                     'created_at' => $joinRequest->created_at,
@@ -171,7 +170,7 @@ class JoinRequestController extends Controller
                     
                     // ✅ بيانات المبرمج (بدون total_evaluations و stars_percentage)
                     'programmer' => [
-                        'programmer_id' => $prog->id,  // ✅ بدل id
+                        'programmer_id' => $prog->id,
                         'name' => $prog->user?->full_name ?? 'Unknown',
                         'username' => $prog->user?->user_name ?? 'unknown',
                         'avatar_url' => $prog->avatar_url 
@@ -185,24 +184,17 @@ class JoinRequestController extends Controller
                     
                     // ✅ بيانات المشروع
                     'project' => [
-                        'project_id' => $project?->id,  // ✅ بدل id
+                        'project_id' => $project?->id,
                         'name' => $project?->title ?? 'Unknown Project',
                         'description' => $project?->description ?? null,
                     ],
                     
                     // ✅ بيانات التيم
                     'team' => [
-                        'team_id' => $joinRequest->team?->id,  // ✅ بدل id
+                        'team_id' => $joinRequest->team?->id,
                         'name' => $joinRequest->team?->name,
                     ],
                 ];
-
-                // ✅ نضيف message بس لو موجود
-                if ($joinRequest->message) {
-                    $response['message'] = $joinRequest->message;
-                }
-
-                return $response;
             });
 
         return response()->json([
