@@ -43,6 +43,10 @@ class TeamController extends Controller
  * تقييم أعضاء الفريق باستخدام AI (بـ project_id)
  * POST /api/projects/{projectId}/ai-evaluate
  */
+/**
+ * تقييم أعضاء الفريق باستخدام AI (بـ project_id)
+ * POST /api/projects/{projectId}/ai-evaluate
+ */
 public function evaluateProjectWithAI($projectId)
 {
     try {
@@ -127,110 +131,107 @@ public function evaluateProjectWithAI($projectId)
         ], 500);
     }
 }
-
     /**
      * تجهيز بيانات الفريق للـ AI API
      */
-    private function prepareAIEvaluationData(Team $team): array
-    {
-        $project = $team->project;
-
-        // تجهيز الـ members
-        $members = $team->activeMembers->map(function ($member) {
-            $prog = $member->programmer;
-            return [
-                'programmer_id' => $prog->id,
-                'role' => $member->role,
-                'skills' => $prog->skills->map(function ($skill) {
-                    return ['name' => $skill->name];
-                })->toArray(),
-            ];
-        })->toArray();
-
-        // تجهيز الـ tasks
-        $tasks = $team->tasks->map(function ($task) {
-            return [
-                'id' => $task->id,
-                'team_id' => $task->team_id,
-                'programmer_id' => $task->programmer_id,
-                'title' => $task->title,
-                'status' => $task->status,
-                'estimated_hours' => $task->estimated_hours ?? 0,
-                'actual_hours' => $task->actual_hours ?? 0,
-                'deadline' => $task->deadline?->toIso8601String(),
-                'complexity' => $task->complexity ?? 'medium',
-                'required_skills' => $task->required_skills ?? [],
-                'completed_at' => $task->completed_at?->toIso8601String(),
-                'reviewed_at' => $task->reviewed_at?->toIso8601String(),
-                'quality_score' => $task->quality_score ?? 0,
-                'is_blocked' => $task->is_blocked ?? false,
-            ];
-        })->toArray();
-
-        // تجهيز الـ task history
-        $taskHistory = TaskHistory::whereIn('task_id', $team->tasks->pluck('id'))
-            ->get()
-            ->map(function ($history) {
-                return [
-                    'task_id' => $history->task_id,
-                    'changed_by' => $history->changed_by,
-                    'change_type' => $history->change_type,
-                    'change_description' => $history->change_description,
-                ];
-            })->toArray();
-
-        // تجهيز الـ messages
-        $teamMessages = TeamMessage::where('team_id', $team->id)
-            ->get()
-            ->map(function ($message) {
-                return [
-                    'programmer_id' => $message->programmer_id,
-                    'team_id' => $message->team_id,
-                    'message_type' => $message->message_type ?? 'text',
-                    'message_text' => $message->message_text,
-                ];
-            })->toArray();
-
-        // تجهيز الـ activities
-        $programmerActivities = ProgrammerActivity::where('project_id', $project->id)
-            ->whereIn('programmer_id', $team->activeMembers->pluck('programmer_id'))
-            ->get()
-            ->map(function ($activity) {
-                return [
-                    'programmer_id' => $activity->programmer_id,
-                    'project_id' => $activity->project_id,
-                    'commits_count' => $activity->commits_count ?? 0,
-                    'code_lines_added' => $activity->code_lines_added ?? 0,
-                    'code_lines_deleted' => $activity->code_lines_deleted ?? 0,
-                    'chat_messages_count' => $activity->chat_messages_count ?? 0,
-                    'tasks_completed_count' => $activity->tasks_completed_count ?? 0,
-                    'tasks_completed_on_time' => $activity->tasks_completed_on_time ?? 0,
-                    'code_quality_score' => $activity->code_quality_score ?? 0,
-                    'activity_date' => $activity->activity_date?->toDateString(),
-                ];
-            })->toArray();
-
+    private function prepareAIEvaluationData(Team $team, Project $project): array
+{
+    // تجهيز الـ members
+    $members = $team->activeMembers->map(function ($member) {
+        $prog = $member->programmer;
         return [
-            'project' => [
-                'id' => $project->id,
-                'title' => $project->title,
-                'difficulty' => $project->difficulty ?? 'intermediate',
-                'estimated_duration_days' => $project->estimated_duration_days ?? 30,
-                'required_skills' => $project->required_skills ?? [],
-            ],
-            'team' => [
-                'id' => $team->id,
-                'project_id' => $team->project_id,
-                'team_size' => $team->activeMembers->count(),
-                'experience_level' => $team->experience_level ?? 'intermediate',
-            ],
-            'members' => $members,
-            'tasks' => $tasks,
-            'task_history' => $taskHistory,
-            'team_messages' => $teamMessages,
-            'programmer_activities' => $programmerActivities,
+            'programmer_id' => $prog->id,
+            'role' => $member->role,
+            'skills' => $prog->skills->map(function ($skill) {
+                return ['name' => $skill->name];
+            })->toArray(),
         ];
-    }
+    })->toArray();
+
+    // تجهيز الـ tasks
+    $tasks = $team->tasks->map(function ($task) {
+        return [
+            'id' => $task->id,
+            'team_id' => $task->team_id,
+            'programmer_id' => $task->programmer_id,
+            'title' => $task->title,
+            'status' => $task->status,
+            'estimated_hours' => $task->estimated_hours ?? 0,
+            'actual_hours' => $task->actual_hours ?? 0,
+            'deadline' => $task->deadline?->toIso8601String(),
+            'complexity' => $task->complexity ?? 'medium',
+            'required_skills' => $task->required_skills ?? [],
+            'completed_at' => $task->completed_at?->toIso8601String(),
+            'reviewed_at' => $task->reviewed_at?->toIso8601String(),
+            'quality_score' => $task->quality_score ?? 0,
+            'is_blocked' => $task->is_blocked ?? false,
+        ];
+    })->toArray();
+
+    // تجهيز الـ task history
+    $taskHistory = TaskHistory::whereIn('task_id', $team->tasks->pluck('id'))
+        ->get()
+        ->map(function ($history) {
+            return [
+                'task_id' => $history->task_id,
+                'changed_by' => $history->changed_by,
+                'change_type' => $history->change_type,
+                'change_description' => $history->change_description,
+            ];
+        })->toArray();
+
+    // تجهيز الـ messages
+    $teamMessages = TeamMessage::where('team_id', $team->id)
+        ->get()
+        ->map(function ($message) {
+            return [
+                'programmer_id' => $message->programmer_id,
+                'team_id' => $message->team_id,
+                'message_type' => $message->message_type ?? 'text',
+                'message_text' => $message->message_text,
+            ];
+        })->toArray();
+
+    // تجهيز الـ activities
+    $programmerActivities = ProgrammerActivity::where('project_id', $project->id)
+        ->whereIn('programmer_id', $team->activeMembers->pluck('programmer_id'))
+        ->get()
+        ->map(function ($activity) {
+            return [
+                'programmer_id' => $activity->programmer_id,
+                'project_id' => $activity->project_id,
+                'commits_count' => $activity->commits_count ?? 0,
+                'code_lines_added' => $activity->code_lines_added ?? 0,
+                'code_lines_deleted' => $activity->code_lines_deleted ?? 0,
+                'chat_messages_count' => $activity->chat_messages_count ?? 0,
+                'tasks_completed_count' => $activity->tasks_completed_count ?? 0,
+                'tasks_completed_on_time' => $activity->tasks_completed_on_time ?? 0,
+                'code_quality_score' => $activity->code_quality_score ?? 0,
+                'activity_date' => $activity->activity_date?->toDateString(),
+            ];
+        })->toArray();
+
+    return [
+        'project' => [
+            'id' => $project->id,
+            'title' => $project->title,
+            'difficulty' => $project->difficulty ?? 'intermediate',
+            'estimated_duration_days' => $project->estimated_duration_days ?? 30,
+            'required_skills' => $project->required_skills ?? [],
+        ],
+        'team' => [
+            'id' => $team->id,
+            'project_id' => $team->project_id,
+            'team_size' => $team->activeMembers->count(),
+            'experience_level' => $team->experience_level ?? 'intermediate',
+        ],
+        'members' => $members,
+        'tasks' => $tasks,
+        'task_history' => $taskHistory,
+        'team_messages' => $teamMessages,
+        'programmer_activities' => $programmerActivities,
+    ];
+}
 
     /**
      * حفظ تقييمات الـ AI في الـ database
@@ -277,7 +278,6 @@ public function evaluateProjectWithAI($projectId)
             'is_completed' => true,
             'submitted_at' => now(),
         ]);
-
             // إضافة نقاط للمُقيَّم
             $evaluatedProgrammer = Programmer::find($programmerId);
             if ($evaluatedProgrammer && method_exists($evaluatedProgrammer, 'addStars')) {
