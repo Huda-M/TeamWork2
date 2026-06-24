@@ -53,63 +53,84 @@ class ReportController extends Controller
     }
 
     public function store(StoreReportRequest $request)
-    {
-        try {
-            $validated = $request->validated();
-            $reporter = auth()->user();
+{
+    try {
+        $validated = $request->validated();
+        $reporter = auth()->user();
 
-            $targetUser = User::find($validated['target_user_id']);
-            if ($targetUser->role === 'admin') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot report admin users'
-                ], 400);
-            }
-
-            $existingReport = Report::where('reporter_user_id', $reporter->id)
-                ->where('target_user_id', $validated['target_user_id'])
-                ->where('admin_action', 'pending')
-                ->first();
-
-            if ($existingReport) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You already have a pending report against this user'
-                ], 400);
-            }
-
-            DB::beginTransaction();
-
-            $report = Report::create([
-    'target_user_id'   => $validated['target_user_id'],
-    'reporter_user_id' => $reporter->id,
-    'description'      => $validated['description'],
-    'admin_action'     => 'warning',
-    'status'           => 'generated',
-    'report_type'      => 'other',
-]);
-
-            Log::info('New report created', [
-                'report_id' => $report->id,
-                'reporter' => $reporter->id,
-                'target' => $validated['target_user_id']
-            ]);
-
-            DB::commit();
-
+        // ✅ منع الإبلاغ عن نفسك
+        if ($reporter->id == $validated['target_user_id']) {
             return response()->json([
-                'success' => true,
-                'message' => 'Report submitted successfully. Admin will review it soon.',
-                'data' => $report->load(['targetUser', 'reporterUser'])
-            ], 201);
+                'success' => false,
+                'message' => 'لا يمكنك الإبلاغ عن نفسك'
+            ], 400);
+        }
 
-        } catch (\Exception $e) {
-    DB::rollBack();
-    return response()->json([
-        'success' => false,
-        'message' => 'Failed to submit report',
-        'error'   => $e->getMessage(),
-    ], 500);
+        $targetUser = User::find($validated['target_user_id']);
+        if ($targetUser->role === 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot report admin users'
+            ], 400);
+        }
+
+        $existingReport = Report::where('reporter_user_id', $reporter->id)
+            ->where('target_user_id', $validated['target_user_id'])
+            ->where('admin_action', 'pending')
+            ->first();
+
+        if ($existingReport) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You already have a pending report against this user'
+            ], 400);
+        }
+
+        DB::beginTransaction();
+
+        $report = Report::create([
+            'target_user_id'   => $validated['target_user_id'],
+            'reporter_user_id' => $reporter->id,
+            'description'      => $validated['description'],
+            'admin_action'     => 'warning',
+            'status'           => 'generated',
+            'report_type'      => 'other',
+        ]);
+
+        Log::info('New report created', [
+            'report_id' => $report->id,
+            'reporter' => $reporter->id,
+            'target' => $validated['target_user_id']
+        ]);
+
+        DB::commit();
+
+        // ✅ رجّع programmer_id بدل user_id
+        $report = $report->fresh(['targetUser.programmer', 'reporterUser.programmer']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Report submitted successfully. Admin will review it soon.',
+            'data' => [
+                'report_id' => $report->id,
+                'target_programmer_id' => $report->targetUser->programmer?->id,
+                'reporter_programmer_id' => $report->reporterUser->programmer?->id,
+                'description' => $report->description,
+                'admin_action' => $report->admin_action,
+                'status' => $report->status,
+                'report_type' => $report->report_type,
+                'created_at' => $report->created_at,
+            ]
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to submit report',
+            'error'   => $e->getMessage(),
+        ], 500);
+    }
 }
     }
     public function show(Report $report)
