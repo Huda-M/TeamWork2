@@ -2,24 +2,19 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TeamMessage extends Model
 {
-    use HasFactory;
     protected $fillable = [
-        'message_text',
-        'message_type',
-        'file_url',
         'programmer_id',
         'team_id',
+        'message_type',
+        'message_text',
     ];
-    public function team():BelongsTo{
-        return $this->belongsTo(Team::class);
-    }
-    public function programmer():BelongsTo{
-        return $this->belongsTo(Programmer::class);
-    }
+
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
 }
