@@ -323,38 +323,28 @@ class JoinRequestController extends Controller
         }
     }
 
-    /**
-     * ✅ NEW: حساب متوسط النجوم للمبرمج
-     */
     private function calculateAverageStars($programmerId)
-    {
-        $evaluations = Evaluation::where('evaluated_id', $programmerId)
-            ->whereNotNull('average_score')
-            ->get();
+{
+    $evaluations = Evaluation::where('evaluated_id', $programmerId)
+        ->whereNotNull('average_score')
+        ->get();
 
-        $total = $evaluations->count();
-        
-        if ($total === 0) {
-            return [
-                'stars' => 0,
-                'total' => 0,
-                'percentage' => 0,
-            ];
-        }
-
-        // average_score من 10، نحول لـ 5
-        $avgScore = $evaluations->avg('average_score');
-        $starsOutOf5 = round($avgScore / 2, 1);
-
-        // نسبة النجوم من 5
-        $percentage = round(($starsOutOf5 / 5) * 100, 1);
-
+    $total = $evaluations->count();
+    
+    if ($total === 0) {
         return [
-            'stars' => $starsOutOf5,
-            'total' => $total,
-            'percentage' => $percentage,
+            'stars' => 0,
         ];
     }
+
+    // average_score من 10، نحول لـ 5
+    $avgScore = $evaluations->avg('average_score');
+    $starsOutOf5 = round($avgScore / 2, 1);
+
+    return [
+        'stars' => $starsOutOf5,
+    ];
+}
 
     /**
      * ⬇️ OLD: إرسال طلب انضمام إلى فريق (by team_id) - سيبه زي ما هو
