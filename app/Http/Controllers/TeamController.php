@@ -39,82 +39,94 @@ class TeamController extends Controller
         $this->aiRecommendationService = $aiRecommendationService;
         $this->aiEvaluationService = $aiEvaluationService;
     }
-    public function evaluateTeamWithAI($teamId)
-    {
-        try {
-            $user = auth()->user();
-            if (!$user || $user->role !== 'programmer') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only programmers can access'
-                ], 403);
-            }
-
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Programmer profile not found'
-                ], 404);
-            }
-
-            $team = Team::with([
-                'project',
-                'activeMembers.programmer.user',
-                'activeMembers.programmer.skills',
-                'tasks.programmer',
-                'tasks.taskHistories',
-                'messages',
-            ])->find($teamId);
-
-            if (!$team) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Team not found'
-                ], 404);
-            }
-
-            if (!$team->isMember($programmer->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You are not a member of this team'
-                ], 403);
-            }
-
-            // التحقق من أن المشروع مكتمل
-            if ($team->project->status !== 'completed') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You can only evaluate after the project is completed'
-                ], 400);
-            }
-
-            // ✅ تجهيز البيانات للـ AI API
-            $aiRequestData = $this->prepareAIEvaluationData($team);
-
-            // ✅ إرسال للـ AI API
-            $aiResponse = $this->aiEvaluationService->evaluateTeam($aiRequestData);
-
-            // ✅ حفظ التقييمات في الـ database
-            $savedEvaluations = $this->saveAIEvaluations($aiResponse, $team, $programmer);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'AI evaluation completed successfully',
-                'data' => [
-                    'evaluations' => $savedEvaluations,
-                    'ai_raw_response' => $aiResponse,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('AI evaluation error: ' . $e->getMessage());
+    /**
+ * تقييم أعضاء الفريق باستخدام AI (بـ project_id)
+ * POST /api/projects/{projectId}/ai-evaluate
+ */
+public function evaluateProjectWithAI($projectId)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to evaluate team: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Only programmers can access'
+            ], 403);
         }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        // ✅ جلب المشروع مع الفريق
+        $project = Project::with(['teams.activeMembers.programmer.user', 'teams.activeMembers.programmer.skills'])
+            ->find($projectId);
+
+        if (!$project) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Project not found'
+            ], 404);
+        }
+
+        // ✅ جلب الفريق المرتبط بالمشروع
+        $team = $project->teams->first();
+
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No team found for this project'
+            ], 404);
+        }
+
+        // ✅ التحقق من أن المبرمج عضو في الفريق
+        if (!$team->isMember($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not a member of this team'
+            ], 403);
+        }
+
+        // ✅ التحقق من أن المشروع مكتمل
+        if ($project->status !== 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'You can only evaluate after the project is completed'
+            ], 400);
+        }
+
+        // تجهيز البيانات للـ AI API
+        $aiRequestData = $this->prepareAIEvaluationData($team, $project);
+
+        // إرسال للـ AI API
+        $aiResponse = $this->aiEvaluationService->evaluateTeam($aiRequestData);
+
+        // حفظ التقييمات
+        $savedEvaluations = $this->saveAIEvaluations($aiResponse, $team, $programmer, $project);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'AI evaluation completed successfully',
+            'data' => [
+                'project_id' => $project->id,
+                'team_id' => $team->id,
+                'evaluations' => $savedEvaluations,
+                'ai_raw_response' => $aiResponse,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('AI evaluation error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to evaluate: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * تجهيز بيانات الفريق للـ AI API
@@ -223,51 +235,48 @@ class TeamController extends Controller
     /**
      * حفظ تقييمات الـ AI في الـ database
      */
-    private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $evaluator): array
-    {
-        $saved = [];
-        $project = $team->project;
+   private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $evaluator, Project $project): array
+{
+    $saved = [];
 
-        foreach ($aiResponse['evaluations'] as $eval) {
-            $programmerId = $eval['programmer_id'];
-            $overallScore = $eval['overall_score'];
-            $breakdown = $eval['breakdown'] ?? [];
-            $explanation = $eval['explanation'] ?? '';
+    foreach ($aiResponse['evaluations'] as $eval) {
+        $programmerId = $eval['programmer_id'];
+        $overallScore = $eval['overall_score'];
+        $breakdown = $eval['breakdown'] ?? [];
+        $explanation = $eval['explanation'] ?? '';
 
-            // التحقق من أن المبرمج عضو في الفريق
-            if (!$team->isMember($programmerId)) {
-                continue;
-            }
+        if (!$team->isMember($programmerId)) {
+            continue;
+        }
 
-            // التحقق من عدم وجود تقييم سابق
-            $existing = Evaluation::where('project_id', $project->id)
-                ->where('team_id', $team->id)
-                ->where('evaluator_id', $evaluator->id)
-                ->where('evaluated_id', $programmerId)
-                ->first();
+        // التحقق من عدم وجود تقييم سابق
+        $existing = Evaluation::where('project_id', $project->id)
+            ->where('team_id', $team->id)
+            ->where('evaluator_id', $evaluator->id)
+            ->where('evaluated_id', $programmerId)
+            ->first();
 
-            if ($existing) {
-                continue;
-            }
+        if ($existing) {
+            continue;
+        }
 
-            // إنشاء التقييم
-            $evaluation = Evaluation::create([
-                'project_id' => $project->id,
-                'team_id' => $team->id,
-                'evaluator_id' => $evaluator->id,
-                'evaluated_id' => $programmerId,
-                'technical_skills' => $breakdown['technical_skills'] ?? $overallScore,
-                'communication' => $breakdown['communication'] ?? $overallScore,
-                'teamwork' => $breakdown['teamwork'] ?? $overallScore,
-                'problem_solving' => $breakdown['problem_solving'] ?? $overallScore,
-                'reliability' => $breakdown['reliability'] ?? $overallScore,
-                'code_quality' => $breakdown['code_quality'] ?? $overallScore,
-                'average_score' => $overallScore * 2, // تحويل من 0-10 لـ 0-20
-                'feedback' => $explanation,
-                'is_anonymous' => false,
-                'is_completed' => true,
-                'submitted_at' => now(),
-            ]);
+        $evaluation = Evaluation::create([
+            'project_id' => $project->id,
+            'team_id' => $team->id,
+            'evaluator_id' => $evaluator->id,
+            'evaluated_id' => $programmerId,
+            'technical_skills' => $breakdown['technical_skills'] ?? $overallScore,
+            'communication' => $breakdown['communication'] ?? $overallScore,
+            'teamwork' => $breakdown['teamwork'] ?? $overallScore,
+            'problem_solving' => $breakdown['problem_solving'] ?? $overallScore,
+            'reliability' => $breakdown['reliability'] ?? $overallScore,
+            'code_quality' => $breakdown['code_quality'] ?? $overallScore,
+            'average_score' => $overallScore * 2,
+            'feedback' => $explanation,
+            'is_anonymous' => false,
+            'is_completed' => true,
+            'submitted_at' => now(),
+        ]);
 
             // إضافة نقاط للمُقيَّم
             $evaluatedProgrammer = Programmer::find($programmerId);
