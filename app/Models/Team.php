@@ -211,10 +211,7 @@ class Team extends Model
     {
         return $this->hasMany(AiTeam::class);
     }
-    public function tasks()
-{
-    return $this->hasMany(Task::class);
-}
+ 
 
 public function messages()
 {
