@@ -5,15 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class AIEvaluation extends Model
+class AiEvaluation extends Model
 {
     use HasFactory;
 
-    // ✅ الحل الأقوى: Override getTable() method
-    public function getTable()
-    {
-        return 'ai_evaluations';
-    }
+    
 
     protected $fillable = [
         'project_id',
