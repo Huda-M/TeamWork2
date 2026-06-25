@@ -25,6 +25,10 @@ class AIEvaluation extends Model
         'overall_score' => 'decimal:2',
         'is_ai_generated' => 'boolean',
     ];
+    public function getTable()
+    {
+        return 'ai_evaluations';
+    }
 
     public function project()
     {
