@@ -177,112 +177,108 @@ class SocialAuthController extends Controller
         return !in_array($domain, $blockedDomains);
     }
 
-    /**
-     * 🔧 CORE: معالجة بيانات GitHub
-     */
-    private function processGitHubUser($githubUser)
-    {
-        DB::beginTransaction();
+   private function processGitHubUser($githubUser)
+{
+    DB::beginTransaction();
 
-        try {
-            $email = $githubUser->getEmail();
-            $name = $githubUser->getName() ?? $githubUser->getNickname() ?? 'Developer';
-            $avatar = $githubUser->getAvatar();
-            $githubUsername = $githubUser->getNickname();
-            $githubId = $githubUser->getId();
+    try {
+        $email = $githubUser->getEmail();
+        $name = $githubUser->getName() ?? $githubUser->getNickname() ?? 'Developer';
+        $avatar = $githubUser->getAvatar();
+        $githubUsername = $githubUser->getNickname();
+        $githubId = $githubUser->getId();
 
-            $existingAuth = UserAuth::where('provider_type', 'github')
-                ->where('provider_user_id', $githubId)
-                ->first();
+        $existingAuth = UserAuth::where('provider_type', 'github')
+            ->where('provider_user_id', $githubId)
+            ->first();
 
-            if ($existingAuth) {
-                $user = $existingAuth->user;
-                Log::info('Existing GitHub user login', [
-                    'user_id' => $user->id,
-                    'github_id' => $githubId
-                ]);
-            } else {
-                $user = User::where('email', $email)->first();
-
-                if (!$user) {
-                    $user = User::create([
-                        'full_name' => $name,
-                        'email' => $email,
-                        'password' => Hash::make(Str::random(24)),
-                        'role' => 'programmer',
-                        'email_verified_at' => now(),
-                    ]);
-
-                    Programmer::updateOrCreate(
-                        ['user_id' => $user->id],
-                        [
-                            'user_name' => $this->generateUniqueUsername($githubUser),
-                            'avatar_url' => $avatar,
-                            'github_username' => $githubUsername,
-                            'bio' => null,
-                            'track' => null,
-                            'experience_level' => null,
-                            'profile_completed' => false,
-                        ]
-                    );
-
-                    Log::info('New GitHub user created', [
-                        'user_id' => $user->id,
-                        'email' => $email
-                    ]);
-                }
-            }
-
-            if ($user->role !== 'programmer') {
-                throw new \Exception('This account is registered as ' . $user->role);
-            }
-
-            Programmer::updateOrCreate(
-                ['user_id' => $user->id],
-                [
-                    'user_name' => $this->generateUniqueUsername($githubUser),
-                    'avatar_url' => $avatar ?? $user->programmer?->avatar_url,
-                    'github_username' => $githubUsername ?? $user->programmer?->github_username,
-                    'bio' => $user->programmer?->bio,
-                    'track' => $user->programmer?->track,
-                    'experience_level' => $user->programmer?->experience_level,
-                    'profile_completed' => $user->programmer?->profile_completed ?? false,
-                ]
-            );
-
-            $user->refresh();
-            $this->storeGitHubAuth($user, $githubUser);
-
-            $token = $user->createToken('github_auth')->plainTextToken;
-            $user->load('programmer');
-            $programmer = $user->programmer;
-            $profileCompleted = $programmer ? $programmer->profile_completed : false;
-
-            $userData = [
-                'id' => $programmer?->id,
+        if ($existingAuth) {
+            $user = $existingAuth->user;
+            Log::info('Existing GitHub user login', [
                 'user_id' => $user->id,
-                'name' => $user->full_name,
-                'email' => $user->email,
-                'role' => 'programmer',
-                'avatar' => $programmer?->avatar_url ?? null,
-                'github_username' => $programmer?->github_username ?? null,
-                'profile_completed' => $profileCompleted,
-            ];
+                'github_id' => $githubId
+            ]);
+        } else {
+            $user = User::where('email', $email)->first();
 
-            DB::commit();
+            if (!$user) {
+                $user = User::create([
+                    'full_name' => $name,
+                    'email' => $email,
+                    'password' => Hash::make(Str::random(24)),
+                    'role' => 'programmer',
+                    'email_verified_at' => now(),
+                ]);
 
-            return [
-                'token' => $token,
-                'user_data' => $userData,
-                'profile_completed' => $profileCompleted,
-            ];
+                // ✅ user_name = null
+                Programmer::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'user_name' => null,
+                        'avatar_url' => $avatar,
+                        'github_username' => $githubUsername,
+                        'bio' => null,
+                        'track' => null,
+                        'experience_level' => null,
+                        'profile_completed' => false,
+                    ]
+                );
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+                Log::info('New GitHub user created', [
+                    'user_id' => $user->id,
+                    'email' => $email
+                ]);
+            }
         }
-    }
 
+        if ($user->role !== 'programmer') {
+            throw new \Exception('This account is registered as ' . $user->role);
+        }
+
+        Programmer::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'avatar_url' => $avatar ?? $user->programmer?->avatar_url,
+                'github_username' => $githubUsername ?? $user->programmer?->github_username,
+                'bio' => $user->programmer?->bio,
+                'track' => $user->programmer?->track,
+                'experience_level' => $user->programmer?->experience_level,
+                'profile_completed' => $user->programmer?->profile_completed ?? false,
+            ]
+        );
+
+        $user->refresh();
+        $this->storeGitHubAuth($user, $githubUser);
+
+        $token = $user->createToken('github_auth')->plainTextToken;
+        $user->load('programmer');
+        $programmer = $user->programmer;
+        $profileCompleted = $programmer ? $programmer->profile_completed : false;
+
+        $userData = [
+            'id' => $programmer?->id,
+            'user_id' => $user->id,
+            'name' => $user->full_name,
+            'email' => $user->email,
+            'role' => 'programmer',
+            'avatar' => $programmer?->avatar_url ?? null,
+            'github_username' => $programmer?->github_username ?? null,
+            'profile_completed' => $profileCompleted,
+        ];
+
+        DB::commit();
+
+        return [
+            'token' => $token,
+            'user_data' => $userData,
+            'profile_completed' => $profileCompleted,
+        ];
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        throw $e;
+    }
+}
     // ─── Helpers ───
 
     private function storeGitHubAuth(User $user, $githubUser)
