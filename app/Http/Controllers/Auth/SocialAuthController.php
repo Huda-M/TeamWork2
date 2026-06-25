@@ -66,31 +66,50 @@ class SocialAuthController extends Controller
     /**
      * 🔧 CORE: معالجة بيانات GitHub (للمبرمجين فقط)
      */
-    private function processGitHubUser($githubUser)
-    {
-        DB::beginTransaction();
+   private function processGitHubUser($githubUser)
+{
+    DB::beginTransaction();
 
-        try {
-            $email = $githubUser->getEmail();
-            $name = $githubUser->getName() ?? $githubUser->getNickname() ?? 'Developer';
-            $avatar = $githubUser->getAvatar();
-            $githubUsername = $githubUser->getNickname();
+    try {
+        $email = $githubUser->getEmail();
+        $name = $githubUser->getName() ?? $githubUser->getNickname() ?? 'Developer';
+        $avatar = $githubUser->getAvatar();
+        $githubUsername = $githubUser->getNickname();
 
-            // ✅ البحث عن مستخدم موجود
-            $user = User::where('email', $email)->first();
+        // ✅ البحث عن مستخدم موجود
+        $user = User::where('email', $email)->first();
 
-            if (!$user) {
-                // ✅ مستخدم جديد: يكون مبرمج فقط
-                $user = User::create([
-                    'full_name' => $name,
-                    'email' => $email,
-                    'password' => Hash::make(Str::random(24)),
-                    'role' => 'programmer',
-                    'email_verified_at' => now(),
-                ]);
+        if (!$user) {
+            // ✅ مستخدم جديد تماماً
+            $user = User::create([
+                'full_name' => $name,
+                'email' => $email,
+                'password' => Hash::make(Str::random(24)),
+                'role' => 'programmer',
+                'email_verified_at' => now(),
+            ]);
 
-                // ✅ إنشاء بروفايل المبرمج
-                $user->programmer()->create([
+            // ✅ إنشاء بروفايل المبرمج
+            $user->programmer()->create([
+                'user_name' => $this->generateUniqueUsername($githubUser),
+                'avatar_url' => $avatar,
+                'github_username' => $githubUsername,
+                'bio' => null,
+                'track' => null,
+                'profile_completed' => false,
+            ]);
+
+        } else {
+            // ✅ مستخدم موجود: تأكدي من الدور
+            if ($user->role !== 'programmer') {
+                throw new \Exception('هذا الحساب مسجل كـ ' . $user->role);
+            }
+
+            // ✅ تأكدي إنه عنده Programmer record
+            if (!$user->programmer) {
+                // لو مالوش programmer record، اعملي له
+                Programmer::create([
+                    'user_id' => $user->id,
                     'user_name' => $this->generateUniqueUsername($githubUser),
                     'avatar_url' => $avatar,
                     'github_username' => $githubUsername,
@@ -98,55 +117,49 @@ class SocialAuthController extends Controller
                     'track' => null,
                     'profile_completed' => false,
                 ]);
-
             } else {
-                // ✅ مستخدم موجود
-                if ($user->role !== 'programmer') {
-                    throw new \Exception('هذا الحساب مسجل كـ ' . $user->role);
+                // ✅ موجود: حديثي البيانات
+                if (!$user->programmer->avatar_url && $avatar) {
+                    $user->programmer->update(['avatar_url' => $avatar]);
                 }
-
-                if ($user->programmer) {
-                    if (!$user->programmer->avatar_url && $avatar) {
-                        $user->programmer->update(['avatar_url' => $avatar]);
-                    }
-                    if (!$user->programmer->github_username && $githubUsername) {
-                        $user->programmer->update(['github_username' => $githubUsername]);
-                    }
+                if (!$user->programmer->github_username && $githubUsername) {
+                    $user->programmer->update(['github_username' => $githubUsername]);
                 }
             }
-
-            // ✅ حفظ بيانات GitHub
-            $this->storeGitHubAuth($user, $githubUser);
-
-            // ✅ إنشاء Sanctum token
-            $token = $user->createToken('github_auth')->plainTextToken;
-
-            $programmer = $user->programmer;
-            $profileCompleted = $programmer ? $programmer->profile_completed : false;
-
-            $userData = [
-                'id' => $user->id,
-                'name' => $user->full_name,
-                'email' => $user->email,
-                'role' => 'programmer',
-                'avatar' => $programmer->avatar_url ?? null,
-                'github_username' => $programmer->github_username ?? null,
-                'profile_completed' => $profileCompleted,
-            ];
-
-            DB::commit();
-
-            return [
-                'token' => $token,
-                'user_data' => $userData,
-                'profile_completed' => $profileCompleted,
-            ];
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
         }
+
+        // ✅ حفظ بيانات GitHub
+        $this->storeGitHubAuth($user, $githubUser);
+
+        // ✅ إنشاء Sanctum token
+        $token = $user->createToken('github_auth')->plainTextToken;
+
+        $programmer = $user->programmer;
+        $profileCompleted = $programmer ? $programmer->profile_completed : false;
+
+        $userData = [
+            'id' => $user->id,
+            'name' => $user->full_name,
+            'email' => $user->email,
+            'role' => 'programmer',
+            'avatar' => $programmer?->avatar_url ?? null,
+            'github_username' => $programmer?->github_username ?? null,
+            'profile_completed' => $profileCompleted,
+        ];
+
+        DB::commit();
+
+        return [
+            'token' => $token,
+            'user_data' => $userData,
+            'profile_completed' => $profileCompleted,
+        ];
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        throw $e;
     }
+}
 
     /**
      * ✅ إكمال بروفايل المبرمج
