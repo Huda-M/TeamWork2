@@ -64,6 +64,19 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
         ],
+    'auth' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/auth.log'),
+        'level' => 'info',
+        'days' => 30,
+    ],
+    
+    'security' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/security.log'),
+        'level' => 'warning',
+        'days' => 90,
+    ],
 
         'daily' => [
             'driver' => 'daily',
