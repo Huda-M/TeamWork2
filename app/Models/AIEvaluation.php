@@ -2,13 +2,19 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class AIEvaluation extends Model
 {
     use HasFactory;
-    protected $table = 'ai_evaluations';
+
+    // ✅ الحل الأقوى: Override getTable() method
+    public function getTable()
+    {
+        return 'ai_evaluations';
+    }
+
     protected $fillable = [
         'project_id',
         'team_id',
@@ -25,10 +31,6 @@ class AIEvaluation extends Model
         'overall_score' => 'decimal:2',
         'is_ai_generated' => 'boolean',
     ];
-    public function getTable()
-    {
-        return 'ai_evaluations';
-    }
 
     public function project()
     {
