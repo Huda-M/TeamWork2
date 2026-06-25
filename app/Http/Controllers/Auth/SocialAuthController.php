@@ -136,7 +136,8 @@ class SocialAuthController extends Controller
             $profileCompleted = $programmer ? $programmer->profile_completed : false;
 
             $userData = [
-                'id' => $user->id,
+                'id' => $programmer?->id,           // ✅ programmer_id بدل user_id
+    'user_id' => $user->id, 
                 'name' => $user->full_name,
                 'email' => $user->email,
                 'role' => 'programmer',
