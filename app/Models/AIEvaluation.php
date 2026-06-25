@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class AIEvaluation extends Model
 {
+    use HasFactory;
+    protected $table = 'ai_evaluations';
     protected $fillable = [
         'project_id',
         'team_id',
