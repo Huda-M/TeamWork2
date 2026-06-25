@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserAuth;
 use App\Models\Programmer;
-use App\Traits\CompletesProgrammerProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -18,12 +17,7 @@ use Illuminate\Support\Facades\RateLimiter;
 
 class SocialAuthController extends Controller
 {
-    use CompletesProgrammerProfile;
 
-    /**
-     * ✅ MOBILE ONLY: استقبال GitHub Token من Flutter
-     * POST /api/auth/github/mobile
-     */
     public function handleGitHubMobile(Request $request)
     {
         $key = 'github-login:' . $request->ip();
@@ -306,21 +300,5 @@ class SocialAuthController extends Controller
                 'token_expires_at' => $githubUser->expiresIn ? now()->addSeconds($githubUser->expiresIn) : null,
             ]
         );
-    }
-
-    private function generateUniqueUsername($githubUser)
-    {
-        $base = $githubUser->getNickname()
-            ?? explode('@', $githubUser->getEmail())[0]
-            ?? 'dev_' . Str::random(5);
-
-        $username = Str::slug($base);
-        $counter = 1;
-
-        while (Programmer::where('user_name', $username)->exists()) {
-            $username = Str::slug($base) . '_' . $counter++;
-        }
-
-        return $username;
     }
 }
