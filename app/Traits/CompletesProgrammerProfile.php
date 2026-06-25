@@ -36,9 +36,10 @@ trait CompletesProgrammerProfile
                 ], 400);
             }
 
+            // ✅ بس track و experience_level
             $validated = $request->validate([
-                'experience_level' => 'required|in:beginner,junior,intermediate,senior,advanced,expert',
                 'track' => 'required|string',
+                'experience_level' => 'required|in:beginner,junior,intermediate,senior,advanced,expert',
             ]);
 
             $pointsMap = [
@@ -50,15 +51,12 @@ trait CompletesProgrammerProfile
                 'expert'       => 500,
             ];
 
-            if ($request->hasFile('avatar')) {
-                $path = $request->file('avatar')->store('avatars', 'public');
-                $validated['avatar_url'] = $path;
-            }
-
-            $validated['total_score'] = $pointsMap[$validated['experience_level']] ?? 0;
-            $validated['profile_completed'] = true;
-
-            $programmer->update($validated);
+            $programmer->update([
+                'track' => $validated['track'],
+                'experience_level' => $validated['experience_level'],
+                'total_score' => $pointsMap[$validated['experience_level']] ?? 0,
+                'profile_completed' => true,
+            ]);
 
             return response()->json([
                 'success' => true, 
@@ -71,8 +69,8 @@ trait CompletesProgrammerProfile
                     'track' => $programmer->track,
                     'experience_level' => $programmer->experience_level,
                     'total_score' => $programmer->total_score,
-                    'avatar_url' => $programmer->avatar_url,
                     'github_username' => $programmer->github_username,
+                    'avatar_url' => $programmer->avatar_url,
                     'profile_completed' => true,
                 ]
             ]);
