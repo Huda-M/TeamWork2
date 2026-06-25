@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 
 class SocialAuthController extends Controller
 {
@@ -21,23 +23,85 @@ class SocialAuthController extends Controller
      */
     public function handleGitHubMobile(Request $request)
     {
+        // ✅ 1. Rate Limiting Check
+        $key = 'github-login:' . $request->ip();
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $seconds = RateLimiter::availableIn($key);
+            Log::warning('Rate limit exceeded for GitHub login', [
+                'ip' => $request->ip(),
+                'retry_after' => $seconds
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'محاولات كتيرة. جربي تاني بعد ' . $seconds . ' ثانية'
+            ], 429);
+        }
+
         try {
             $request->validate([
-                'access_token' => 'required|string',
+                'access_token' => [
+                    'required',
+                    'string',
+                    'min:10',           // ✅ التحقق من الطول
+                    'max:255',
+                    'regex:/^gho_|ghp_|github_pat_/i'  // ✅ يبدأ بـ gho_ أو ghp_ أو github_pat_
+                ],
             ]);
 
+            // ✅ 2. التحقق من الـ token مع GitHub API مباشرة
+            $githubValidation = $this->validateGitHubToken($request->access_token);
+            
+            if (!$githubValidation['valid']) {
+                Log::warning('Invalid GitHub token', [
+                    'ip' => $request->ip(),
+                    'error' => $githubValidation['error']
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'التوكن غير صالح أو منتهي'
+                ], 401);
+            }
+
+            // ✅ 3. جلب بيانات المستخدم من GitHub
             $githubUser = Socialite::driver('github')
                 ->stateless()
                 ->userFromToken($request->access_token);
 
             if (!$githubUser || !$githubUser->getEmail()) {
+                Log::warning('GitHub user has no email', [
+                    'ip' => $request->ip(),
+                    'github_id' => $githubUser?->getId()
+                ]);
                 return response()->json([
                     'success' => false,
-                    'message' => 'التوكن غير صالح أو الـ GitHub account مفيهوش email public'
-                ], 401);
+                    'message' => 'الـ GitHub account مفيهوش email public. فعلي الـ email في إعدادات GitHub'
+                ], 400);
+            }
+
+            // ✅ 4. التحقق من الـ Email Domain (اختياري)
+            $email = $githubUser->getEmail();
+            if (!$this->isAllowedEmail($email)) {
+                Log::warning('Blocked email domain', [
+                    'ip' => $request->ip(),
+                    'email' => $email
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'الـ email domain غير مسموح بيه'
+                ], 403);
             }
 
             $result = $this->processGitHubUser($githubUser);
+
+            // ✅ 5. تسجيل النجاح
+            Log::info('GitHub login successful', [
+                'user_id' => $result['user_data']['user_id'],
+                'programmer_id' => $result['user_data']['id'],
+                'email' => $email,
+                'ip' => $request->ip()
+            ]);
+
+            RateLimiter::hit($key);
 
             return response()->json([
                 'success' => true,
@@ -52,18 +116,75 @@ class SocialAuthController extends Controller
                 ]
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('Validation failed', [
+                'ip' => $request->ip(),
+                'errors' => $e->errors()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'البيانات غير صحيحة',
+                'errors' => $e->errors()
+            ], 422);
+
         } catch (\Exception $e) {
-            Log::error("GitHub mobile error: " . $e->getMessage());
+            Log::error('GitHub mobile error', [
+                'ip' => $request->ip(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'فشل في التسجيل',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'خطأ في النظام'
             ], 500);
         }
     }
 
     /**
-     * 🔧 CORE: معالجة بيانات GitHub (للمبرمجين فقط)
+     * ✅ التحقق من الـ Token مع GitHub API
+     */
+    private function validateGitHubToken(string $token): array
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $token,
+                'Accept' => 'application/vnd.github.v3+json',
+            ])->get('https://api.github.com/user');
+
+            if ($response->successful()) {
+                return ['valid' => true, 'data' => $response->json()];
+            }
+
+            return [
+                'valid' => false,
+                'error' => $response->json()['message'] ?? 'Invalid token'
+            ];
+
+        } catch (\Exception $e) {
+            return ['valid' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * ✅ التحقق من الـ Email Domain
+     */
+    private function isAllowedEmail(string $email): bool
+    {
+        // ✅ سمحي بكل الـ domains أو حددي list
+        $blockedDomains = [
+            'tempmail.com',
+            '10minutemail.com',
+            'guerrillamail.com',
+        ];
+
+        $domain = substr(strrchr($email, "@"), 1);
+        
+        return !in_array($domain, $blockedDomains);
+    }
+
+    /**
+     * 🔧 CORE: معالجة بيانات GitHub
      */
     private function processGitHubUser($githubUser)
     {
@@ -74,70 +195,78 @@ class SocialAuthController extends Controller
             $name = $githubUser->getName() ?? $githubUser->getNickname() ?? 'Developer';
             $avatar = $githubUser->getAvatar();
             $githubUsername = $githubUser->getNickname();
+            $githubId = $githubUser->getId();
 
-            // ✅ البحث عن مستخدم موجود
-            $user = User::where('email', $email)->first();
+            // ✅ التحقق من عدم وجود GitHub ID تاني
+            $existingAuth = UserAuth::where('provider_type', 'github')
+                ->where('provider_user_id', $githubId)
+                ->first();
 
-            if (!$user) {
-                // ✅ مستخدم جديد تماماً
-                $user = User::create([
-                    'full_name' => $name,
-                    'email' => $email,
-                    'password' => Hash::make(Str::random(24)),
-                    'role' => 'programmer',
-                    'email_verified_at' => now(),
+            if ($existingAuth) {
+                $user = $existingAuth->user;
+                Log::info('Existing GitHub user login', [
+                    'user_id' => $user->id,
+                    'github_id' => $githubId
                 ]);
-
-                // ✅ إنشاء بروفايل المبرمج باستخدام updateOrCreate
-                Programmer::updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'user_name' => $this->generateUniqueUsername($githubUser),
-                        'avatar_url' => $avatar,
-                        'github_username' => $githubUsername,
-                        'bio' => null,
-                        'track' => null,
-                        'profile_completed' => false,
-                    ]
-                );
-
             } else {
-                // ✅ مستخدم موجود: تأكدي من الدور
-                if ($user->role !== 'programmer') {
-                    throw new \Exception('هذا الحساب مسجل كـ ' . $user->role);
+                $user = User::where('email', $email)->first();
+
+                if (!$user) {
+                    $user = User::create([
+                        'full_name' => $name,
+                        'email' => $email,
+                        'password' => Hash::make(Str::random(24)),
+                        'role' => 'programmer',
+                        'email_verified_at' => now(),
+                    ]);
+
+                    Programmer::updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'user_name' => $this->generateUniqueUsername($githubUser),
+                            'avatar_url' => $avatar,
+                            'github_username' => $githubUsername,
+                            'bio' => null,
+                            'track' => null,
+                            'profile_completed' => false,
+                        ]
+                    );
+
+                    Log::info('New GitHub user created', [
+                        'user_id' => $user->id,
+                        'email' => $email
+                    ]);
                 }
-
-                // ✅ استخدمي updateOrCreate بدل ما تتحققي يدوياً
-                Programmer::updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'user_name' => $this->generateUniqueUsername($githubUser),
-                        'avatar_url' => $avatar ?? $user->programmer?->avatar_url,
-                        'github_username' => $githubUsername ?? $user->programmer?->github_username,
-                        'bio' => $user->programmer?->bio,
-                        'track' => $user->programmer?->track,
-                        'profile_completed' => $user->programmer?->profile_completed ?? false,
-                    ]
-                );
-
-                // ✅ أعدي تحميل العلاقة
-                $user->refresh();
             }
 
-            // ✅ حفظ بيانات GitHub
+            // ✅ تحديث البيانات
+            if ($user->role !== 'programmer') {
+                throw new \Exception('هذا الحساب مسجل كـ ' . $user->role);
+            }
+
+            Programmer::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'user_name' => $this->generateUniqueUsername($githubUser),
+                    'avatar_url' => $avatar ?? $user->programmer?->avatar_url,
+                    'github_username' => $githubUsername ?? $user->programmer?->github_username,
+                    'bio' => $user->programmer?->bio,
+                    'track' => $user->programmer?->track,
+                    'profile_completed' => $user->programmer?->profile_completed ?? false,
+                ]
+            );
+
+            $user->refresh();
             $this->storeGitHubAuth($user, $githubUser);
 
-            // ✅ إنشاء Sanctum token
             $token = $user->createToken('github_auth')->plainTextToken;
-
-            // ✅ أعدي تحميل العلاقة بعد الإنشاء/التحديث
             $user->load('programmer');
             $programmer = $user->programmer;
             $profileCompleted = $programmer ? $programmer->profile_completed : false;
 
             $userData = [
-                'id' => $programmer?->id,           // ✅ programmer_id بدل user_id
-    'user_id' => $user->id, 
+                'id' => $programmer?->id,
+                'user_id' => $user->id,
                 'name' => $user->full_name,
                 'email' => $user->email,
                 'role' => 'programmer',
@@ -161,11 +290,19 @@ class SocialAuthController extends Controller
     }
 
     /**
-     * ✅ إكمال بروفايل المبرمج
-     * POST /api/auth/complete-profile
+     * ✅ إكمال بروفايل
      */
     public function completeProfile(Request $request)
     {
+        $key = 'complete-profile:' . ($request->user()?->id ?: $request->ip());
+        
+        if (RateLimiter::tooManyAttempts($key, 10)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'محاولات كتيرة. جربي تاني لاحقاً'
+            ], 429);
+        }
+
         try {
             $user = $request->user();
 
@@ -194,14 +331,21 @@ class SocialAuthController extends Controller
 
             $validated = $request->validate([
                 'user_name' => 'required|string|max:255|unique:programmers,user_name,' . $programmer->id,
-                'phone' => 'required|string|max:20',
-                'track' => 'required|string|max:100',
+                'phone' => 'required|string|max:20|regex:/^\+?[0-9]{10,15}$/',
+                'track' => 'required|string|max:100|in:frontend,backend,mobile,devops,ai,fullstack',
                 'bio' => 'nullable|string|max:1000',
             ]);
 
             $programmer->update([
                 ...$validated,
                 'profile_completed' => true,
+            ]);
+
+            RateLimiter::hit($key);
+
+            Log::info('Profile completed', [
+                'programmer_id' => $programmer->id,
+                'user_id' => $user->id
             ]);
 
             return response()->json([
@@ -222,7 +366,10 @@ class SocialAuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Complete profile error: ' . $e->getMessage());
+            Log::error('Complete profile error', [
+                'user_id' => $request->user()?->id,
+                'error' => $e->getMessage()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'فشل في إكمال البروفايل'
