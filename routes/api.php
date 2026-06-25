@@ -4,7 +4,6 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\Auth\SocialAuthController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyProgrammerController;
@@ -21,6 +20,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\JoinRequestController;
+use App\Http\Controllers\Auth\SocialAuthController;
+
+
+Route::post('/auth/github/mobile', [SocialAuthController::class, 'handleGitHubMobile']);
+
+Route::middleware('auth:sanctum')->post('/auth/complete-profile', [SocialAuthController::class, 'completeProfile']);
 
 
 Route::post('/register', [RegisteredUserController::class, 'register']);
