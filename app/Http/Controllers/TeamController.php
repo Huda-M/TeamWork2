@@ -60,9 +60,13 @@ public function evaluateProjectWithAI($projectId)
             ], 404);
         }
 
-        // ✅ جلب المشروع مع الفريق
-        $project = Project::with(['teams.activeMembers.programmer.user', 'teams.activeMembers.programmer.skills'])
-            ->find($projectId);
+        // ✅ جلب المشروع مع كل الـ relations المطلوبة
+$project = Project::with([
+    'teams.activeMembers.programmer.skills',
+    'teams.tasks',
+    'teams.messages'
+])->find($projectId);
+       
 
         if (!$project) {
             return response()->json([
@@ -132,22 +136,29 @@ public function evaluateProjectWithAI($projectId)
         ], 500);
     }
 }
-    private function prepareAIEvaluationData(Team $team, Project $project): array
+ private function prepareAIEvaluationData(Team $team, Project $project): array
 {
+    // ✅ تأكد من loading الـ relations
+    $team->loadMissing([
+        'activeMembers.programmer.skills',
+        'tasks',
+        'messages'
+    ]);
+
     // تجهيز الـ members
-    $members = $team->activeMembers->map(function ($member) {
+    $members = $team->activeMembers ? $team->activeMembers->map(function ($member) {
         $prog = $member->programmer;
         return [
-            'programmer_id' => $prog->id,
+            'programmer_id' => $prog?->id,
             'role' => $member->role,
-            'skills' => $prog->skills->map(function ($skill) {
+            'skills' => $prog && $prog->skills ? $prog->skills->map(function ($skill) {
                 return ['name' => $skill->name];
-            })->toArray(),
+            })->toArray() : [],
         ];
-    })->toArray();
+    })->toArray() : [];
 
     // تجهيز الـ tasks
-    $tasks = $team->tasks->map(function ($task) {
+    $tasks = $team->tasks ? $team->tasks->map(function ($task) {
         return [
             'id' => $task->id,
             'team_id' => $task->team_id,
@@ -164,10 +175,11 @@ public function evaluateProjectWithAI($projectId)
             'quality_score' => $task->quality_score ?? 0,
             'is_blocked' => $task->is_blocked ?? false,
         ];
-    })->toArray();
+    })->toArray() : [];
 
     // تجهيز الـ task history
-    $taskHistory = TaskHistory::whereIn('task_id', $team->tasks->pluck('id'))
+    $taskIds = $team->tasks ? $team->tasks->pluck('id') : collect();
+    $taskHistory = $taskIds->isNotEmpty() ? TaskHistory::whereIn('task_id', $taskIds)
         ->get()
         ->map(function ($history) {
             return [
@@ -176,7 +188,7 @@ public function evaluateProjectWithAI($projectId)
                 'change_type' => $history->change_type,
                 'change_description' => $history->change_description,
             ];
-        })->toArray();
+        })->toArray() : [];
 
     // تجهيز الـ messages
     $teamMessages = TeamMessage::where('team_id', $team->id)
@@ -191,8 +203,9 @@ public function evaluateProjectWithAI($projectId)
         })->toArray();
 
     // تجهيز الـ activities
-    $programmerActivities = ProgrammerActivity::where('project_id', $project->id)
-        ->whereIn('programmer_id', $team->activeMembers->pluck('programmer_id'))
+    $programmerIds = $team->activeMembers ? $team->activeMembers->pluck('programmer_id') : collect();
+    $programmerActivities = $programmerIds->isNotEmpty() ? ProgrammerActivity::where('project_id', $project->id)
+        ->whereIn('programmer_id', $programmerIds)
         ->get()
         ->map(function ($activity) {
             return [
@@ -207,7 +220,7 @@ public function evaluateProjectWithAI($projectId)
                 'code_quality_score' => $activity->code_quality_score ?? 0,
                 'activity_date' => $activity->activity_date?->toDateString(),
             ];
-        })->toArray();
+        })->toArray() : [];
 
     return [
         'project' => [
@@ -220,7 +233,7 @@ public function evaluateProjectWithAI($projectId)
         'team' => [
             'id' => $team->id,
             'project_id' => $team->project_id,
-            'team_size' => $team->activeMembers->count(),
+            'team_size' => $team->activeMembers ? $team->activeMembers->count() : 0,
             'experience_level' => $team->experience_level ?? 'intermediate',
         ],
         'members' => $members,
@@ -230,11 +243,6 @@ public function evaluateProjectWithAI($projectId)
         'programmer_activities' => $programmerActivities,
     ];
 }
-
-    /**
-     * حفظ تقييمات الـ AI في الـ database
-     */
-   
 
 private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $evaluator, Project $project): array
 {
