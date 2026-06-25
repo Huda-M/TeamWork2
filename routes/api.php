@@ -21,11 +21,15 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\JoinRequestController;
 use App\Http\Controllers\Auth\SocialAuthController;
+use Illuminate\Support\Facades\RateLimiter;
 
 
-Route::post('/auth/github/mobile', [SocialAuthController::class, 'handleGitHubMobile']);
+Route::post('/auth/github/mobile', [SocialAuthController::class, 'handleGitHubMobile'])
+    ->middleware('throttle:github-login');
 
-Route::middleware('auth:sanctum')->post('/auth/complete-profile', [SocialAuthController::class, 'completeProfile']);
+// ✅ Complete Profile مع Rate Limiting
+Route::middleware(['auth:sanctum', 'throttle:complete-profile'])
+    ->post('/auth/complete-profile', [SocialAuthController::class, 'completeProfile']);
 
 
 Route::post('/register', [RegisteredUserController::class, 'register']);
