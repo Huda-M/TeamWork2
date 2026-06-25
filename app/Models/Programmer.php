@@ -19,6 +19,7 @@ class Programmer extends Model
     protected $fillable = [
     'user_id',
         'user_name',
+    'github_username',
         'phone',
         'bio',
         'track',
