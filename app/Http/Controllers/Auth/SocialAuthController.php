@@ -14,6 +14,7 @@ use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Validator;
 
 class SocialAuthController extends Controller
 {
@@ -289,7 +290,9 @@ class SocialAuthController extends Controller
         }
     }
 
-   public function completeProfile(Request $request)
+  
+
+public function completeProfile(Request $request)
 {
     try {
         $user = $request->user();
@@ -317,13 +320,21 @@ class SocialAuthController extends Controller
             ], 400);
         }
 
-        $validated = $request->validate([
-            
-            'track' => 'required|string|in:Web Development,Mobile Development,AI & Data Science,DevOps,UI/UX Design,Game Development,Cybersecurity,Blockchain,Cloud Computing',
-            // ✅ experience_level محدد مسبقاً
+        // ✅ Validator يدوي - تحكم كامل
+        $validator = Validator::make($request->all(), [
+            'track' => 'required|string',
             'experience_level' => 'required|string|in:beginner,junior,senior,expert',
-            
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'البيانات غير صحيحة',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $validated = $validator->validated();
 
         $programmer->update([
             'track' => $validated['track'],
@@ -347,13 +358,6 @@ class SocialAuthController extends Controller
                 'profile_completed' => true,
             ]
         ]);
-
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'البيانات غير صحيحة',
-            'errors' => $e->errors()
-        ], 422);
 
     } catch (\Exception $e) {
         Log::error('Complete profile error: ' . $e->getMessage());
