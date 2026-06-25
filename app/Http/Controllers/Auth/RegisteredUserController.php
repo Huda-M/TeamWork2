@@ -1,12 +1,11 @@
 <?php
+// app/Http/Controllers/Auth/RegisteredUserController.php
 
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\EmailVerificationCode;
-use App\Models\Company;
-use App\Traits\CompletesProgrammerProfile;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -22,8 +21,6 @@ use Illuminate\Support\Str;
 
 class RegisteredUserController extends Controller
 {
-    use CompletesProgrammerProfile;
-
     /**
      * الخطوة 1: إرسال كود التفعيل
      */
@@ -37,12 +34,13 @@ class RegisteredUserController extends Controller
                 'lowercase',
                 'email',
                 'max:255',
-                Rule::unique('users')->whereNull('deleted_at')
+                Rule::unique('users')->whereNull('deleted_at') // ← بيتشيك على active users بس
             ],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'source' => ['required', 'in:mobile,web'],
         ]);
 
+        // ← لو في deleted user بنفس الـ email، امسحيه نهائي عشان يفضى المكان
         $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
         if ($deletedUser) {
             $deletedUser->forceDelete();
@@ -67,9 +65,6 @@ class RegisteredUserController extends Controller
         ], 200);
     }
 
-    /**
-     * الخطوة 2: التحقق من الكود وإنشاء الحساب
-     */
     public function verifyAndCreate(Request $request): JsonResponse
     {
         $request->validate([
@@ -92,41 +87,44 @@ class RegisteredUserController extends Controller
         }
 
         DB::beginTransaction();
-        try {
-            $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
-            if ($deletedUser) {
-                $deletedUser->forceDelete();
-            }
+    try {
+        $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
+        if ($deletedUser) {
+            $deletedUser->forceDelete();
+        }
 
-            $user = User::create([
-                'full_name' => $registrationData['full_name'],
-                'email' => $request->email,
-                'password' => Hash::make($registrationData['password']),
-                'role' => $registrationData['role'],
-                'email_verified_at' => now(),
-            ]);
+        $user = User::create([
+            'full_name' => $registrationData['full_name'],
+            'email' => $request->email,
+            'password' => Hash::make($registrationData['password']),
+            'role' => $registrationData['role'],
+            'email_verified_at' => now(),
+        ]);
 
-            if ($user->role === 'company') {
-                Company::firstOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'company_name' => $user->full_name,
-                        'phone' => '0000000000',
-                        'cr_number' => 'TEMP_' . Str::random(10),
-                        'about' => null,
-                        'country' => 'Unknown',
-                        'location' => 'Unknown',
-                        'industry' => 'General',
-                        'size' => '1-10',
-                        'website' => 'https://temp.com',
-                        'subscription_end_date' => now()->addYear(),
-                        'profile_completed' => false,
-                    ]
-                );
-            }
+        // ← التعديل هنا
+        if  ($user->role === 'company') {
+            Company::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'company_name' => $user->full_name,
+                    'phone' => '0000000000',
+                    'cr_number' => 'TEMP_' . Str::random(10),
+                    'about' => null,
+                    'country' => 'Unknown',
+                    'location' => 'Unknown',
+                    'industry' => 'General',
+                    'size' => '1-10',
+                    'website' => 'https://temp.com',
+                    'subscription_end_date' => now()->addYear(),
+                    'profile_completed' => false,
+                ]
+            );
+        }
 
             event(new Registered($user));
+
             cache()->forget('registration:' . $request->email);
+
             Auth::login($user);
 
             DB::commit();
@@ -140,10 +138,9 @@ class RegisteredUserController extends Controller
 
             if ($user->role === 'programmer' && $user->programmer) {
                 $programmerData = $user->programmer->toArray();
-                unset($programmerData['user_id']);
+                unset($programmerData['user_id']);  // ✅ Remove user_id
                 $responseData['programmer'] = $programmerData;
             }
-            
             if ($user->role === 'company' && $user->company) {
                 $responseData['company'] = $user->company;
             }
@@ -186,9 +183,49 @@ class RegisteredUserController extends Controller
         ], 200);
     }
 
-    /**
-     * إكمال بروفايل الشركة
-     */
+    public function completeProfile(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user || $user->role !== 'programmer') {
+                return response()->json(['message' => 'Only programmers can complete profile'], 403);
+            }
+            $programmer = $user->programmer;
+            if (!$programmer) {
+                return response()->json(['message' => 'Programmer profile not found'], 404);
+            }
+
+            $validated = $request->validate([
+                'experience_level' => 'required|in:beginner,junior,intermediate,senior,advanced,expert',
+                'track' => 'required|string',
+            ]);
+
+            $pointsMap = [
+                'beginner'    => 0,
+                'junior'      => 50,
+                'intermediate'=> 100,
+                'senior'      => 200,
+                'advanced'    => 350,
+                'expert'      => 500,
+            ];
+
+            if ($request->hasFile('avatar')) {
+                $path = $request->file('avatar')->store('avatars', 'public');
+                $validated['avatar_url'] = $path;
+            }
+
+            $validated['total_score'] = $pointsMap[$validated['experience_level']] ?? 0;
+            $validated['profile_completed'] = true;
+
+            $programmer->update($validated);
+
+            return response()->json(['success' => true, 'message' => 'Profile completed']);
+        } catch (\Exception $e) {
+            Log::error('Profile completion error: ' . $e->getMessage());
+            return response()->json(['message' => 'Server Error: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function completeCompanyProfile(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -248,9 +285,6 @@ class RegisteredUserController extends Controller
         ], 200);
     }
 
-    /**
-     * حالة البروفايل
-     */
     public function profileStatus(Request $request): JsonResponse
     {
         $user = $request->user();
