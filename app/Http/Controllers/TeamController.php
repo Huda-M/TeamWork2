@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use OpenApi\Annotations as OA;
-use App\Models\AIEvaluation;
+use App\Models\AiEvaluation;
 
 class TeamController extends Controller
 {
