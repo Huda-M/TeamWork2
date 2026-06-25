@@ -41,14 +41,6 @@ class TeamController extends Controller
         $this->aiRecommendationService = $aiRecommendationService;
         $this->aiEvaluationService = $aiEvaluationService;
     }
-    /**
- * تقييم أعضاء الفريق باستخدام AI (بـ project_id)
- * POST /api/projects/{projectId}/ai-evaluate
- */
-/**
- * تقييم أعضاء الفريق باستخدام AI (بـ project_id)
- * POST /api/projects/{projectId}/ai-evaluate
- */
 public function evaluateProjectWithAI($projectId)
 {
     try {
@@ -97,6 +89,14 @@ public function evaluateProjectWithAI($projectId)
             ], 403);
         }
 
+        // ✅ التحقق من أن المبرمج هو الليدر
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the team leader can perform AI evaluation'
+            ], 403);
+        }
+
         // ✅ التحقق من أن المشروع مكتمل
         if ($project->status !== 'completed') {
             return response()->json([
@@ -105,7 +105,6 @@ public function evaluateProjectWithAI($projectId)
             ], 400);
         }
 
-        // تجهيز البيانات للـ AI API
         $aiRequestData = $this->prepareAIEvaluationData($team, $project);
 
         // إرسال للـ AI API
@@ -133,9 +132,6 @@ public function evaluateProjectWithAI($projectId)
         ], 500);
     }
 }
-    /**
-     * تجهيز بيانات الفريق للـ AI API
-     */
     private function prepareAIEvaluationData(Team $team, Project $project): array
 {
     // تجهيز الـ members
@@ -301,9 +297,10 @@ private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $ev
 
     return $saved;
 }
-    /**
+/**
  * عرض تقييمات AI لمشروع معين
  * GET /api/projects/{projectId}/ai-evaluations
+ * أي عضو في التيم يقدر يشوف
  */
 public function getProjectAIEvaluations($projectId)
 {
@@ -343,7 +340,7 @@ public function getProjectAIEvaluations($projectId)
             ], 404);
         }
 
-        // التحقق من العضوية
+        // ✅ أي عضو في التيم يقدر يشوف (مش الليدر بس)
         if (!$team->isMember($programmer->id)) {
             return response()->json([
                 'success' => false,
@@ -376,6 +373,7 @@ public function getProjectAIEvaluations($projectId)
             'data' => [
                 'project_id' => (int) $projectId,
                 'project_name' => $project->title,
+                'is_leader' => $team->isLeader($programmer->id), // ← معلومة للـ frontend
                 'evaluations_count' => $evaluations->count(),
                 'evaluations' => $evaluations,
             ]
