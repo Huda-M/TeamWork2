@@ -289,94 +289,82 @@ class SocialAuthController extends Controller
         }
     }
 
-    /**
-     * ✅ إكمال بروفايل
-     */
-    public function completeProfile(Request $request)
-    {
-        $key = 'complete-profile:' . ($request->user()?->id ?: $request->ip());
-        
-        if (RateLimiter::tooManyAttempts($key, 10)) {
+   public function completeProfile(Request $request)
+{
+    try {
+        $user = $request->user();
+
+        if (!$user || $user->role !== 'programmer') {
             return response()->json([
                 'success' => false,
-                'message' => 'محاولات كتيرة. جربي تاني لاحقاً'
-            ], 429);
+                'message' => 'غير مصرح'
+            ], 403);
         }
 
-        try {
-            $user = $request->user();
+        $programmer = $user->programmer;
 
-            if (!$user || $user->role !== 'programmer') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'غير مصرح'
-                ], 403);
-            }
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'البروفايل مش موجود'
+            ], 404);
+        }
 
-            $programmer = $user->programmer;
+        if ($programmer->profile_completed) {
+            return response()->json([
+                'success' => false,
+                'message' => 'البروفايل مكتمل بالفعل'
+            ], 400);
+        }
 
-            if (!$programmer) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'البروفايل مش موجود'
-                ], 404);
-            }
+        $validated = $request->validate([
+            'user_name' => 'required|string|max:255|unique:programmers,user_name,' . $programmer->id,
+            'phone' => 'required|string|max:20',
+            // ✅ track محدد مسبقاً
+            'track' => 'required|string|in:Web Development,Mobile Development,AI & Data Science,DevOps,UI/UX Design,Game Development,Cybersecurity,Blockchain,Cloud Computing',
+            // ✅ experience_level محدد مسبقاً
+            'experience_level' => 'required|string|in:beginner,junior,senior,expert',
+            'bio' => 'nullable|string|max:1000',
+        ]);
 
-            if ($programmer->profile_completed) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'البروفايل مكتمل بالفعل'
-                ], 400);
-            }
+        $programmer->update([
+            ...$validated,
+            'profile_completed' => true,
+        ]);
 
-            $validated = $request->validate([
-                'user_name' => 'required|string|max:255|unique:programmers,user_name,' . $programmer->id,
-                'phone' => 'required|string|max:20|regex:/^\+?[0-9]{10,15}$/',
-                'track' => 'required|string|max:100|in:frontend,backend,mobile,devops,ai,fullstack',
-                'bio' => 'nullable|string|max:1000',
-            ]);
-
-            $programmer->update([
-                ...$validated,
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إكمال البروفايل بنجاح',
+            'data' => [
+                'id' => $programmer->id,
+                'user_name' => $programmer->user_name,
+                'full_name' => $user->full_name,
+                'email' => $user->email,
+                'phone' => $programmer->phone,
+                'track' => $programmer->track,
+                'experience_level' => $programmer->experience_level,
+                'bio' => $programmer->bio,
+                'github_username' => $programmer->github_username,
+                'avatar_url' => $programmer->avatar_url,
                 'profile_completed' => true,
-            ]);
+            ]
+        ]);
 
-            RateLimiter::hit($key);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'البيانات غير صحيحة',
+            'errors' => $e->errors()
+        ], 422);
 
-            Log::info('Profile completed', [
-                'programmer_id' => $programmer->id,
-                'user_id' => $user->id
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم إكمال البروفايل بنجاح',
-                'data' => [
-                    'id' => $programmer->id,
-                    'user_name' => $programmer->user_name,
-                    'full_name' => $user->full_name,
-                    'email' => $user->email,
-                    'phone' => $programmer->phone,
-                    'track' => $programmer->track,
-                    'bio' => $programmer->bio,
-                    'github_username' => $programmer->github_username,
-                    'avatar_url' => $programmer->avatar_url,
-                    'profile_completed' => true,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Complete profile error', [
-                'user_id' => $request->user()?->id,
-                'error' => $e->getMessage()
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'فشل في إكمال البروفايل'
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        Log::error('Complete profile error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'فشل في إكمال البروفايل'
+        ], 500);
     }
-
+}
     // ─── Helpers ───
 
     private function storeGitHubAuth(User $user, $githubUser)
