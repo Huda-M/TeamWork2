@@ -25,10 +25,10 @@ use Illuminate\Support\Facades\RateLimiter;
 
 
 Route::post('/auth/github/mobile', [SocialAuthController::class, 'handleGitHubMobile'])
-    ->middleware('throttle:github-login');
+    ->middleware('throttle:5,1');
 
-// ✅ Complete Profile مع Rate Limiting
-Route::middleware(['auth:sanctum', 'throttle:complete-profile'])
+// Complete Profile (shared between GitHub and normal registration)
+Route::middleware(['auth:sanctum', 'throttle:10,1'])
     ->post('/auth/complete-profile', [SocialAuthController::class, 'completeProfile']);
 
 
