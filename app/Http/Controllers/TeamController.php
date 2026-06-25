@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use OpenApi\Annotations as OA;
+use App\Models\AIEvaluation;
 
 class TeamController extends Controller
 {
@@ -237,7 +238,9 @@ public function evaluateProjectWithAI($projectId)
     /**
      * حفظ تقييمات الـ AI في الـ database
      */
-   private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $evaluator, Project $project): array
+   
+
+private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $evaluator, Project $project): array
 {
     $saved = [];
 
@@ -247,58 +250,145 @@ public function evaluateProjectWithAI($projectId)
         $breakdown = $eval['breakdown'] ?? [];
         $explanation = $eval['explanation'] ?? '';
 
+        // التحقق من أن المبرمج عضو في الفريق
         if (!$team->isMember($programmerId)) {
             continue;
         }
 
-        // التحقق من عدم وجود تقييم سابق
-        $existing = Evaluation::where('project_id', $project->id)
-            ->where('team_id', $team->id)
-            ->where('evaluator_id', $evaluator->id)
+        // ✅ التحقق من عدم وجود تقييم AI سابق
+        $existing = AIEvaluation::where('project_id', $project->id)
             ->where('evaluated_id', $programmerId)
             ->first();
 
         if ($existing) {
+            // ✅ تحديث التقييم الموجود
+            $existing->update([
+                'overall_score' => $overallScore,
+                'breakdown' => $breakdown,
+                'explanation' => $explanation,
+                'evaluator_id' => $evaluator->id,
+            ]);
+            $saved[] = [
+                'evaluation_id' => $existing->id,
+                'programmer_id' => $programmerId,
+                'overall_score' => $overallScore,
+                'feedback' => $explanation,
+                'updated' => true,
+            ];
             continue;
         }
 
-        $evaluation = Evaluation::create([
+        // ✅ إنشاء تقييم AI جديد
+        $aiEval = AIEvaluation::create([
             'project_id' => $project->id,
             'team_id' => $team->id,
             'evaluator_id' => $evaluator->id,
             'evaluated_id' => $programmerId,
-            'technical_skills' => $breakdown['technical_skills'] ?? $overallScore,
-            'communication' => $breakdown['communication'] ?? $overallScore,
-            'teamwork' => $breakdown['teamwork'] ?? $overallScore,
-            'problem_solving' => $breakdown['problem_solving'] ?? $overallScore,
-            'reliability' => $breakdown['reliability'] ?? $overallScore,
-            'code_quality' => $breakdown['code_quality'] ?? $overallScore,
-            'average_score' => $overallScore * 2,
-            'feedback' => $explanation,
-            'is_anonymous' => false,
-            'is_completed' => true,
-            'submitted_at' => now(),
+            'overall_score' => $overallScore,
+            'breakdown' => $breakdown,
+            'explanation' => $explanation,
+            'is_ai_generated' => true,
         ]);
-            // إضافة نقاط للمُقيَّم
-            $evaluatedProgrammer = Programmer::find($programmerId);
-            if ($evaluatedProgrammer && method_exists($evaluatedProgrammer, 'addStars')) {
-                $points = round($overallScore) * 10;
-                $evaluatedProgrammer->addStars($points, 'AI team evaluation', [
-                    'project_id' => $project->id,
-                    'evaluation_id' => $evaluation->id,
-                ]);
-            }
 
-            $saved[] = [
-                'evaluation_id' => $evaluation->id,
-                'programmer_id' => $programmerId,
-                'overall_score' => $overallScore,
-                'feedback' => $explanation,
-            ];
+        $saved[] = [
+            'evaluation_id' => $aiEval->id,
+            'programmer_id' => $programmerId,
+            'overall_score' => $overallScore,
+            'feedback' => $explanation,
+            'updated' => false,
+        ];
+    }
+
+    return $saved;
+}
+    /**
+ * عرض تقييمات AI لمشروع معين
+ * GET /api/projects/{projectId}/ai-evaluations
+ */
+public function getProjectAIEvaluations($projectId)
+{
+    try {
+        $user = auth()->user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only programmers can access'
+            ], 403);
         }
 
-        return $saved;
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        // جلب المشروع مع الفريق
+        $project = Project::with('teams')->find($projectId);
+
+        if (!$project) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Project not found'
+            ], 404);
+        }
+
+        $team = $project->teams->first();
+
+        if (!$team) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No team found for this project'
+            ], 404);
+        }
+
+        // التحقق من العضوية
+        if (!$team->isMember($programmer->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not a member of this team'
+            ], 403);
+        }
+
+        // ✅ جلب تقييمات AI المحفوظة
+        $evaluations = AIEvaluation::with(['evaluated.user'])
+            ->where('project_id', $projectId)
+            ->get()
+            ->map(function ($eval) {
+                return [
+                    'evaluation_id' => $eval->id,
+                    'programmer_id' => $eval->evaluated_id,
+                    'name' => $eval->evaluated->user->full_name,
+                    'avatar_url' => $eval->evaluated->avatar_url 
+                        ? asset('storage/' . $eval->evaluated->avatar_url) 
+                        : null,
+                    'overall_score' => $eval->overall_score,
+                    'breakdown' => $eval->breakdown,
+                    'explanation' => $eval->explanation,
+                    'created_at' => $eval->created_at,
+                    'updated_at' => $eval->updated_at,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project_id' => (int) $projectId,
+                'project_name' => $project->title,
+                'evaluations_count' => $evaluations->count(),
+                'evaluations' => $evaluations,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching AI evaluations: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch evaluations'
+        ], 500);
     }
+}
 
     public function index(Request $request)
     {
