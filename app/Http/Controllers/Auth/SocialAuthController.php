@@ -340,7 +340,6 @@ class SocialAuthController extends Controller
                 'user_name' => $programmer->user_name,
                 'full_name' => $user->full_name,
                 'email' => $user->email,
-                'phone' => $programmer->phone,
                 'track' => $programmer->track,
                 'experience_level' => $programmer->experience_level,
                 'bio' => $programmer->bio,
