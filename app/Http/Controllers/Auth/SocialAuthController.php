@@ -318,17 +318,16 @@ class SocialAuthController extends Controller
         }
 
         $validated = $request->validate([
-            'user_name' => 'required|string|max:255|unique:programmers,user_name,' . $programmer->id,
-            'phone' => 'required|string|max:20',
-            // ✅ track محدد مسبقاً
+            
             'track' => 'required|string|in:Web Development,Mobile Development,AI & Data Science,DevOps,UI/UX Design,Game Development,Cybersecurity,Blockchain,Cloud Computing',
             // ✅ experience_level محدد مسبقاً
             'experience_level' => 'required|string|in:beginner,junior,senior,expert',
-            'bio' => 'nullable|string|max:1000',
+            
         ]);
 
         $programmer->update([
-            ...$validated,
+            'track' => $validated['track'],
+            'experience_level' => $validated['experience_level'],
             'profile_completed' => true,
         ]);
 
