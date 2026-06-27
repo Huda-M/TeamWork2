@@ -373,7 +373,7 @@ class ProgrammerController extends Controller
         }
     }
 
-    public function levelProgression()
+   public function levelProgression()
 {
     try {
         $user = Auth::user();
@@ -388,10 +388,16 @@ class ProgrammerController extends Controller
 
         $score = $programmer->total_score ?? 0;
 
-        // ✅ استخدم experience_level لو موجود، وإلا احسب من الـ score
-        $baseLevel = $programmer->experience_level ?? $this->getBaseLevelFromScore($score);
+        // ✅ استخدم experience_level من الـ programmer model
+        $baseLevel = strtolower(trim($programmer->experience_level ?? ''));
 
-        // تعريف المستويات الفرعية (نقاط البدء لكل مستوى فرعي)
+        // ✅ لو فاضي أو غلط، احسب من الـ score
+        $validLevels = ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'];
+        if (empty($baseLevel) || !in_array($baseLevel, $validLevels)) {
+            $baseLevel = $this->getBaseLevelFromScore($score);
+        }
+
+        // تعريف المستويات الفرعية
         $subLevels = [
             'beginner'     => ['bronze' => 0,   'silver' => 50,  'gold' => 100],
             'junior'       => ['bronze' => 200,  'silver' => 250, 'gold' => 300],
@@ -401,10 +407,9 @@ class ProgrammerController extends Controller
             'expert'       => ['bronze' => 1000, 'silver' => 1100, 'gold' => 1200],
         ];
 
-        // ✅ لو الـ experience_level مش موجود في الـ subLevels، نستخدم beginer
         $subs = $subLevels[$baseLevel] ?? $subLevels['beginner'];
 
-        // ✅ تحديد الـ sub level الحالي بناءً على الـ score
+        // ✅ تحديد الـ sub level بناءً على score
         $currentSubLevel = 'bronze';
         $currentThreshold = $subs['bronze'];
         $nextSubLevel = null;
@@ -415,14 +420,13 @@ class ProgrammerController extends Controller
                 $currentSubLevel = $sub;
                 $currentThreshold = $threshold;
             } else {
-                // ده أول threshold أكبر من score = الـ next
                 $nextSubLevel = $sub;
                 $nextThreshold = $threshold;
                 break;
             }
         }
 
-        // ✅ لو مفيش next (وصل لـ gold)، الـ next يبقى المستوى اللي بعده
+        // ✅ لو وصل لـ gold، الـ next يبقى المستوى اللي بعده
         if ($nextSubLevel === null && $baseLevel !== 'expert') {
             $nextBaseLevel = $this->getNextBaseLevel($baseLevel);
             if ($nextBaseLevel) {
@@ -431,30 +435,29 @@ class ProgrammerController extends Controller
             }
         }
 
-        // ✅ لو وصل لـ expert gold = max level
         $isMaxLevel = ($baseLevel === 'expert' && $currentSubLevel === 'gold');
 
-        // ✅ حساب نسبة التقدم داخل المستوى الحالي
+        // ✅ حساب نسبة التقدم
         $progressPercentage = 0;
-        if (!$isMaxLevel && $nextThreshold !== null) {
+        if (!$isMaxLevel && $nextThreshold !== null && $nextThreshold > $currentThreshold) {
             $range = $nextThreshold - $currentThreshold;
             $progress = $score - $currentThreshold;
-            $progressPercentage = $range > 0 ? round(($progress / $range) * 100, 2) : 0;
+            $progressPercentage = round(($progress / $range) * 100, 2);
             $progressPercentage = min(max($progressPercentage, 0), 99.99);
         } elseif ($isMaxLevel) {
             $progressPercentage = 100;
         }
 
         $fullLevelName = ucfirst($baseLevel) . ' ' . ucfirst($currentSubLevel);
+        
         $nextFullLevelName = null;
         if (!$isMaxLevel && $nextSubLevel) {
-            $nextBase = ($nextSubLevel === 'bronze' && $currentSubLevel === 'gold') 
+            $nextBase = ($currentSubLevel === 'gold') 
                 ? $this->getNextBaseLevel($baseLevel) 
                 : $baseLevel;
             $nextFullLevelName = ucfirst($nextBase) . ' ' . ucfirst($nextSubLevel);
         }
 
-        // ✅ إحصائيات إضافية
         $totalTasks = $programmer->tasks()->count();
         $averageRating = \App\Models\Evaluation::where('evaluated_id', $programmer->id)
             ->avg('average_score') ?? 0;
@@ -463,15 +466,15 @@ class ProgrammerController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'current_level_full'    => $fullLevelName,       // "Senior Bronze"
-                'base_level'            => $baseLevel,           // "senior"
-                'sub_level'             => $currentSubLevel,     // "bronze"
-                'progress_percentage'   => $progressPercentage,  // 0 - 99.99 (أو 100)
-                'next_level_full'       => $nextFullLevelName,   // "Senior Silver"
+                'current_level_full'    => $fullLevelName,
+                'base_level'            => $baseLevel,
+                'sub_level'             => $currentSubLevel,
+                'progress_percentage'   => $progressPercentage,
+                'next_level_full'       => $nextFullLevelName,
                 'total_tasks'           => $totalTasks,
                 'average_rating'        => $averageRating,
-                'total_score'           => $score,              // ← للتصحيح
-                'experience_level'      => $programmer->experience_level, // ← للتصحيح
+                'total_score'           => $score,
+                'experience_level'      => $programmer->experience_level,
             ]
         ]);
 
@@ -484,6 +487,27 @@ class ProgrammerController extends Controller
     }
 }
 
+private function getBaseLevelFromScore($score)
+{
+    if ($score >= 1000) return 'expert';
+    if ($score >= 700)  return 'advanced';
+    if ($score >= 500)  return 'senior';
+    if ($score >= 200)  return 'intermediate';
+    if ($score >= 50)   return 'junior';
+    return 'beginner';
+}
+
+private function getNextBaseLevel($currentBaseLevel)
+{
+    $levels = ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'];
+    $currentIndex = array_search($currentBaseLevel, $levels);
+    
+    if ($currentIndex === false || $currentIndex >= count($levels) - 1) {
+        return null;
+    }
+    
+    return $levels[$currentIndex + 1];
+}
 /**
  * تحديد الـ base level من الـ score (fallback لو مفيش experience_level)
  */
