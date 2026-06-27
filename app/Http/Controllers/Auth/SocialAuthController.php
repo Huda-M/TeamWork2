@@ -17,6 +17,266 @@ use Illuminate\Support\Facades\RateLimiter;
 
 class SocialAuthController extends Controller
 {
+    public function handleGoogleMobile(Request $request)
+    {
+        $key = 'google-login:' . $request->ip();
+        
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $seconds = RateLimiter::availableIn($key);
+            Log::warning('Rate limit exceeded for Google login', [
+                'ip' => $request->ip(),
+                'retry_after' => $seconds
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many attempts. Try again after ' . $seconds . ' seconds'
+            ], 429);
+        }
+
+        try {
+            $request->validate([
+                'access_token' => [
+                    'required',
+                    'string',
+                    'min:20',
+                    'max:2048',
+                ],
+            ]);
+
+            // ✅ التحقق من الـ token مع Google
+            $googleValidation = $this->validateGoogleToken($request->access_token);
+            
+            if (!$googleValidation['valid']) {
+                Log::warning('Invalid Google token', [
+                    'ip' => $request->ip(),
+                    'error' => $googleValidation['error']
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired token'
+                ], 401);
+            }
+
+            // ✅ جلب بيانات المستخدم من Google
+            $googleUser = Socialite::driver('google')
+                ->stateless()
+                ->userFromToken($request->access_token);
+
+            if (!$googleUser || !$googleUser->getEmail()) {
+                Log::warning('Google user has no email', [
+                    'ip' => $request->ip()
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Google account has no email'
+                ], 400);
+            }
+
+            $email = $googleUser->getEmail();
+            
+            if (!$this->isAllowedEmail($email)) {
+                Log::warning('Blocked email domain', [
+                    'ip' => $request->ip(),
+                    'email' => $email
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email domain not allowed'
+                ], 403);
+            }
+
+            $result = $this->processGoogleUser($googleUser);
+
+            Log::info('Google login successful', [
+                'user_id' => $result['user_data']['user_id'],
+                'programmer_id' => $result['user_data']['id'],
+                'email' => $email,
+                'ip' => $request->ip()
+            ]);
+
+            RateLimiter::hit($key);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Login successful',
+                'data' => [
+                    'token' => $result['token'],
+                    'token_type' => 'Bearer',
+                    'user' => $result['user_data'],
+                    'role' => 'programmer',
+                    'profile_completed' => $result['profile_completed'],
+                    'needs_profile_completion' => !$result['profile_completed'],
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('Validation failed', [
+                'ip' => $request->ip(),
+                'errors' => $e->errors()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            Log::error('Google mobile error', [
+                'ip' => $request->ip(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Login failed',
+                'error' => config('app.debug') ? $e->getMessage() : 'System error'
+            ], 500);
+        }
+    }
+
+    private function validateGoogleToken(string $token): array
+    {
+        try {
+            // ✅ التحقق من الـ token مع Google API
+            $response = Http::get('https://oauth2.googleapis.com/tokeninfo', [
+                'access_token' => $token,
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                // ✅ التحقق من الـ client_id
+                if (isset($data['aud']) && $data['aud'] === config('services.google.client_id')) {
+                    return ['valid' => true, 'data' => $data];
+                }
+                return ['valid' => false, 'error' => 'Invalid client_id'];
+            }
+
+            return [
+                'valid' => false,
+                'error' => $response->json()['error_description'] ?? 'Invalid token'
+            ];
+
+        } catch (\Exception $e) {
+            return ['valid' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    private function processGoogleUser($googleUser)
+    {
+        DB::beginTransaction();
+
+        try {
+            $email = $googleUser->getEmail();
+            $name = $googleUser->getName() ?? 'User';
+            $avatar = $googleUser->getAvatar();
+            $googleId = $googleUser->getId();
+
+            $existingAuth = UserAuth::where('provider_type', 'google')
+                ->where('provider_user_id', $googleId)
+                ->first();
+
+            if ($existingAuth) {
+                $user = $existingAuth->user;
+                Log::info('Existing Google user login', [
+                    'user_id' => $user->id,
+                    'google_id' => $googleId
+                ]);
+            } else {
+                $user = User::where('email', $email)->first();
+
+                if (!$user) {
+                    $user = User::create([
+                        'full_name' => $name,
+                        'email' => $email,
+                        'password' => Hash::make(Str::random(24)),
+                        'role' => 'programmer',
+                        'email_verified_at' => now(),
+                    ]);
+
+                    Programmer::updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'user_name' => null,
+                            'avatar_url' => $avatar,
+                            'github_username' => null, // Google مفيش github_username
+                            'bio' => null,
+                            'track' => null,
+                            'experience_level' => null,
+                            'profile_completed' => false,
+                        ]
+                    );
+
+                    Log::info('New Google user created', [
+                        'user_id' => $user->id,
+                        'email' => $email
+                    ]);
+                }
+            }
+
+            if ($user->role !== 'programmer') {
+                throw new \Exception('This account is registered as ' . $user->role);
+            }
+
+            Programmer::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'avatar_url' => $avatar ?? $user->programmer?->avatar_url,
+                    'bio' => $user->programmer?->bio,
+                    'track' => $user->programmer?->track,
+                    'experience_level' => $user->programmer?->experience_level,
+                    'profile_completed' => $user->programmer?->profile_completed ?? false,
+                ]
+            );
+
+            $user->refresh();
+            $this->storeGoogleAuth($user, $googleUser);
+
+            $token = $user->createToken('google_auth')->plainTextToken;
+            $user->load('programmer');
+            $programmer = $user->programmer;
+            $profileCompleted = $programmer ? $programmer->profile_completed : false;
+
+            $userData = [
+                'id' => $programmer?->id,
+                'user_id' => $user->id,
+                'name' => $user->full_name,
+                'email' => $user->email,
+                'role' => 'programmer',
+                'avatar' => $programmer?->avatar_url ?? null,
+                'github_username' => $programmer?->github_username ?? null,
+                'profile_completed' => $profileCompleted,
+            ];
+
+            DB::commit();
+
+            return [
+                'token' => $token,
+                'user_data' => $userData,
+                'profile_completed' => $profileCompleted,
+            ];
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    private function storeGoogleAuth(User $user, $googleUser)
+    {
+        UserAuth::updateOrCreate(
+            ['user_id' => $user->id, 'provider_type' => 'google'],
+            [
+                'user_id' => $user->id,
+                'provider_type' => 'google',
+                'provider_user_id' => $googleUser->getId(),
+                'provider_email' => $googleUser->getEmail(),
+                'provider_name' => $googleUser->getName(),
+                'access_token' => $googleUser->token,
+                'refresh_token' => $googleUser->refreshToken ?? null,
+                'token_expires_at' => $googleUser->expiresIn ? now()->addSeconds($googleUser->expiresIn) : null,
+            ]
+        );
+    }
 
     public function handleGitHubMobile(Request $request)
     {
