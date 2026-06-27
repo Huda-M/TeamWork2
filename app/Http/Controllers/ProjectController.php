@@ -159,86 +159,87 @@ public function changeProjectLeader($projectId, $programmerId)
         }
     }
 
-    public function zeroProject($projectId)
-    {
-        try {
-            $user = Auth::user();
-            if (!$user || $user->role !== 'programmer') {
-                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-            }
-
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
-
-            // جلب المشروع مع الفرق والأعضاء والمهام
-            $project = Project::with([
-                'teams.activeMembers.programmer.user',
-                'teams.tasks'
-            ])->find($projectId);
-
-            if (!$project) {
-                return response()->json(['success' => false, 'message' => 'Project not found'], 404);
-            }
-
-            // التحقق من أن المستخدم هو قائد الفريق في هذا المشروع
-            // نفترض أن المشروع له فريق واحد (كما في نظامك)
-            $team = $project->teams->first();
-            if (!$team) {
-                return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
-            }
-
-            if (!$team->isLeader($programmer->id)) {
-                return response()->json(['success' => false, 'message' => 'Only the team leader can view zero project details'], 403);
-            }
-
-            // إزالة الشرط الذي يمنع العرض إذا كانت هناك مهام
-            // جمع جميع الأعضاء من كل فريق في المشروع
-            $members = collect();
-            foreach ($project->teams as $team) {
-                foreach ($team->activeMembers as $member) {
-                    $prog = $member->programmer;
-                    $programmerTasks = $team->tasks->where('programmer_id', $prog->id);
-                    $doneCount = $programmerTasks->where('status', 'done')->count();
-                    $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
-
-                    $members->push([
-                        'name'          => $prog->user->full_name,
-                        'avatar_url' => $programmer->avatar_url 
-    ? Storage::disk('public')->url($programmer->avatar_url) 
-    : null,
-                        'track'         => $prog->track ?? 'general',
-                        'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
-                    ]);
-                }
-            }
-
-            $members = $members->unique('name')->values();
-
-            $responseData = [
-                'project_id'    => $project->id,
-                'project_title' => $project->title,
-                'description'   => $project->description,
-                'total_members' => $members->count(),
-                'pending_tasks' => $project->teams->flatMap->tasks->whereNotIn('status', ['done', 'cancelled'])->count(),
-                'members'       => $members,
-            ];
-
-            return response()->json([
-                'success' => true,
-                'data'    => $responseData,
-                'message' => 'Zero project details fetched successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error fetching zero project: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch zero project details'
-            ], 500);
+   public function zeroProject($projectId)
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        // جلب المشروع مع الفرق والأعضاء والمهام
+        $project = Project::with([
+            'teams.activeMembers.programmer.user',
+            'teams.tasks'
+        ])->find($projectId);
+
+        if (!$project) {
+            return response()->json(['success' => false, 'message' => 'Project not found'], 404);
+        }
+
+        // التحقق من أن المستخدم هو قائد الفريق في هذا المشروع
+        $team = $project->teams->first();
+        if (!$team) {
+            return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
+        }
+
+        // ✅ التحقق: الليدر بس اللي يقدر يشوف
+        if (!$team->isLeader($programmer->id)) {
+            return response()->json(['success' => false, 'message' => 'Only the team leader can view zero project details'], 403);
+        }
+
+        // جمع جميع الأعضاء من كل فريق في المشروع
+        $members = collect();
+        foreach ($project->teams as $team) {
+            foreach ($team->activeMembers as $member) {
+                $prog = $member->programmer;
+                
+                // ✅ استخدم $prog مش $programmer
+                $programmerTasks = $team->tasks->where('programmer_id', $prog->id);
+                $doneCount = $programmerTasks->where('status', 'done')->count();
+                $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
+
+                $members->push([
+                    'name'          => $prog->user->full_name,
+                    'avatar_url'    => $prog->avatar_url   // ← $prog هنا!
+                        ? Storage::disk('public')->url($prog->avatar_url) 
+                        : null,
+                    'track'         => $prog->track ?? 'general',
+                    'tasks_summary' => "{$doneCount} done , {$pendingCount} pending",
+                ]);
+            }
+        }
+
+        $members = $members->unique('name')->values();
+
+        $responseData = [
+            'project_id'    => $project->id,
+            'project_title' => $project->title,
+            'description'   => $project->description,
+            'total_members' => $members->count(),
+            'pending_tasks' => $project->teams->flatMap->tasks->whereNotIn('status', ['done', 'cancelled'])->count(),
+            'members'       => $members,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data'    => $responseData,
+            'message' => 'Zero project details fetched successfully'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching zero project: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch zero project details'
+        ], 500);
     }
+}
 
     public function store(StoreProjectRequest $request)
     {
