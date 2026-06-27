@@ -24,6 +24,8 @@ use App\Http\Controllers\Auth\SocialAuthController;
 use Illuminate\Support\Facades\RateLimiter;
 
 
+Route::post('/auth/google/mobile', [SocialAuthController::class, 'handleGoogleMobile'])
+    ->middleware('throttle:5,1');
 Route::post('/auth/github/mobile', [SocialAuthController::class, 'handleGitHubMobile'])
     ->middleware('throttle:5,1');
 
