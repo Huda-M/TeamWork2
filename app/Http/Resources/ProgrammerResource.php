@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class ProgrammerResource extends JsonResource
 {
@@ -24,7 +25,9 @@ class ProgrammerResource extends JsonResource
             'image' => $this->cover_image,
             'bio' => $this->bio,
             'stars' => $this->stars,
-            'avatar_url' => $this->avatar_url,
+            'avatar_url' => $this->avatar_url
+                ? Storage::disk('public')->url($this->avatar_url)
+                : null,
         ];
     }
 }
