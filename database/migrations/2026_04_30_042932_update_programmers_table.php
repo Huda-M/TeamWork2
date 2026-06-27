@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::table('programmers', function (Blueprint $table) {
             // المستوى الخبروي (يتم تخزينه وليس حسابه)
             $table->enum('experience_level', ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'])
-                  ->nullable();
+                  ->default('beginner');
             $table->boolean('profile_completed')->default(false)->after('user_id');
 
             $table->json('skills')->nullable()->after('track');
