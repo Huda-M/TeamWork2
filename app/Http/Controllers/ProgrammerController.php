@@ -508,33 +508,7 @@ private function getNextBaseLevel($currentBaseLevel)
     
     return $levels[$currentIndex + 1];
 }
-/**
- * تحديد الـ base level من الـ score (fallback لو مفيش experience_level)
- */
-private function getBaseLevelFromScore($score)
-{
-    if ($score >= 1000) return 'expert';
-    if ($score >= 700)  return 'advanced';
-    if ($score >= 500)  return 'senior';
-    if ($score >= 200)  return 'intermediate';
-    if ($score >= 50)   return 'junior';
-    return 'beginner';
-}
 
-/**
- * جلب الـ base level اللي بعده
- */
-private function getNextBaseLevel($currentBaseLevel)
-{
-    $levels = ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'];
-    $currentIndex = array_search($currentBaseLevel, $levels);
-    
-    if ($currentIndex === false || $currentIndex >= count($levels) - 1) {
-        return null;
-    }
-    
-    return $levels[$currentIndex + 1];
-}
     
     public function searchByUsername(Request $request)
     {
