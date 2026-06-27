@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('avatar_url')->nullable();
             $table->json('required_skills')->nullable();
             $table->json('preferred_skills')->nullable();
-            $table->enum('experience_level', ['beginner', 'intermediate', 'advanced', 'expert'])->default('intermediate');
+            $table->enum('experience_level', ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'])->default('beginner');
         });
 
     }
