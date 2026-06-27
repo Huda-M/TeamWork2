@@ -372,6 +372,25 @@ class ProgrammerController extends Controller
             ], 500);
         }
     }
+    /**
+ * تحديد المستوى النصي للمبرمج بناءً على experience_level أو total_score
+ */
+private function getProgrammerLevel($programmer)
+{
+    // إذا كان experience_level موجوداً في الجدول ومُعبأ، استخدمه
+    if (!empty($programmer->experience_level)) {
+        return $programmer->experience_level;
+    }
+
+    // وإلا احسب من total_score
+    $score = $programmer->total_score ?? 0;
+    if ($score >= 1000) return 'expert';
+    if ($score >= 700)  return 'advanced';
+    if ($score >= 500)  return 'senior';
+    if ($score >= 200)  return 'intermediate';
+    if ($score >= 50)   return 'junior';
+    return 'beginner';
+}
 
    public function levelProgression()
 {
