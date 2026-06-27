@@ -397,132 +397,107 @@ class ProgrammerController extends Controller
     }
 
     public function levelProgression()
-    {
-        try {
-            $user = Auth::user();
-            if (!$user || $user->role !== 'programmer') {
-                return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
-            }
-
-            $programmer = $user->programmer;
-            if (!$programmer) {
-                return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
-            }
-
-            $score = $programmer->total_score ?? 0;
-
-            // تعريف المستويات الأساسية والفرعية (نقاط البدء لكل مستوى فرعي)
-            $levels = [
-                'beginner' => [
-                    'bronze' => 0,
-                    'silver' => 50,
-                    'gold'   => 100,
-                ],
-                'junior' => [
-                    'bronze' => 200,
-                    'silver' => 250,
-                    'gold'   => 300,
-                ],
-                'intermediate' => [
-                    'bronze' => 400,
-                    'silver' => 460,
-                    'gold'   => 520,
-                ],
-                'senior' => [
-                    'bronze' => 600,
-                    'silver' => 680,
-                    'gold'   => 760,
-                ],
-                'advanced' => [
-                    'bronze' => 800,
-                    'silver' => 890,
-                    'gold'   => 980,
-                ],
-                'expert' => [
-                    'bronze' => 1000,
-                    'silver' => 1100,
-                    'gold'   => 1200,
-                ],
-            ];
-
-            // 1. تحديد المستوى الحالي (الأساسي والفرعي)
-            $currentBaseLevel = null;
-            $currentSubLevel = null;
-            $currentThreshold = 0;
-            $nextThreshold = null;
-            $nextBaseLevel = null;
-            $nextSubLevel = null;
-
-            // البحث عن المستوى الذي ينتمي إليه score
-            foreach ($levels as $base => $subs) {
-                foreach ($subs as $sub => $threshold) {
-                    if ($score >= $threshold) {
-                        $currentBaseLevel = $base;
-                        $currentSubLevel = $sub;
-                        $currentThreshold = $threshold;
-                    } else {
-                        // هذا هو المستوى التالي (أول threshold أكبر من score)
-                        if ($nextThreshold === null) {
-                            $nextThreshold = $threshold;
-                            $nextBaseLevel = $base;
-                            $nextSubLevel = $sub;
-                        }
-                        break 2; // نخرج من الحلقتين لأننا وجدنا التالي
-                    }
-                }
-            }
-
-            // إذا كان المستوى الحالي هو أعلى مستوى (Gold في Expert) فلن يوجد next
-            $isMaxLevel = ($currentBaseLevel === 'expert' && $currentSubLevel === 'gold');
-
-            // حساب نسبة التقدم داخل المستوى الحالي
-            $progressPercentage = 0;
-            if (!$isMaxLevel && $nextThreshold !== null) {
-                $range = $nextThreshold - $currentThreshold;
-                $progress = $score - $currentThreshold;
-                $progressPercentage = round(($progress / $range) * 100, 2);
-                $progressPercentage = min($progressPercentage, 99.99);
-            } else {
-                $progressPercentage = 100;
-            }
-
-            // تكوين الاسم الكامل (مثل Beginner Silver)
-            $fullLevelName = ucfirst($currentBaseLevel) . ' ' . ucfirst($currentSubLevel);
-
-            // تكوين المستوى التالي (إن وجد)
-            $nextFullLevelName = null;
-            if (!$isMaxLevel && $nextBaseLevel && $nextSubLevel) {
-                $nextFullLevelName = ucfirst($nextBaseLevel) . ' ' . ucfirst($nextSubLevel);
-            }
-
-            // إحصائيات إضافية
-            $totalTasks = $programmer->tasks()->count();
-            $averageRating = \App\Models\Evaluation::where('evaluated_id', $programmer->id)
-                ->avg('average_score') ?? 0;
-            $averageRating = round($averageRating, 2);
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'current_level_full' => $fullLevelName,      // "Beginner Silver"
-                    'base_level'         => $currentBaseLevel,   // "beginner"
-                    'sub_level'          => $currentSubLevel,    // "silver"
-                    'progress_percentage' => $progressPercentage,
-                    'next_level_full'    => $nextFullLevelName,
-                    'total_tasks'        => $totalTasks,
-                    'average_rating'     => $averageRating,
-                    // 'score' => $score, // (اختياري) يمكن إظهار النقاط للتصحيح
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Level progression error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load level progression'
-            ], 500);
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
-    }   
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
+        }
+
+        $score = $programmer->total_score ?? 0;
+
+        // ✅ استخدم experience_level لو موجود
+        $baseLevel = $programmer->experience_level ?? $this->getBaseLevelFromScore($score);
+
+        // تعريف المستويات الفرعية لكل base level
+        $subLevels = [
+            'beginner'     => ['bronze' => 0,   'silver' => 50,  'gold' => 100],
+            'junior'       => ['bronze' => 200,  'silver' => 250, 'gold' => 300],
+            'intermediate' => ['bronze' => 400,  'silver' => 460, 'gold' => 520],
+            'senior'       => ['bronze' => 600,  'silver' => 680, 'gold' => 760],
+            'advanced'     => ['bronze' => 800,  'silver' => 890, 'gold' => 980],
+            'expert'       => ['bronze' => 1000, 'silver' => 1100, 'gold' => 1200],
+        ];
+
+        $subs = $subLevels[$baseLevel] ?? $subLevels['beginner'];
+
+        // تحديد الـ sub level الحالي بناءً على الـ score
+        $currentSubLevel = 'bronze';
+        $currentThreshold = $subs['bronze'];
+        $nextSubLevel = 'silver';
+        $nextThreshold = $subs['silver'];
+
+        foreach ($subs as $sub => $threshold) {
+            if ($score >= $threshold) {
+                $currentSubLevel = $sub;
+                $currentThreshold = $threshold;
+            } else {
+                $nextSubLevel = $sub;
+                $nextThreshold = $threshold;
+                break;
+            }
+        }
+
+        // لو وصل لـ gold في expert
+        $isMaxLevel = ($baseLevel === 'expert' && $currentSubLevel === 'gold');
+
+        // حساب نسبة التقدم
+        $progressPercentage = 0;
+        if (!$isMaxLevel) {
+            $range = $nextThreshold - $currentThreshold;
+            $progress = $score - $currentThreshold;
+            $progressPercentage = $range > 0 ? round(($progress / $range) * 100, 2) : 0;
+            $progressPercentage = min($progressPercentage, 99.99);
+        } else {
+            $progressPercentage = 100;
+        }
+
+        $fullLevelName = ucfirst($baseLevel) . ' ' . ucfirst($currentSubLevel);
+        $nextFullLevelName = $isMaxLevel ? null : ucfirst($baseLevel) . ' ' . ucfirst($nextSubLevel);
+
+        $totalTasks = $programmer->tasks()->count();
+        $averageRating = \App\Models\Evaluation::where('evaluated_id', $programmer->id)
+            ->avg('average_score') ?? 0;
+        $averageRating = round($averageRating, 2);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'current_level_full'    => $fullLevelName,      // "Senior Bronze"
+                'base_level'            => $baseLevel,          // "senior"
+                'sub_level'             => $currentSubLevel,    // "bronze"
+                'progress_percentage'   => $progressPercentage,
+                'next_level_full'       => $nextFullLevelName,  // "Senior Silver"
+                'total_tasks'           => $totalTasks,
+                'average_rating'        => $averageRating,
+                'total_score'           => $score,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Level progression error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load level progression'
+        ], 500);
+    }
+}
+
+// ✅ Helper method لو الـ experience_level مش موجود
+private function getBaseLevelFromScore($score)
+{
+    if ($score >= 1000) return 'expert';
+    if ($score >= 700)  return 'advanced';
+    if ($score >= 500)  return 'senior';
+    if ($score >= 200)  return 'intermediate';
+    if ($score >= 50)   return 'junior';
+    return 'beginner';
+}
     /**
      * البحث عن المبرمجين بواسطة username (للدعوات)
      */
