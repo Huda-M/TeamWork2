@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: teamwork-api
+    runtime: docker
+    plan: free
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: https://teamwork-api.onrender.com
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: teamwork-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: teamwork-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: teamwork-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: teamwork-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: teamwork-db
+          property: password
+      - key: BROADCAST_DRIVER
+        value: log
+      - key: CACHE_DRIVER
+        value: file
+      - key: SESSION_DRIVER
+        value: file
+      - key: QUEUE_DRIVER
+        value: sync
+
+databases:
+  - name: teamwork-db
+    databaseName: teamwork
+    user: teamwork
+    plan: free
