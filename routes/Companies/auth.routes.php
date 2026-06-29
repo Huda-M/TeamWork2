@@ -7,9 +7,10 @@ use Illuminate\Support\Facades\Route;
 Route::controller(AuthController::class)->prefix('company/auth')->group(function () {
     Route::post('/login', 'login');
     Route::post('/register', 'register');
-    Route::get('/{provider}/redirect', 'redirectToProvider');
-    Route::get('/{provider}/callback', 'handleProviderCallback');
 });
+
+Route::get('/auth/{provider}/redirect', [AuthController::class, 'redirectToProvider']);
+Route::get('/auth/{provider}/callback', [AuthController::class, 'handleProviderCallback']);
 
 Route::controller(AuthController::class)->prefix('company/auth')->middleware('auth:sanctum')->group(function () {
     Route::post('/logout', 'logout');
