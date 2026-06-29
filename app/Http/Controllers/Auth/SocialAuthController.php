@@ -557,4 +557,142 @@ class SocialAuthController extends Controller
             ]
         );
     }
+
+    // ─── Web OAuth (redirect-based) ───
+
+    /**
+     * Redirect to the OAuth provider.
+     */
+    public function redirectToProvider($provider)
+    {
+        $allowed = ['google', 'github', 'facebook'];
+        if (! in_array($provider, $allowed)) {
+            return response()->json(['message' => 'Unsupported provider'], 422);
+        }
+
+        return response()->json([
+            'url' => Socialite::driver($provider)->stateless()->redirect()->getTargetUrl(),
+        ]);
+    }
+
+    /**
+     * Handle the OAuth provider callback.
+     * Google/GitHub/Facebook redirect back here after user grants access.
+     */
+    public function handleProviderCallback($provider)
+    {
+        $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
+
+        try {
+            $socialUser = Socialite::driver($provider)->stateless()->user();
+        } catch (\Exception $e) {
+            Log::error("OAuth callback error [{$provider}]: " . $e->getMessage());
+            return redirect($frontendUrl . '/auth/callback?error=' . urlencode('Authentication failed'));
+        }
+
+        DB::beginTransaction();
+        try {
+            $userAuth = UserAuth::where('provider_type', $provider)
+                ->where('provider_user_id', $socialUser->getId())
+                ->first();
+
+            $user = $userAuth ? $userAuth->user : null;
+
+            if ($userAuth && ! $user) {
+                $userAuth->delete();
+                $userAuth = null;
+            }
+
+            $isNew = false;
+
+            if (! $userAuth) {
+                $user = User::where('email', $socialUser->getEmail())->first();
+
+                if (! $user) {
+                    $user = User::create([
+                        'full_name'         => $socialUser->getName() ?? $socialUser->getNickname() ?? 'Unknown User',
+                        'email'             => $socialUser->getEmail(),
+                        'password'          => Hash::make(Str::random(24)),
+                        'role'              => 'programmer',
+                        'email_verified_at' => now(),
+                    ]);
+
+                    Programmer::updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'user_name'        => null,
+                            'avatar_url'       => $socialUser->getAvatar(),
+                            'github_username'  => $provider === 'github' ? $socialUser->getNickname() : null,
+                            'bio'              => null,
+                            'track'            => null,
+                            'experience_level' => null,
+                            'profile_completed'=> false,
+                        ]
+                    );
+
+                    $isNew = true;
+                }
+
+                UserAuth::updateOrCreate(
+                    ['user_id' => $user->id, 'provider_type' => $provider],
+                    [
+                        'user_id'          => $user->id,
+                        'provider_type'    => $provider,
+                        'provider_user_id' => $socialUser->getId(),
+                        'provider_email'   => $socialUser->getEmail(),
+                        'provider_name'    => $socialUser->getName() ?? $socialUser->getNickname(),
+                        'access_token'     => $socialUser->token,
+                        'refresh_token'    => $socialUser->refreshToken ?? null,
+                        'token_expires_at' => $socialUser->expiresIn ? now()->addSeconds($socialUser->expiresIn) : null,
+                    ]
+                );
+            }
+
+            DB::commit();
+
+            $token = $user->createToken('social_auth')->plainTextToken;
+
+            return redirect(
+                $frontendUrl . '/auth/callback?token=' . $token
+                . '&is_new=' . ($isNew ? 'true' : 'false')
+                . '&role=' . $user->role
+            );
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("OAuth processing error [{$provider}]: " . $e->getMessage());
+            return redirect($frontendUrl . '/auth/callback?error=' . urlencode('Authentication failed'));
+        }
+    }
+
+    /**
+     * Complete social registration (called after user fills profile info).
+     */
+    public function completeSocialRegistration(Request $request)
+    {
+        $request->validate([
+            'token'     => 'required|string',
+            'user_name' => 'required|string|max:50|unique:programmers,user_name',
+        ]);
+
+        $user = auth()->user();
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $programmer = Programmer::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'user_name'        => $request->user_name,
+                'profile_completed'=> true,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile completed',
+            'user'    => $user->load('programmer'),
+        ]);
+    }
 }

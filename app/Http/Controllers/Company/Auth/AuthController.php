@@ -98,10 +98,12 @@ class AuthController extends Controller
 
     public function handleProviderCallback($provider)
     {
+        $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
+
         try {
             $socialUser = Socialite::driver($provider)->stateless()->user();
         } catch (\Exception $e) {
-            return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Authentication failed'));
+            return redirect($frontendUrl . '/auth/callback?error=' . urlencode('Authentication failed'));
         }
 
         $isNew = false;
@@ -122,7 +124,7 @@ class AuthController extends Controller
 
             if ($user) {
                 if ($user->role !== 'company') {
-                    return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Not authorized to login as company'));
+                    return redirect($frontendUrl . '/auth/callback?error=' . urlencode('Not authorized to login as company'));
                 }
             } else {
                 $user = User::create([
@@ -146,11 +148,11 @@ class AuthController extends Controller
         }
 
         if (! $user || $user->role !== 'company') {
-            return redirect('http://localhost:3000/auth/callback?error=' . urlencode('Not authorized to login as company'));
+            return redirect($frontendUrl . '/auth/callback?error=' . urlencode('Not authorized to login as company'));
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return redirect('http://localhost:3000/auth/callback?token=' . $token . '&is_new=' . ($isNew ? 'true' : 'false'));
+        return redirect($frontendUrl . '/auth/callback?token=' . $token . '&is_new=' . ($isNew ? 'true' : 'false'));
     }
 }
