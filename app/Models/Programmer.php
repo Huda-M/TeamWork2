@@ -180,29 +180,7 @@ class Programmer extends Model
             ->first();
     }
 
-    // ========== إدارة المستوى والخبرة ==========
-
-    /**
-     * تحديد المستوى (experience_level) بناءً على total_score
-     */
-    public function getExperienceLevelAttribute(): string
-    {
-        if ($this->total_score >= 2000) {
-            return 'expert';
-        }
-        if ($this->total_score >= 1000) {
-            return 'advanced';
-        }
-        if ($this->total_score >= 500) {
-            return 'intermediate';
-        }
-
-        return 'beginner';
-    }
-
-    /**
-     * إضافة نقاط (Stars) ورفع المستوى تلقائياً إذا تجاوز الحدود
-     */
+  
     public function addStars(int $points, string $reason, array $metadata = []): void
     {
         $oldLevel = $this->experience_level;
