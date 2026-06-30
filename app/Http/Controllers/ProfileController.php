@@ -815,4 +815,96 @@ public function updateProfile(Request $request)
 
         return response()->json($response);
     }
+    public function getSkillsAndExperience()
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only programmers can access'
+            ], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'skills'     => $programmer->skills,        // "Flutter, React, UI/UX"
+                'experience' => $programmer->experience,    // النص الطويل
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get skills/experience error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch skills and experience'
+        ], 500);
+    }
+}
+    public function updateSkillsAndExperience(Request $request)
+{
+    try {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'programmer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only programmers can update'
+            ], 403);
+        }
+
+        $programmer = $user->programmer;
+        if (!$programmer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programmer profile not found'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'skills'     => 'nullable|string|max:2000',   // Flutter, React, UI/UX
+            'experience' => 'nullable|string|max:5000',   // النص الطويل
+        ]);
+
+        $updated = false;
+
+        if (isset($validated['skills'])) {
+            $programmer->skills = $validated['skills'];
+            $updated = true;
+        }
+
+        if (isset($validated['experience'])) {
+            $programmer->experience = $validated['experience'];
+            $updated = true;
+        }
+
+        if ($updated) {
+            $programmer->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Skills and experience updated successfully',
+            'data' => [
+                'skills'     => $programmer->skills,
+                'experience' => $programmer->experience,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Update skills/experience error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update skills and experience'
+        ], 500);
+    }
+}
 }
