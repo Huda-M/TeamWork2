@@ -13,10 +13,10 @@ class Skill extends Model
     protected $fillable = [
         'name',
     ];
-    public function programmers():BelongsToMany
-    {
-        return $this->belongsToMany(Programmer::class, 'programmer_skills');
-    }
+    public function programmers()
+{
+    return $this->belongsToMany(Programmer::class, 'programmer_skills');
+}
     public function projects():BelongsToMany
     {
         return $this->belongsToMany(Project::class, 'projects_skills');
