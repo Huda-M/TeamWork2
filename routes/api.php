@@ -209,7 +209,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{task}/update-status', [TaskController::class, 'updateStatus']);
     });
 
-    Route::prefix('profile')->group(function () {
+    Route::middleware('auth:sanctum')->prefix('profile')->group(function () {
+        Route::get('/skills-experience', [ProfileController::class, 'getSkillsAndExperience']);
+        Route::post('/skills-experience', [ProfileController::class, 'updateSkillsAndExperience']);
         Route::get('/', [ProfileController::class, 'myProfile']);           // ✅ صحيح
         Route::post('/update', [ProfileController::class, 'updateProfile']);
         Route::get('/my-stats', [ProfileController::class, 'myStats']);
