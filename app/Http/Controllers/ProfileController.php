@@ -7,6 +7,7 @@ use App\Models\Team;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\Evaluation;
+use App\Models\Skill;
 use App\Http\Requests\UpdateProgrammerRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
