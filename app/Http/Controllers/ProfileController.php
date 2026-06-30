@@ -815,7 +815,11 @@ public function updateProfile(Request $request)
 
         return response()->json($response);
     }
-    public function getSkillsAndExperience()
+    /**
+ * عرض Skills & Experience
+ * GET /api/profile/skills-experience
+ */
+public function getSkillsAndExperience()
 {
     try {
         $user = Auth::user();
@@ -834,11 +838,18 @@ public function updateProfile(Request $request)
             ], 404);
         }
 
+        // ✅ جلب Skills من الـ relation
+        $skills = $programmer->skills()->pluck('name')->toArray();
+
+        // ✅ جلب Experience من الـ bio أو column جديد
+        $experience = $programmer->bio; // أو $programmer->experience لو ضفت column
+
         return response()->json([
             'success' => true,
             'data' => [
-                'skills'     => $programmer->skills,        // "Flutter, React, UI/UX"
-                'experience' => $programmer->experience,    // النص الطويل
+                'experience_level' => $programmer->experience_level,  // "junior", "senior", etc.
+                'skills' => $skills,  // ["Flutter", "React", "UI/UX"]
+                'experience' => $experience,  // النص الطويل
             ]
         ]);
 
@@ -850,7 +861,12 @@ public function updateProfile(Request $request)
         ], 500);
     }
 }
-    public function updateSkillsAndExperience(Request $request)
+
+/**
+ * تعديل Skills & Experience
+ * POST /api/profile/skills-experience
+ */
+public function updateSkillsAndExperience(Request $request)
 {
     try {
         $user = Auth::user();
@@ -870,23 +886,24 @@ public function updateProfile(Request $request)
         }
 
         $validated = $request->validate([
-            'skills'     => 'nullable|string|max:2000',   // Flutter, React, UI/UX
-            'experience' => 'nullable|string|max:5000',   // النص الطويل
+            'skills' => 'nullable|array',           // ["Flutter", "React", "UI/UX"]
+            'skills.*' => 'string|max:50',
+            'experience' => 'nullable|string|max:5000',  // النص الطويل
         ]);
 
-        $updated = false;
-
+        // ✅ تحديث Skills (sync with pivot table)
         if (isset($validated['skills'])) {
-            $programmer->skills = $validated['skills'];
-            $updated = true;
+            $skillIds = [];
+            foreach ($validated['skills'] as $skillName) {
+                $skill = Skill::firstOrCreate(['name' => trim($skillName)]);
+                $skillIds[] = $skill->id;
+            }
+            $programmer->skills()->sync($skillIds);
         }
 
+        // ✅ تحديث Experience (في bio أو column جديد)
         if (isset($validated['experience'])) {
-            $programmer->experience = $validated['experience'];
-            $updated = true;
-        }
-
-        if ($updated) {
+            $programmer->bio = $validated['experience']; // أو $programmer->experience
             $programmer->save();
         }
 
@@ -894,8 +911,8 @@ public function updateProfile(Request $request)
             'success' => true,
             'message' => 'Skills and experience updated successfully',
             'data' => [
-                'skills'     => $programmer->skills,
-                'experience' => $programmer->experience,
+                'skills' => $programmer->skills()->pluck('name')->toArray(),
+                'experience' => $programmer->bio, // أو $programmer->experience
             ]
         ]);
 
