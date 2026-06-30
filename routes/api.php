@@ -130,32 +130,7 @@ Route::put('/join-requests/{joinRequest}', [JoinRequestController::class, 'updat
     });
 
 });
-// Public API v1 (Read-only)
-Route::prefix('v1')->group(function () {
-    // Users
-    Route::get('/users', [UserController::class, 'index']);
-    Route::get('/users/{id}', [UserController::class, 'show']);
 
-    // Programmers
-    Route::get('/programmers', [ProgrammerController::class, 'index']);
-    Route::get('/programmers/{id}', [ProgrammerController::class, 'show']);
-
-    // Projects
-    Route::get('/projects', [ProjectController::class, 'index']);
-    Route::get('/projects/{id}', [ProjectController::class, 'show']);
-    Route::get('/projects/{id}/teams', [ProjectController::class, 'teams']);
-
-    // Skills
-    Route::get('/skills', [SkillController::class, 'index']);
-    Route::get('/skills/popular', [SkillController::class, 'popular']);
-    Route::get('/skills/{id}', [SkillController::class, 'show']);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Authenticated Routes (Sanctum)
-|--------------------------------------------------------------------------
-*/
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{projectId}/my-ratings', [TeamController::class, 'getProjectMembersWithMyRatings']);
     Route::get('/projects/{projectId}/full-details', [TeamController::class, 'getProjectFullDetails']);
@@ -175,15 +150,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my/statistics', [ProgrammerController::class, 'myStatistics']);
     Route::get('/programmers/{id}/statistics', [ProgrammerController::class, 'programmerStatistics']);
 
-    // // Notifications
-    // Route::prefix('notifications')->group(function () {
-    //     Route::get('/', [UserController::class, 'getNotifications']);
-    //     Route::get('/unread-count', [UserController::class, 'getUnreadCount']);
-    //     Route::post('/{notificationId}/read', [UserController::class, 'markNotificationAsRead']);
-    //     Route::post('/read-all', [UserController::class, 'markAllNotificationsAsRead']);
-    //     Route::delete('/{notificationId}', [UserController::class, 'deleteNotification']);
-    //     Route::delete('/read/all', [UserController::class, 'deleteReadNotifications']);
-    // });
 
     // Projects related (authenticated)
     Route::get('/my-projects', [ProjectController::class, 'myProjects']);
@@ -266,17 +232,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}/statistics', [TeamController::class, 'teamStatistics']);
     });
 
-    // Evaluations
-    Route::prefix('evaluations')->group(function () {
-        Route::post('/projects/{projectId}/teams/{teamId}/start', [EvaluationController::class, 'startEvaluation']);
-        Route::post('/projects/{projectId}/teams/{teamId}', [EvaluationController::class, 'store']);
-        Route::get('/projects/{projectId}', [EvaluationController::class, 'index']);
-        Route::get('/my/as-evaluator', [EvaluationController::class, 'myEvaluationsAsEvaluator']);
-        Route::get('/my/as-evaluated', [EvaluationController::class, 'myEvaluationsAsEvaluated']);
-        Route::get('/programmer/{programmerId}/stats', [EvaluationController::class, 'programmerStats']);
-    });
-
-    // Reports (with status check)
     Route::prefix('reports')->group(function () {
         Route::post('/', [ReportController::class, 'store']);
         Route::get('/my', [ReportController::class, 'myReports']);
@@ -291,28 +246,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{report}', [ReportController::class, 'show']);
         Route::put('/{report}', [ReportController::class, 'update']);
         Route::delete('/{report}', [ReportController::class, 'destroy']);
-    });
-
-    // CRUD operations v1 (mostly for admins or owners)
-    Route::prefix('v1')->group(function () {
-        // Users (admin only recommended)
-        Route::post('/users', [UserController::class, 'store']);
-        Route::put('/users/{id}', [UserController::class, 'update']);
-        Route::delete('/users/{id}', [UserController::class, 'destroy']);
-
-        // Programmers
-        Route::put('/programmers/{id}', [ProgrammerController::class, 'update']);
-        Route::delete('/programmers/{id}', [ProgrammerController::class, 'destroy']);
-
-        // Projects
-        Route::post('/projects', [ProjectController::class, 'store']);
-        Route::put('/projects/{id}', [ProjectController::class, 'update']);
-        Route::delete('/projects/{id}', [ProjectController::class, 'destroy']);
-
-        // Skills
-        Route::post('/skills', [SkillController::class, 'store']);
-        Route::put('/skills/{id}', [SkillController::class, 'update']);
-        Route::delete('/skills/{id}', [SkillController::class, 'destroy']);
     });
 
 });
