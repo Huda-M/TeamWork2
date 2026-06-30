@@ -57,10 +57,10 @@ class Programmer extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function skills(): BelongsToMany
-    {
-        return $this->belongsToMany(Skill::class, 'programmer_skills')->withTimestamps();
-    }
+    public function skills()
+{
+    return $this->belongsToMany(Skill::class, 'programmer_skills');
+}
 
     public function tracks(): BelongsToMany
     {
