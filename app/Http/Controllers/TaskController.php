@@ -199,7 +199,7 @@ class TaskController extends Controller
         }
 
         $query = Task::where('programmer_id', $programmer->id)
-            ->where('status', 'active') 
+            ->whereIn('status', ['active', 'in_progress'])
             ->with(['team.project'])
             ->orderBy('deadline', 'asc');
 
