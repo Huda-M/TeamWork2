@@ -74,22 +74,7 @@
                 "summary": "جلب المهام المكتملة",
                 "description": "الحصول على قائمة المهام المكتملة للمبرمج الحالي. ممكن تفلتر بالتاريخ.",
                 "security": [{"Bearer": []}],
-                "parameters": [
-                    {
-                        "name": "from_date",
-                        "in": "query",
-                        "description": "تاريخ البداية للفلترة (YYYY-MM-DD)",
-                        "required": false,
-                        "schema": {"type": "string", "format": "date", "example": "2026-01-01"}
-                    },
-                    {
-                        "name": "to_date",
-                        "in": "query",
-                        "description": "تاريخ النهاية للفلترة (YYYY-MM-DD)",
-                        "required": false,
-                        "schema": {"type": "string", "format": "date", "example": "2026-12-31"}
-                    }
-                ],
+                
                 "responses": {
                     "200": {
                         "description": "قائمة المهام المكتملة",
