@@ -44,7 +44,7 @@ return [
             ],
         ],
         'scanOptions' => [
-            'analyser' => \OpenApi\Analysers\DocBlockAnnotationFactory::class, // ✅ Force DocBlock
+            'analyser' => null, // ✅ Force DocBlock
             'default_processors_configuration' => [],
             'analysis' => null,
             'processors' => [],
