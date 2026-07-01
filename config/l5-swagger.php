@@ -46,8 +46,8 @@ return [
                  * Absolute paths to directory containing the swagger annotations are stored.
                  */
                'annotations' => [
-    'base_path' => base_path('app'),
-],
+                   base_path('app'),
+               ],
             ],
         ],
     ],
@@ -69,6 +69,9 @@ return [
             'views' => base_path('resources/views/vendor/l5-swagger'),
             'base' => env('L5_SWAGGER_BASE_PATH', null),
             'excludes' => [],
+            'annotations' => [
+                base_path('app'),
+            ],
         ],
 
         'scanOptions' => [
