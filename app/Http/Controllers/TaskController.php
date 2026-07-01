@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Storage;
 use OpenApi\Annotations as OA;
 
 
+
 class TaskController extends Controller
 {
     public function getMyTasks(Request $request)
@@ -57,58 +58,22 @@ class TaskController extends Controller
             ], 500);
         }
     }
-/**
- * @OA\Get(
- *     path="/api/tasks/completed",
- *     tags={"Tasks"},
- *     summary="جلب المهام المكتملة",
- *     description="الحصول على قائمة المهام المكتملة للمبرمج الحالي",
- *     security={{"Bearer": {}}},
- *     @OA\Parameter(
- *         name="from_date",
- *         in="query",
- *         description="تاريخ البداية للفلترة",
- *         required=false,
- *         @OA\Schema(type="string", format="date", example="2026-01-01")
- *     ),
- *     @OA\Parameter(
- *         name="to_date",
- *         in="query",
- *         description="تاريخ النهاية للفلترة",
- *         required=false,
- *         @OA\Schema(type="string", format="date", example="2026-12-31")
- *     ),
- *     @OA\Response(
- *         response=200,
- *         description="قائمة المهام المكتملة",
- *         @OA\JsonContent(
- *             type="object",
- *             @OA\Property(property="success", type="boolean", example=true),
- *             @OA\Property(
- *                 property="data",
- *                 type="object",
- *                 @OA\Property(property="num_of_tasks_done", type="integer", example=25),
- *                 @OA\Property(property="num_of_tasks_done_this_week", type="integer", example=3),
- *                 @OA\Property(property="completed_tasks", type="array", @OA\Items(
- *                     type="object",
- *                     @OA\Property(property="task_id", type="integer", example=1),
- *                     @OA\Property(property="task_title", type="string", example="Implement payment gateway"),
- *                     @OA\Property(property="completion_date", type="string", format="date", example="2026-06-28"),
- *                     @OA\Property(property="project_name", type="string", example="E-commerce App"),
- *                     @OA\Property(property="estimated_hours", type="integer", example=8),
- *                     @OA\Property(property="actual_hours", type="integer", example=6)
- *                 )),
- *                 @OA\Property(property="current_page", type="integer", example=1),
- *                 @OA\Property(property="last_page", type="integer", example=3)
- *             ),
- *             @OA\Property(property="message", type="string", example="Completed tasks fetched successfully")
- *         )
- *     ),
- *     @OA\Response(response=403, description="ممنوع - فقط المبرمجين"),
- *     @OA\Response(response=404, description="ملف المبرمج غير موجود"),
- *     @OA\Response(response=500, description="خطأ في السيرفر")
- * )
- */
+#[OA\Get(
+        path: "/api/tasks/completed",
+        tags: ["Tasks"],
+        summary: "جلب المهام المكتملة",
+        security: [["Bearer" => []]],
+        parameters: [
+            new OA\Parameter(name: "from_date", in: "query", required: false, schema: new OA\Schema(type: "string", format: "date")),
+            new OA\Parameter(name: "to_date", in: "query", required: false, schema: new OA\Schema(type: "string", format: "date"))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: "قائمة المهام المكتملة"),
+            new OA\Response(response: 403, description: "ممنوع"),
+            new OA\Response(response: 404, description: "غير موجود"),
+            new OA\Response(response: 500, description: "خطأ في السيرفر")
+        ]
+    )]
     public function completedTasks(Request $request)
     {
         try {
