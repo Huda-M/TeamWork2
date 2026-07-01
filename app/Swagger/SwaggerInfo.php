@@ -2,7 +2,7 @@
 
 namespace App\Swagger;
 
-use OpenApi\Annotations as OA; // ✅ ده المهم!
+use OpenApi\Annotations as OA;
 
 /**
  * @OA\Info(
