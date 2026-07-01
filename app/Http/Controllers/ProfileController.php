@@ -18,20 +18,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 
-/**
- * @OA\Info(
- *     version="1.0.0",
- *     title="TeamWork2 API",
- *     description="Documentation for TeamWork2"
- * )
- *
- * @OA\SecurityScheme(
- *     securityScheme="Bearer",
- *     type="http",
- *     scheme="bearer",
- *     bearerFormat="JWT"
- * )
- */
+
 class ProfileController extends Controller
 {
    public function myProfile()
