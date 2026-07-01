@@ -1,4 +1,3 @@
-
 {
     "openapi": "3.0.0",
     "info": {
@@ -14,13 +13,386 @@
         {
             "url": "https://teamwork2-production-ucr9dn.laravel.cloud/api",
             "description": "Production Server"
-        },
-        {
-            "url": "http://localhost:8000/api",
-            "description": "Local Development Server"
         }
     ],
-    "paths": {},
+    "paths": {
+        "/tasks/in-progress": {
+            "get": {
+                "tags": ["Tasks"],
+                "summary": "جلب المهام النشطة (قيد التنفيذ)",
+                "description": "الحصول على قائمة المهام النشطة للمبرمج الحالي",
+                "security": [{"Bearer": []}],
+                "responses": {
+                    "200": {
+                        "description": "قائمة المهام النشطة",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean", "example": true},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "active_tasks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "task_id": {"type": "integer", "example": 1},
+                                                            "task_title": {"type": "string", "example": "Fix login bug"},
+                                                            "project_name": {"type": "string", "example": "E-commerce App"},
+                                                            "due_date": {"type": "string", "format": "date", "example": "2026-07-15"},
+                                                            "priority": {"type": "string", "example": "high"},
+                                                            "status": {"type": "string", "example": "active"},
+                                                            "days_remaining": {"type": "integer", "example": 14},
+                                                            "is_overdue": {"type": "boolean", "example": false},
+                                                            "percentage_time_passed": {"type": "integer", "example": 30}
+                                                        }
+                                                    }
+                                                },
+                                                "total": {"type": "integer", "example": 5},
+                                                "current_page": {"type": "integer", "example": 1},
+                                                "last_page": {"type": "integer", "example": 2}
+                                            }
+                                        },
+                                        "message": {"type": "string", "example": "Active tasks fetched successfully"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {"description": "ممنوع - فقط المبرمجين"},
+                    "404": {"description": "ملف المبرمج غير موجود"},
+                    "500": {"description": "خطأ في السيرفر"}
+                }
+            }
+        },
+        "/tasks/completed": {
+            "get": {
+                "tags": ["Tasks"],
+                "summary": "جلب المهام المكتملة",
+                "description": "الحصول على قائمة المهام المكتملة للمبرمج الحالي",
+                "security": [{"Bearer": []}],
+                "parameters": [
+                    {
+                        "name": "from_date",
+                        "in": "query",
+                        "description": "تاريخ البداية للفلترة",
+                        "required": false,
+                        "schema": {"type": "string", "format": "date", "example": "2026-01-01"}
+                    },
+                    {
+                        "name": "to_date",
+                        "in": "query",
+                        "description": "تاريخ النهاية للفلترة",
+                        "required": false,
+                        "schema": {"type": "string", "format": "date", "example": "2026-12-31"}
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "قائمة المهام المكتملة",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean", "example": true},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "num_of_tasks_done": {"type": "integer", "example": 25},
+                                                "num_of_tasks_done_this_week": {"type": "integer", "example": 3},
+                                                "completed_tasks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "task_id": {"type": "integer", "example": 1},
+                                                            "task_title": {"type": "string", "example": "Implement payment gateway"},
+                                                            "completion_date": {"type": "string", "format": "date", "example": "2026-06-28"},
+                                                            "project_name": {"type": "string", "example": "E-commerce App"},
+                                                            "estimated_hours": {"type": "integer", "example": 8},
+                                                            "actual_hours": {"type": "integer", "example": 6}
+                                                        }
+                                                    }
+                                                },
+                                                "current_page": {"type": "integer", "example": 1},
+                                                "last_page": {"type": "integer", "example": 3}
+                                            }
+                                        },
+                                        "message": {"type": "string", "example": "Completed tasks fetched successfully"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {"description": "ممنوع - فقط المبرمجين"},
+                    "404": {"description": "ملف المبرمج غير موجود"},
+                    "500": {"description": "خطأ في السيرفر"}
+                }
+            }
+        },
+        "/tasks/{task}": {
+            "get": {
+                "tags": ["Tasks"],
+                "summary": "عرض تفاصيل مهمة معينة",
+                "description": "الحصول على تفاصيل مهمة واحدة بالكامل",
+                "security": [{"Bearer": []}],
+                "parameters": [
+                    {
+                        "name": "task",
+                        "in": "path",
+                        "description": "معرف المهمة",
+                        "required": true,
+                        "schema": {"type": "integer", "example": 46}
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "تفاصيل المهمة",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean", "example": true},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {"type": "integer", "example": 46},
+                                                "title": {"type": "string", "example": "Implement authentication"},
+                                                "description": {"type": "string", "example": "Add JWT auth to API endpoints"},
+                                                "status": {"type": "string", "example": "todo"},
+                                                "priority": {"type": "string", "example": "high"},
+                                                "deadline": {"type": "string", "format": "date", "example": "2026-07-10"},
+                                                "project_name": {"type": "string", "example": "Bridge X Platform"},
+                                                "created_by": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {"type": "integer", "example": 5},
+                                                        "name": {"type": "string", "example": "Ahmed Mohamed"},
+                                                        "avatar_url": {"type": "string", "nullable": true, "example": "https://example.com/avatar.jpg"}
+                                                    }
+                                                },
+                                                "assigned_to": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {"type": "integer", "example": 10},
+                                                        "name": {"type": "string", "example": "Sara Ali"},
+                                                        "avatar_url": {"type": "string", "nullable": true, "example": null}
+                                                    }
+                                                },
+                                                "attachments": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {"type": "integer", "example": 1},
+                                                            "file_name": {"type": "string", "example": "document.pdf"},
+                                                            "file_path": {"type": "string", "example": "task_attachments/46/document.pdf"},
+                                                            "file_size": {"type": "integer", "example": 2048},
+                                                            "uploaded_by": {"type": "string", "example": "Ahmed Mohamed"},
+                                                            "uploaded_at": {"type": "string", "format": "datetime", "example": "2026-06-25T10:00:00Z"}
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {"description": "غير مصرح"},
+                    "404": {"description": "المهمة غير موجودة"},
+                    "500": {"description": "خطأ في السيرفر"}
+                }
+            }
+        },
+        "/projects/{projectId}/tasks": {
+            "get": {
+                "tags": ["Tasks"],
+                "summary": "جلب مهام مشروع معين",
+                "description": "الحصول على قائمة مهام مشروع معين للمبرمج الحالي",
+                "security": [{"Bearer": []}],
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "in": "path",
+                        "description": "معرف المشروع",
+                        "required": true,
+                        "schema": {"type": "integer", "example": 5}
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "قائمة مهام المشروع",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean", "example": true},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "tasks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {"type": "integer", "example": 1},
+                                                            "title": {"type": "string", "example": "Design database schema"},
+                                                            "description": {"type": "string", "example": "Create ERD and migrations"},
+                                                            "status": {"type": "string", "example": "in_progress"},
+                                                            "priority": {"type": "string", "example": "high"},
+                                                            "priority_value": {"type": "integer", "example": 3},
+                                                            "deadline": {"type": "string", "format": "date", "example": "2026-07-20"},
+                                                            "created_at": {"type": "string", "format": "date", "example": "2026-06-01"},
+                                                            "team": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "id": {"type": "integer", "example": 2},
+                                                                    "name": {"type": "string", "example": "Backend Team"}
+                                                                }
+                                                            },
+                                                            "assigned_to": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "id": {"type": "integer", "example": 5},
+                                                                    "name": {"type": "string", "example": "Mohamed Ali"},
+                                                                    "avatar_url": {"type": "string", "nullable": true, "example": "https://example.com/avatar.jpg"}
+                                                                }
+                                                            },
+                                                            "created_by": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "id": {"type": "integer", "example": 3},
+                                                                    "name": {"type": "string", "example": "Team Leader"}
+                                                                }
+                                                            },
+                                                            "is_overdue": {"type": "boolean", "example": false},
+                                                            "days_remaining": {"type": "integer", "example": 19}
+                                                        }
+                                                    }
+                                                },
+                                                "total": {"type": "integer", "example": 15},
+                                                "current_page": {"type": "integer", "example": 1},
+                                                "last_page": {"type": "integer", "example": 2}
+                                            }
+                                        },
+                                        "message": {"type": "string", "example": "Project tasks retrieved successfully"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {"description": "غير مصرح - لست عضو في المشروع"},
+                    "404": {"description": "المشروع أو الفريق غير موجود"},
+                    "500": {"description": "خطأ في السيرفر"}
+                }
+            }
+        },
+        "/profile/skills-experience": {
+            "get": {
+                "tags": ["Profile"],
+                "summary": "عرض المهارات والخبرات",
+                "description": "الحصول على مهارات وخبرات المبرمج الحالي (بدون تعديل Experience Level)",
+                "security": [{"Bearer": []}],
+                "responses": {
+                    "200": {
+                        "description": "بيانات المهارات والخبرات",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean", "example": true},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "experience_level": {"type": "string", "example": "junior", "description": "للعرض فقط - لا يمكن تعديله من هنا"},
+                                                "skills": {
+                                                    "type": "array",
+                                                    "description": "قائمة المهارات التقنية",
+                                                    "items": {"type": "string", "example": "Flutter"}
+                                                },
+                                                "experience": {"type": "string", "example": "Experienced mobile developer with a focus on creating performant, beautiful cross-platform applications..."}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {"description": "ممنوع - فقط المبرمجين"},
+                    "404": {"description": "ملف المبرمج غير موجود"},
+                    "500": {"description": "خطأ في السيرفر"}
+                }
+            },
+            "post": {
+                "tags": ["Profile"],
+                "summary": "تحديث المهارات والخبرات",
+                "description": "تحديث مهارات وخبرات المبرمج الحالي (Experience Level للعرض فقط)",
+                "security": [{"Bearer": []}],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "skills": {
+                                        "type": "array",
+                                        "description": "قائمة المهارات الجديدة",
+                                        "items": {"type": "string", "example": "Flutter"},
+                                        "example": ["Flutter", "React", "UI/UX", "Laravel"]
+                                    },
+                                    "experience": {
+                                        "type": "string",
+                                        "description": "نص الخبرات والوصف المهني",
+                                        "example": "Experienced mobile developer with 3 years in Flutter and React..."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "تم التحديث بنجاح",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean", "example": true},
+                                        "message": {"type": "string", "example": "Skills and experience updated successfully"},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {"type": "string", "example": "Flutter"}
+                                                },
+                                                "experience": {"type": "string", "example": "Updated experience text..."}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {"description": "ممنوع - فقط المبرمجين"},
+                    "404": {"description": "ملف المبرمج غير موجود"},
+                    "422": {"description": "خطأ في التحقق من البيانات"},
+                    "500": {"description": "خطأ في السيرفر"}
+                }
+            }
+        }
+    },
     "components": {
         "securitySchemes": {
             "Bearer": {
