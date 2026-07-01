@@ -59,21 +59,30 @@ class TaskController extends Controller
         }
     }
 #[OA\Get(
-        path: "/api/tasks/completed",
-        tags: ["Tasks"],
-        summary: "جلب المهام المكتملة",
-        security: [["Bearer" => []]],
-        parameters: [
-            new OA\Parameter(name: "from_date", in: "query", required: false, schema: new OA\Schema(type: "string", format: "date")),
-            new OA\Parameter(name: "to_date", in: "query", required: false, schema: new OA\Schema(type: "string", format: "date"))
-        ],
-        responses: [
-            new OA\Response(response: 200, description: "قائمة المهام المكتملة"),
-            new OA\Response(response: 403, description: "ممنوع"),
-            new OA\Response(response: 404, description: "غير موجود"),
-            new OA\Response(response: 500, description: "خطأ في السيرفر")
-        ]
-    )]
+/**
+     * @OA\Get(
+     *     path="/api/tasks/completed",
+     *     tags={"Tasks"},
+     *     summary="جلب المهام المكتملة",
+     *     security={{"Bearer": {}}},
+     *     @OA\Parameter(
+     *         name="from_date",
+     *         in="query",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="to_date",
+     *         in="query",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(response=200, description="قائمة المهام المكتملة"),
+     *     @OA\Response(response=403, description="ممنوع"),
+     *     @OA\Response(response=404, description="غير موجود"),
+     *     @OA\Response(response=500, description="خطأ في السيرفر")
+     * )
+     */
     public function completedTasks(Request $request)
     {
         try {
