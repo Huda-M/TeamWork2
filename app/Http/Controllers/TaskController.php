@@ -58,7 +58,7 @@ class TaskController extends Controller
             ], 500);
         }
     }
-#[OA\Get(
+
 /**
      * @OA\Get(
      *     path="/api/tasks/completed",
