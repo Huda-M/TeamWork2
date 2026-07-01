@@ -1,1 +1,34 @@
 
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "TeamWork2 API",
+        "description": "Documentation for TeamWork2",
+        "version": "1.0.0",
+        "contact": {
+            "email": "support@teamwork2.com",
+            "name": "Support Team"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://teamwork2-production-ucr9dn.laravel.cloud/api",
+            "description": "Production Server"
+        },
+        {
+            "url": "http://localhost:8000/api",
+            "description": "Local Development Server"
+        }
+    ],
+    "paths": {},
+    "components": {
+        "securitySchemes": {
+            "Bearer": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "Enter your Bearer token in the format: Bearer {token}"
+            }
+        }
+    }
+}
