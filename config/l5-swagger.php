@@ -76,13 +76,13 @@ return [
         ],
 
         'scanOptions' => [
-    'analyser' => null,
+    'analyser' => \OpenApi\Analysers\DocBlockAnnotationFactory::class, // ✅ Force DocBlock analyser
     'default_processors_configuration' => [],
     'analysis' => null,
     'processors' => [],
-    'pattern' => '*.php',
+    'pattern' => null,
     'exclude' => [],
-    'open_api_spec_version' => env('L5_SWAGGER_OPEN_API_SPEC_VERSION', '3.1.0'),
+    'open_api_spec_version' => env('L5_SWAGGER_OPEN_API_SPEC_VERSION', '3.0.0'),
 ],
 
         'securityDefinitions' => [
