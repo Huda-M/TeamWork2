@@ -20,7 +20,7 @@
             "get": {
                 "tags": ["Tasks"],
                 "summary": "جلب المهام النشطة (قيد التنفيذ)",
-                "description": "الحصول على قائمة المهام النشطة للمبرمج الحالي",
+                "description": "الحصول على قائمة المهام النشطة للمبرمج الحالي. المهام اللي status بتاعها 'in_progress'",
                 "security": [{"Bearer": []}],
                 "responses": {
                     "200": {
@@ -41,13 +41,13 @@
                                                         "properties": {
                                                             "task_id": {"type": "integer", "example": 1},
                                                             "task_title": {"type": "string", "example": "Fix login bug"},
-                                                            "project_name": {"type": "string", "example": "E-commerce App"},
+                                                            "project_name": {"type": "string", "example": "E-commerce App", "nullable": true},
                                                             "due_date": {"type": "string", "format": "date", "example": "2026-07-15"},
-                                                            "priority": {"type": "string", "example": "high"},
+                                                            "priority": {"type": "string", "example": high, "description": "low, medium, high"},
                                                             "status": {"type": "string", "example": "active"},
-                                                            "days_remaining": {"type": "integer", "example": 14},
+                                                            "days_remaining": {"type": "integer", "example": 14, "description": "أيام متبقية (سالب = متأخر)"},
                                                             "is_overdue": {"type": "boolean", "example": false},
-                                                            "percentage_time_passed": {"type": "integer", "example": 30}
+                                                            "percentage_time_passed": {"type": "integer", "example": 30, "description": "نسبة الوقت اللي عدى من تاريخ الإنشاء للديدلاين"}
                                                         }
                                                     }
                                                 },
@@ -72,20 +72,20 @@
             "get": {
                 "tags": ["Tasks"],
                 "summary": "جلب المهام المكتملة",
-                "description": "الحصول على قائمة المهام المكتملة للمبرمج الحالي",
+                "description": "الحصول على قائمة المهام المكتملة للمبرمج الحالي. ممكن تفلتر بالتاريخ.",
                 "security": [{"Bearer": []}],
                 "parameters": [
                     {
                         "name": "from_date",
                         "in": "query",
-                        "description": "تاريخ البداية للفلترة",
+                        "description": "تاريخ البداية للفلترة (YYYY-MM-DD)",
                         "required": false,
                         "schema": {"type": "string", "format": "date", "example": "2026-01-01"}
                     },
                     {
                         "name": "to_date",
                         "in": "query",
-                        "description": "تاريخ النهاية للفلترة",
+                        "description": "تاريخ النهاية للفلترة (YYYY-MM-DD)",
                         "required": false,
                         "schema": {"type": "string", "format": "date", "example": "2026-12-31"}
                     }
@@ -102,8 +102,8 @@
                                         "data": {
                                             "type": "object",
                                             "properties": {
-                                                "num_of_tasks_done": {"type": "integer", "example": 25},
-                                                "num_of_tasks_done_this_week": {"type": "integer", "example": 3},
+                                                "num_of_tasks_done": {"type": "integer", "example": 25, "description": "إجمالي المهام المكتملة"},
+                                                "num_of_tasks_done_this_week": {"type": "integer", "example": 3, "description": "المهام المكتملة هذا الأسبوع"},
                                                 "completed_tasks": {
                                                     "type": "array",
                                                     "items": {
@@ -111,10 +111,10 @@
                                                         "properties": {
                                                             "task_id": {"type": "integer", "example": 1},
                                                             "task_title": {"type": "string", "example": "Implement payment gateway"},
-                                                            "completion_date": {"type": "string", "format": "date", "example": "2026-06-28"},
-                                                            "project_name": {"type": "string", "example": "E-commerce App"},
-                                                            "estimated_hours": {"type": "integer", "example": 8},
-                                                            "actual_hours": {"type": "integer", "example": 6}
+                                                            "completion_date": {"type": "string", "format": "date", "example": "2026-06-28", "description": "completed_at أو updated_at لو completed_at فاضي"},
+                                                            "project_name": {"type": "string", "example": "E-commerce App", "nullable": true},
+                                                            "estimated_hours": {"type": "integer", "example": 8, "nullable": true},
+                                                            "actual_hours": {"type": "integer", "example": 6, "nullable": true}
                                                         }
                                                     }
                                                 },
@@ -138,13 +138,13 @@
             "get": {
                 "tags": ["Tasks"],
                 "summary": "عرض تفاصيل مهمة معينة",
-                "description": "الحصول على تفاصيل مهمة واحدة بالكامل",
+                "description": "الحصول على تفاصيل مهمة واحدة بالكامل مع المرفقات",
                 "security": [{"Bearer": []}],
                 "parameters": [
                     {
                         "name": "task",
                         "in": "path",
-                        "description": "معرف المهمة",
+                        "description": "معرف المهمة (ID)",
                         "required": true,
                         "schema": {"type": "integer", "example": 46}
                     }
@@ -163,17 +163,17 @@
                                             "properties": {
                                                 "id": {"type": "integer", "example": 46},
                                                 "title": {"type": "string", "example": "Implement authentication"},
-                                                "description": {"type": "string", "example": "Add JWT auth to API endpoints"},
-                                                "status": {"type": "string", "example": "todo"},
-                                                "priority": {"type": "string", "example": "high"},
-                                                "deadline": {"type": "string", "format": "date", "example": "2026-07-10"},
-                                                "project_name": {"type": "string", "example": "Bridge X Platform"},
+                                                "description": {"type": "string", "example": "Add JWT auth to API endpoints", "nullable": true},
+                                                "status": {"type": "string", "example": "todo", "enum": ["todo", "in_progress", "review", "done"]},
+                                                "priority": {"type": "string", "example": "high", "enum": ["low", "medium", "high"]},
+                                                "deadline": {"type": "string", "format": "date", "example": "2026-07-10", "nullable": true},
+                                                "project_name": {"type": "string", "example": "Bridge X Platform", "nullable": true},
                                                 "created_by": {
                                                     "type": "object",
                                                     "properties": {
                                                         "id": {"type": "integer", "example": 5},
                                                         "name": {"type": "string", "example": "Ahmed Mohamed"},
-                                                        "avatar_url": {"type": "string", "nullable": true, "example": "https://example.com/avatar.jpg"}
+                                                        "avatar_url": {"type": "string", "format": "uri", "nullable": true, "example": "https://teamwork2-production-ucr9dn.laravel.cloud/storage/avatars/avatar_123.jpg"}
                                                     }
                                                 },
                                                 "assigned_to": {
@@ -181,7 +181,7 @@
                                                     "properties": {
                                                         "id": {"type": "integer", "example": 10},
                                                         "name": {"type": "string", "example": "Sara Ali"},
-                                                        "avatar_url": {"type": "string", "nullable": true, "example": null}
+                                                        "avatar_url": {"type": "string", "format": "uri", "nullable": true}
                                                     }
                                                 },
                                                 "attachments": {
@@ -192,9 +192,9 @@
                                                             "id": {"type": "integer", "example": 1},
                                                             "file_name": {"type": "string", "example": "document.pdf"},
                                                             "file_path": {"type": "string", "example": "task_attachments/46/document.pdf"},
-                                                            "file_size": {"type": "integer", "example": 2048},
+                                                            "file_size": {"type": "integer", "example": 2048, "description": "بالبايت"},
                                                             "uploaded_by": {"type": "string", "example": "Ahmed Mohamed"},
-                                                            "uploaded_at": {"type": "string", "format": "datetime", "example": "2026-06-25T10:00:00Z"}
+                                                            "uploaded_at": {"type": "string", "format": "date-time", "example": "2026-06-25T10:00:00Z"}
                                                         }
                                                     }
                                                 }
@@ -205,8 +205,8 @@
                             }
                         }
                     },
-                    "403": {"description": "غير مصرح"},
-                    "404": {"description": "المهمة غير موجودة"},
+                    "403": {"description": "غير مصرح - لست عضو في الفريق"},
+                    "404": {"description": "المهمة غير موجودة أو ليس لها فريق"},
                     "500": {"description": "خطأ في السيرفر"}
                 }
             }
@@ -245,11 +245,11 @@
                                                         "properties": {
                                                             "id": {"type": "integer", "example": 1},
                                                             "title": {"type": "string", "example": "Design database schema"},
-                                                            "description": {"type": "string", "example": "Create ERD and migrations"},
-                                                            "status": {"type": "string", "example": "in_progress"},
-                                                            "priority": {"type": "string", "example": "high"},
-                                                            "priority_value": {"type": "integer", "example": 3},
-                                                            "deadline": {"type": "string", "format": "date", "example": "2026-07-20"},
+                                                            "description": {"type": "string", "example": "Create ERD and migrations", "nullable": true},
+                                                            "status": {"type": "string", "example": "in_progress", "enum": ["todo", "in_progress", "review", "done"]},
+                                                            "priority": {"type": "string", "example": "high", "enum": ["low", "medium", "high"]},
+                                                            "priority_value": {"type": "integer", "example": 3, "description": "1=low, 2=medium, 3=high"},
+                                                            "deadline": {"type": "string", "format": "date", "example": "2026-07-20", "nullable": true},
                                                             "created_at": {"type": "string", "format": "date", "example": "2026-06-01"},
                                                             "team": {
                                                                 "type": "object",
@@ -263,7 +263,7 @@
                                                                 "properties": {
                                                                     "id": {"type": "integer", "example": 5},
                                                                     "name": {"type": "string", "example": "Mohamed Ali"},
-                                                                    "avatar_url": {"type": "string", "nullable": true, "example": "https://example.com/avatar.jpg"}
+                                                                    "avatar_url": {"type": "string", "format": "uri", "nullable": true}
                                                                 }
                                                             },
                                                             "created_by": {
@@ -274,7 +274,7 @@
                                                                 }
                                                             },
                                                             "is_overdue": {"type": "boolean", "example": false},
-                                                            "days_remaining": {"type": "integer", "example": 19}
+                                                            "days_remaining": {"type": "integer", "example": 19, "nullable": true, "description": "سالب = متأخر"}
                                                         }
                                                     }
                                                 },
@@ -313,13 +313,14 @@
                                         "data": {
                                             "type": "object",
                                             "properties": {
-                                                "experience_level": {"type": "string", "example": "junior", "description": "للعرض فقط - لا يمكن تعديله من هنا"},
+                                                "experience_level": {"type": "string", "example": "junior", "description": "للعرض فقط - لا يمكن تعديله من هنا", "enum": ["junior", "mid", "senior", "lead"]},
                                                 "skills": {
                                                     "type": "array",
                                                     "description": "قائمة المهارات التقنية",
-                                                    "items": {"type": "string", "example": "Flutter"}
+                                                    "items": {"type": "string", "example": "Flutter"},
+                                                    "example": ["Flutter", "React", "UI/UX", "Laravel"]
                                                 },
-                                                "experience": {"type": "string", "example": "Experienced mobile developer with a focus on creating performant, beautiful cross-platform applications..."}
+                                                "experience": {"type": "string", "example": "Experienced mobile developer with a focus on creating performant, beautiful cross-platform applications...", "nullable": true}
                                             }
                                         }
                                     }
@@ -335,7 +336,7 @@
             "post": {
                 "tags": ["Profile"],
                 "summary": "تحديث المهارات والخبرات",
-                "description": "تحديث مهارات وخبرات المبرمج الحالي (Experience Level للعرض فقط)",
+                "description": "تحديث مهارات وخبرات المبرمج الحالي (Experience Level للعرض فقط - مش بيتعدل)",
                 "security": [{"Bearer": []}],
                 "requestBody": {
                     "required": true,
@@ -346,14 +347,17 @@
                                 "properties": {
                                     "skills": {
                                         "type": "array",
-                                        "description": "قائمة المهارات الجديدة",
-                                        "items": {"type": "string", "example": "Flutter"},
-                                        "example": ["Flutter", "React", "UI/UX", "Laravel"]
+                                        "description": "قائمة المهارات الجديدة (هتتعمل sync)",
+                                        "items": {"type": "string", "maxLength": 50},
+                                        "example": ["Flutter", "React", "UI/UX", "Laravel"],
+                                        "nullable": true
                                     },
                                     "experience": {
                                         "type": "string",
-                                        "description": "نص الخبرات والوصف المهني",
-                                        "example": "Experienced mobile developer with 3 years in Flutter and React..."
+                                        "description": "نص الخبرات والوصف المهني (بيتحفظ في bio)",
+                                        "example": "Experienced mobile developer with 3 years in Flutter and React...",
+                                        "maxLength": 5000,
+                                        "nullable": true
                                     }
                                 }
                             }
@@ -375,9 +379,10 @@
                                             "properties": {
                                                 "skills": {
                                                     "type": "array",
-                                                    "items": {"type": "string", "example": "Flutter"}
+                                                    "items": {"type": "string", "example": "Flutter"},
+                                                    "example": ["Flutter", "React", "UI/UX"]
                                                 },
-                                                "experience": {"type": "string", "example": "Updated experience text..."}
+                                                "experience": {"type": "string", "example": "Updated experience text...", "nullable": true}
                                             }
                                         }
                                     }
@@ -387,7 +392,7 @@
                     },
                     "403": {"description": "ممنوع - فقط المبرمجين"},
                     "404": {"description": "ملف المبرمج غير موجود"},
-                    "422": {"description": "خطأ في التحقق من البيانات"},
+                    "422": {"description": "خطأ في التحقق من البيانات - skills.* لازم string و max 50"},
                     "500": {"description": "خطأ في السيرفر"}
                 }
             }
