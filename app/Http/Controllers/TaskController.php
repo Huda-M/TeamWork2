@@ -964,7 +964,7 @@ public function storeProjectTask(StoreTaskRequest $request, $projectId)
              'created_by' => $programmer->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'status' => $validated['status'] ?? 'todo',
+            'status' => $validated['status'] ?? 'active',
             'estimated_hours' => $validated['estimated_hours'] ?? 72,
             'deadline' => $validated['deadline'] ?? now()->addDays(3),
             'priority' => $validated['priority'] ?? 5,
