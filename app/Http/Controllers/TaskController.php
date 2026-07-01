@@ -57,7 +57,58 @@ class TaskController extends Controller
             ], 500);
         }
     }
-
+/**
+ * @OA\Get(
+ *     path="/api/tasks/completed",
+ *     tags={"Tasks"},
+ *     summary="جلب المهام المكتملة",
+ *     description="الحصول على قائمة المهام المكتملة للمبرمج الحالي",
+ *     security={{"Bearer": {}}},
+ *     @OA\Parameter(
+ *         name="from_date",
+ *         in="query",
+ *         description="تاريخ البداية للفلترة",
+ *         required=false,
+ *         @OA\Schema(type="string", format="date", example="2026-01-01")
+ *     ),
+ *     @OA\Parameter(
+ *         name="to_date",
+ *         in="query",
+ *         description="تاريخ النهاية للفلترة",
+ *         required=false,
+ *         @OA\Schema(type="string", format="date", example="2026-12-31")
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="قائمة المهام المكتملة",
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(property="num_of_tasks_done", type="integer", example=25),
+ *                 @OA\Property(property="num_of_tasks_done_this_week", type="integer", example=3),
+ *                 @OA\Property(property="completed_tasks", type="array", @OA\Items(
+ *                     type="object",
+ *                     @OA\Property(property="task_id", type="integer", example=1),
+ *                     @OA\Property(property="task_title", type="string", example="Implement payment gateway"),
+ *                     @OA\Property(property="completion_date", type="string", format="date", example="2026-06-28"),
+ *                     @OA\Property(property="project_name", type="string", example="E-commerce App"),
+ *                     @OA\Property(property="estimated_hours", type="integer", example=8),
+ *                     @OA\Property(property="actual_hours", type="integer", example=6)
+ *                 )),
+ *                 @OA\Property(property="current_page", type="integer", example=1),
+ *                 @OA\Property(property="last_page", type="integer", example=3)
+ *             ),
+ *             @OA\Property(property="message", type="string", example="Completed tasks fetched successfully")
+ *         )
+ *     ),
+ *     @OA\Response(response=403, description="ممنوع - فقط المبرمجين"),
+ *     @OA\Response(response=404, description="ملف المبرمج غير موجود"),
+ *     @OA\Response(response=500, description="خطأ في السيرفر")
+ * )
+ */
     public function completedTasks(Request $request)
     {
         try {
@@ -118,6 +169,47 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to fetch completed tasks'], 500);
         }
     }
+    /**
+ * @OA\Get(
+ *     path="/api/tasks/in-progress",
+ *     tags={"Tasks"},
+ *     summary="جلب المهام النشطة (قيد التنفيذ)",
+ *     description="الحصول على قائمة المهام النشطة للمبرمج الحالي",
+ *     security={{"Bearer": {}}},
+ *     @OA\Response(
+ *         response=200,
+ *         description="قائمة المهام النشطة",
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(property="active_tasks", type="array", @OA\Items(
+ *                     type="object",
+ *                     @OA\Property(property="task_id", type="integer", example=1),
+ *                     @OA\Property(property="task_title", type="string", example="Fix login bug"),
+ *                     @OA\Property(property="project_name", type="string", example="E-commerce App"),
+ *                     @OA\Property(property="due_date", type="string", format="date", example="2026-07-15"),
+ *                     @OA\Property(property="priority", type="string", example="high"),
+ *                     @OA\Property(property="status", type="string", example="active"),
+ *                     @OA\Property(property="days_remaining", type="integer", example=14),
+ *                     @OA\Property(property="is_overdue", type="boolean", example=false),
+ *                     @OA\Property(property="percentage_time_passed", type="integer", example=30)
+ *                 )),
+ *                 @OA\Property(property="total", type="integer", example=5),
+ *                 @OA\Property(property="current_page", type="integer", example=1),
+ *                 @OA\Property(property="last_page", type="integer", example=2)
+ *             ),
+ *             @OA\Property(property="message", type="string", example="Active tasks fetched successfully")
+ *         )
+ *     ),
+ *     @OA\Response(response=403, description="ممنوع - فقط المبرمجين"),
+ *     @OA\Response(response=404, description="ملف المبرمج غير موجود"),
+ *     @OA\Response(response=500, description="خطأ في السيرفر")
+ * )
+ */
+
 
     public function inProgressTasks(Request $request)
 {
@@ -176,6 +268,71 @@ class TaskController extends Controller
         return response()->json(['success' => false, 'message' => 'Failed to fetch active tasks'], 500);
     }
 }
+    /**
+ * @OA\Get(
+ *     path="/api/tasks/{task}",
+ *     tags={"Tasks"},
+ *     summary="عرض تفاصيل مهمة معينة",
+ *     description="الحصول على تفاصيل مهمة واحدة بالكامل",
+ *     security={{"Bearer": {}}},
+ *     @OA\Parameter(
+ *         name="task",
+ *         in="path",
+ *         description="معرف المهمة",
+ *         required=true,
+ *         @OA\Schema(type="integer", example=46)
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="تفاصيل المهمة",
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(property="id", type="integer", example=46),
+ *                 @OA\Property(property="title", type="string", example="Implement authentication"),
+ *                 @OA\Property(property="description", type="string", example="Add JWT auth to API endpoints"),
+ *                 @OA\Property(property="status", type="string", example="todo"),
+ *                 @OA\Property(property="priority", type="string", example="high"),
+ *                 @OA\Property(property="deadline", type="string", format="date", example="2026-07-10"),
+ *                 @OA\Property(property="project_name", type="string", example="Bridge X Platform"),
+ *                 @OA\Property(
+ *                     property="created_by",
+ *                     type="object",
+ *                     @OA\Property(property="id", type="integer", example=5),
+ *                     @OA\Property(property="name", type="string", example="Ahmed Mohamed"),
+ *                     @OA\Property(property="avatar_url", type="string", nullable=true, example="https://example.com/avatar.jpg")
+ *                 ),
+ *                 @OA\Property(
+ *                     property="assigned_to",
+ *                     type="object",
+ *                     @OA\Property(property="id", type="integer", example=10),
+ *                     @OA\Property(property="name", type="string", example="Sara Ali"),
+ *                     @OA\Property(property="avatar_url", type="string", nullable=true, example=null)
+ *                 ),
+ *                 @OA\Property(
+ *                     property="attachments",
+ *                     type="array",
+ *                     @OA\Items(
+ *                         type="object",
+ *                         @OA\Property(property="id", type="integer", example=1),
+ *                         @OA\Property(property="file_name", type="string", example="document.pdf"),
+ *                         @OA\Property(property="file_path", type="string", example="task_attachments/46/document.pdf"),
+ *                         @OA\Property(property="file_size", type="integer", example=2048),
+ *                         @OA\Property(property="uploaded_by", type="string", example="Ahmed Mohamed"),
+ *                         @OA\Property(property="uploaded_at", type="string", format="datetime", example="2026-06-25T10:00:00Z")
+ *                     )
+ *                 )
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(response=403, description="غير مصرح"),
+ *     @OA\Response(response=404, description="المهمة غير موجودة"),
+ *     @OA\Response(response=500, description="خطأ في السيرفر")
+ * )
+ */
 public function show(Task $task)
 {
     try {
@@ -605,6 +762,73 @@ public function show(Task $task)
             ], 500);
         }
     }
+    /**
+ * @OA\Get(
+ *     path="/api/projects/{projectId}/tasks",
+ *     tags={"Tasks"},
+ *     summary="جلب مهام مشروع معين",
+ *     description="الحصول على قائمة مهام مشروع معين للمبرمج الحالي",
+ *     security={{"Bearer": {}}},
+ *     @OA\Parameter(
+ *         name="projectId",
+ *         in="path",
+ *         description="معرف المشروع",
+ *         required=true,
+ *         @OA\Schema(type="integer", example=5)
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="قائمة مهام المشروع",
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(property="tasks", type="array", @OA\Items(
+ *                     type="object",
+ *                     @OA\Property(property="id", type="integer", example=1),
+ *                     @OA\Property(property="title", type="string", example="Design database schema"),
+ *                     @OA\Property(property="description", type="string", example="Create ERD and migrations"),
+ *                     @OA\Property(property="status", type="string", example="in_progress"),
+ *                     @OA\Property(property="priority", type="string", example="high"),
+ *                     @OA\Property(property="priority_value", type="integer", example=3),
+ *                     @OA\Property(property="deadline", type="string", format="date", example="2026-07-20"),
+ *                     @OA\Property(property="created_at", type="string", format="date", example="2026-06-01"),
+ *                     @OA\Property(
+ *                         property="team",
+ *                         type="object",
+ *                         @OA\Property(property="id", type="integer", example=2),
+ *                         @OA\Property(property="name", type="string", example="Backend Team")
+ *                     ),
+ *                     @OA\Property(
+ *                         property="assigned_to",
+ *                         type="object",
+ *                         @OA\Property(property="id", type="integer", example=5),
+ *                         @OA\Property(property="name", type="string", example="Mohamed Ali"),
+ *                         @OA\Property(property="avatar_url", type="string", nullable=true, example="https://example.com/avatar.jpg")
+ *                     ),
+ *                     @OA\Property(
+ *                         property="created_by",
+ *                         type="object",
+ *                         @OA\Property(property="id", type="integer", example=3),
+ *                         @OA\Property(property="name", type="string", example="Team Leader")
+ *                     ),
+ *                     @OA\Property(property="is_overdue", type="boolean", example=false),
+ *                     @OA\Property(property="days_remaining", type="integer", example=19)
+ *                 )),
+ *                 @OA\Property(property="total", type="integer", example=15),
+ *                 @OA\Property(property="current_page", type="integer", example=1),
+ *                 @OA\Property(property="last_page", type="integer", example=2)
+ *             ),
+ *             @OA\Property(property="message", type="string", example="Project tasks retrieved successfully")
+ *         )
+ *     ),
+ *     @OA\Response(response=403, description="غير مصرح - لست عضو في المشروع"),
+ *     @OA\Response(response=404, description="المشروع أو الفريق غير موجود"),
+ *     @OA\Response(response=500, description="خطأ في السيرفر")
+ * )
+ */
 public function getProjectTasks(Request $request, $projectId)
 {
     try {
