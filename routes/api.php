@@ -25,20 +25,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use OpenApi\Annotations as OA;
 
 
-/**
- * @OA\Info(
- *     version="1.0.0",
- *     title="TeamWork2 API",
- *     description="Documentation for TeamWork2"
- * )
- *
- * @OA\SecurityScheme(
- *     securityScheme="Bearer",
- *     type="http",
- *     scheme="bearer",
- *     bearerFormat="JWT"
- * )
- */
+
 Route::post('/auth/google/mobile', [SocialAuthController::class, 'handleGoogleMobile'])
     ->middleware('throttle:5,1');
 Route::post('/auth/github/mobile', [SocialAuthController::class, 'handleGitHubMobile'])
