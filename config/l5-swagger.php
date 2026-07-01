@@ -77,7 +77,7 @@ return [
     'analysis' => null,
     'processors' => [],
     'pattern' => null,
-    'exclude' => [],
+    'exclude' => [],  // ✅ فاضي
     'open_api_spec_version' => env('L5_SWAGGER_OPEN_API_SPEC_VERSION', \L5Swagger\Generator::OPEN_API_DEFAULT_SPEC_VERSION),
 ],
 
@@ -159,7 +159,7 @@ return [
          * Constants which can be used in annotations
          */
         'constants' => [
-            'L5_SWAGGER_CONST_HOST' => env('L5_SWAGGER_CONST_HOST', 'https://teamwork2-main-opmxfq.free.laravel.cloud'),
-        ],
+    'L5_SWAGGER_CONST_HOST' => env('L5_SWAGGER_CONST_HOST', 'https://teamwork2-production-ucr9dn.laravel.cloud'),
+],
     ],
 ];
