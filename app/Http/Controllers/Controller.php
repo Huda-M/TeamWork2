@@ -9,28 +9,28 @@ use Illuminate\Routing\Controller as BaseController;
 /**
  * @OA\Info(
  *     version="1.0.0",
- *     title="Bridge X API",
- *     description="API documentation for Bridge X platform - Team collaboration and project management",
+ *     title="TeamWork API",
+ *     description="API Documentation for TeamWork System",
  *     @OA\Contact(
- *         email="support@bridgex.com",
- *         name="Bridge X Support"
+ *         email="support@teamwork.com",
+ *         name="Support Team"
  *     ),
  *     @OA\License(
  *         name="MIT",
  *         url="https://opensource.org/licenses/MIT"
  *     )
  * )
- * 
+ *
  * @OA\Server(
  *     url="http://localhost:8000/api",
  *     description="Local Development Server"
  * )
- * 
+ *
  * @OA\Server(
- *     url="https://teamwork2-main-opmxfq.free.laravel.cloud/api",
+ *     url="https://teamwork2-production-ucr9dn.laravel.cloud/api",
  *     description="Production Server"
  * )
- * 
+ *
  * @OA\SecurityScheme(
  *     securityScheme="Bearer",
  *     type="http",
