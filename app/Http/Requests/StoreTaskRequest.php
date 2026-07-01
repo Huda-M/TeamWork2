@@ -48,7 +48,7 @@ public function rules(): array
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'status' => $this->status ?? 'todo',
+            'status' => $this->status ?? 'active',
             'priority' => $this->priority ?? 'medium',
             'complexity' => $this->complexity ?? 'medium',
         ]);
