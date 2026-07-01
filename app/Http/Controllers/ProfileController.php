@@ -816,9 +816,37 @@ public function updateProfile(Request $request)
 
         return response()->json($response);
     }
-    /**
- * عرض Skills & Experience
- * GET /api/profile/skills-experience
+/**
+ * @OA\Get(
+ *     path="/api/profile/skills-experience",
+ *     tags={"Profile"},
+ *     summary="عرض المهارات والخبرات",
+ *     description="الحصول على مهارات وخبرات المبرمج الحالي (بدون تعديل Experience Level)",
+ *     security={{"Bearer": {}}},
+ *     @OA\Response(
+ *         response=200,
+ *         description="بيانات المهارات والخبرات",
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(property="experience_level", type="string", example="junior", description="للعرض فقط - لا يمكن تعديله من هنا"),
+ *                 @OA\Property(
+ *                     property="skills",
+ *                     type="array",
+ *                     description="قائمة المهارات التقنية",
+ *                     @OA\Items(type="string", example="Flutter")
+ *                 ),
+ *                 @OA\Property(property="experience", type="string", example="Experienced mobile developer with a focus on creating performant, beautiful cross-platform applications...")
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(response=403, description="ممنوع - فقط المبرمجين"),
+ *     @OA\Response(response=404, description="ملف المبرمج غير موجود"),
+ *     @OA\Response(response=500, description="خطأ في السيرفر")
+ * )
  */
 public function getSkillsAndExperience()
 {
@@ -862,10 +890,56 @@ public function getSkillsAndExperience()
         ], 500);
     }
 }
-
 /**
- * تعديل Skills & Experience
- * POST /api/profile/skills-experience
+ * @OA\Post(
+ *     path="/api/profile/skills-experience",
+ *     tags={"Profile"},
+ *     summary="تحديث المهارات والخبرات",
+ *     description="تحديث مهارات وخبرات المبرمج الحالي (Experience Level للعرض فقط)",
+ *     security={{"Bearer": {}}},
+ *     @OA\RequestBody(
+ *         required=true,
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(
+ *                 property="skills",
+ *                 type="array",
+ *                 description="قائمة المهارات الجديدة",
+ *                 @OA\Items(type="string", example="Flutter"),
+ *                 example={"Flutter", "React", "UI/UX", "Laravel"}
+ *             ),
+ *             @OA\Property(
+ *                 property="experience",
+ *                 type="string",
+ *                 description="نص الخبرات والوصف المهني",
+ *                 example="Experienced mobile developer with 3 years in Flutter and React..."
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="تم التحديث بنجاح",
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="success", type="boolean", example=true),
+ *             @OA\Property(property="message", type="string", example="Skills and experience updated successfully"),
+ *             @OA\Property(
+ *                 property="data",
+ *                 type="object",
+ *                 @OA\Property(
+ *                     property="skills",
+ *                     type="array",
+ *                     @OA\Items(type="string", example="Flutter")
+ *                 ),
+ *                 @OA\Property(property="experience", type="string", example="Updated experience text...")
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(response=403, description="ممنوع - فقط المبرمجين"),
+ *     @OA\Response(response=404, description="ملف المبرمج غير موجود"),
+ *     @OA\Response(response=422, description="خطأ في التحقق من البيانات"),
+ *     @OA\Response(response=500, description="خطأ في السيرفر")
+ * )
  */
 public function updateSkillsAndExperience(Request $request)
 {
