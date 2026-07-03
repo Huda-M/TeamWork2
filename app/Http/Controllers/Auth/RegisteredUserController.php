@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/Auth/RegisteredUserController.php
 
 namespace App\Http\Controllers\Auth;
 
@@ -21,9 +20,6 @@ use Illuminate\Support\Str;
 
 class RegisteredUserController extends Controller
 {
-    /**
-     * الخطوة 1: إرسال كود التفعيل
-     */
     public function register(Request $request): JsonResponse
     {
         $request->validate([
@@ -34,29 +30,23 @@ class RegisteredUserController extends Controller
                 'lowercase',
                 'email',
                 'max:255',
-                Rule::unique('users')->whereNull('deleted_at') // ← بيتشيك على active users بس
+                Rule::unique('users')->whereNull('deleted_at') 
             ],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'source' => ['required', 'in:mobile,web'],
         ]);
-
-        // ← لو في deleted user بنفس الـ email، امسحيه نهائي عشان يفضى المكان
         $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
         if ($deletedUser) {
             $deletedUser->forceDelete();
         }
-
         $role = $request->source === 'mobile' ? 'programmer' : 'company';
-
         cache()->put('registration:' . $request->email, [
             'full_name' => $request->full_name,
             'password' => $request->password,
             'role' => $role,
             'source' => $request->source,
         ], now()->addMinutes(30));
-
         EmailVerificationCode::createForEmail($request->email);
-
         return response()->json([
             'message' => 'Verification code sent to your email',
             'email' => $request->email,
@@ -64,35 +54,29 @@ class RegisteredUserController extends Controller
             'role' => $role,
         ], 200);
     }
-
     public function verifyAndCreate(Request $request): JsonResponse
     {
         $request->validate([
             'email' => ['required', 'email'],
             'code' => ['required', 'string', 'size:6'],
         ]);
-
         if (!EmailVerificationCode::verify($request->email, $request->code)) {
             throw ValidationException::withMessages([
                 'code' => ['Invalid or expired verification code.'],
             ]);
         }
-
         $registrationData = cache()->get('registration:' . $request->email);
-
         if (!$registrationData) {
             return response()->json([
                 'message' => 'Registration data expired. Please register again.',
             ], 400);
         }
-
         DB::beginTransaction();
     try {
         $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
         if ($deletedUser) {
             $deletedUser->forceDelete();
         }
-
         $user = User::create([
             'full_name' => $registrationData['full_name'],
             'email' => $request->email,
@@ -100,8 +84,6 @@ class RegisteredUserController extends Controller
             'role' => $registrationData['role'],
             'email_verified_at' => now(),
         ]);
-
-        // ← التعديل هنا
         if  ($user->role === 'company') {
             Company::firstOrCreate(
                 ['user_id' => $user->id],
@@ -120,31 +102,24 @@ class RegisteredUserController extends Controller
                 ]
             );
         }
-
             event(new Registered($user));
-
             cache()->forget('registration:' . $request->email);
-
             Auth::login($user);
-
             DB::commit();
-
             $responseData = [
                 'full_name' => $user->full_name,
                 'email' => $user->email,
                 'role' => $user->role,
                 'email_verified_at' => $user->email_verified_at,
             ];
-
             if ($user->role === 'programmer' && $user->programmer) {
                 $programmerData = $user->programmer->toArray();
-                unset($programmerData['user_id']);  // ✅ Remove user_id
+                unset($programmerData['user_id']);  
                 $responseData['programmer'] = $programmerData;
             }
             if ($user->role === 'company' && $user->company) {
                 $responseData['company'] = $user->company;
             }
-
             return response()->json([
                 'message' => 'Registration successful',
                 'user' => $responseData,
@@ -152,7 +127,6 @@ class RegisteredUserController extends Controller
                 'profile_completed' => false,
                 'source' => $registrationData['source'],
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Registration failed', [
@@ -160,29 +134,21 @@ class RegisteredUserController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-
             return response()->json([
                 'message' => 'Registration failed. Please try again.',
             ], 500);
         }
     }
-
-    /**
-     * إعادة إرسال الكود
-     */
     public function resendCode(Request $request): JsonResponse
     {
         $request->validate([
             'email' => ['required', 'email'],
         ]);
-
         EmailVerificationCode::createForEmail($request->email);
-
         return response()->json([
             'message' => 'Verification code resent',
         ], 200);
     }
-
     public function completeProfile(Request $request)
     {
         try {
@@ -194,12 +160,10 @@ class RegisteredUserController extends Controller
             if (!$programmer) {
                 return response()->json(['message' => 'Programmer profile not found'], 404);
             }
-
             $validated = $request->validate([
                 'experience_level' => 'required|in:beginner,junior,intermediate,senior,advanced,expert',
                 'track' => 'required|string',
             ]);
-
             $pointsMap = [
                 'beginner'    => 0,
                 'junior'      => 50,
@@ -208,44 +172,35 @@ class RegisteredUserController extends Controller
                 'advanced'    => 350,
                 'expert'      => 500,
             ];
-
             if ($request->hasFile('avatar')) {
                 $path = $request->file('avatar')->store('avatars', 'public');
                 $validated['avatar_url'] = $path;
             }
-
             $validated['total_score'] = $pointsMap[$validated['experience_level']] ?? 0;
             $validated['profile_completed'] = true;
-
             $programmer->update($validated);
-
             return response()->json(['success' => true, 'message' => 'Profile completed']);
         } catch (\Exception $e) {
             Log::error('Profile completion error: ' . $e->getMessage());
             return response()->json(['message' => 'Server Error: ' . $e->getMessage()], 500);
         }
     }
-
     public function completeCompanyProfile(Request $request): JsonResponse
     {
         $user = $request->user();
-
         if ($user->role !== 'company') {
             return response()->json([
                 'success' => false,
                 'message' => 'Only companies can complete profile here'
             ], 403);
         }
-
         $company = $user->company;
-
         if (!$company) {
             return response()->json([
                 'success' => false,
                 'message' => 'Company profile not found'
             ], 404);
         }
-
         $validated = $request->validate([
             'company_name' => ['required', 'string', 'max:255'],
             'phone'        => ['required', 'string', 'max:20'],
@@ -257,7 +212,6 @@ class RegisteredUserController extends Controller
             'social_links' => ['nullable', 'array'],
             'social_links.*' => ['url', 'max:255'],
         ]);
-
         if ($request->hasFile('logo')) {
             if ($company->logo) {
                 Storage::disk('public')->delete($company->logo);
@@ -265,7 +219,6 @@ class RegisteredUserController extends Controller
             $path = $request->file('logo')->store('company_logos', 'public');
             $validated['logo'] = $path;
         }
-
         $company->update([
             'company_name' => $validated['company_name'],
             'phone'        => $validated['phone'],
@@ -277,18 +230,15 @@ class RegisteredUserController extends Controller
             'social_links' => $validated['social_links'] ?? null,
             'profile_completed' => true,
         ]);
-
         return response()->json([
             'success' => true,
             'message' => 'Company profile completed successfully',
             'data'    => $company->fresh()
         ], 200);
     }
-
     public function profileStatus(Request $request): JsonResponse
     {
         $user = $request->user();
-
         if ($user->role === 'programmer') {
             $profile = $user->programmer;
             $completed = $profile ? $profile->profile_completed : false;
@@ -299,7 +249,6 @@ class RegisteredUserController extends Controller
             $completed = true;
             $profile = null;
         }
-
         return response()->json([
             'profile_completed' => $completed,
             'role' => $user->role,
