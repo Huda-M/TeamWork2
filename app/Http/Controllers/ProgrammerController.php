@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Auth;
@@ -17,104 +16,26 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
-
 class ProgrammerController extends Controller
 {
-    /**
-     * @OA\Get(
-     *     path="/api/v1/programmers",
-     *     operationId="getProgrammers",
-
-     *     tags={"Programmers"},
-     *     summary="جلب قائمة المبرمجين",
-     *     description="الحصول على قائمة بجميع المبرمجين المسجلين",
-     *     @OA\Parameter(
-     *         name="page",
-     *         in="query",
-     *         description="رقم الصفحة",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=1)
-     *     ),
-     *     @OA\Parameter(
-     *         name="per_page",
-     *         in="query",
-     *         description="عدد النتائج في الصفحة",
-     *         required=false,
-     *         @OA\Schema(type="integer", default=15, maximum=100)
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="قائمة المبرمجين",
-     *         @OA\JsonContent(
-     *             type="object",
-     *             @OA\Property(property="status", type="string", example="success"),
-     *             @OA\Property(property="message", type="string"),
-     *             @OA\Property(
-     *                 property="data",
-     *                 type="array",
-     *                 @OA\Items(
-     *                     type="object",
-     *                     @OA\Property(property="id", type="integer"),
-     *                     @OA\Property(property="user_name", type="string"),
-     *                     @OA\Property(property="track", type="string"),
-     *                     @OA\Property(property="total_score", type="integer"),
-     *                     @OA\Property(property="experience_level", type="string")
-     *                 )
-     *             ),
-     *             @OA\Property(property="pagination", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=500, description="خطأ في السيرفر")
-     * )
-     */
     public function index()
     {
         $programmers = Programmer::with('user')->get();
-
         return response()->json([
             'status' => 'success',
             'message' => 'Programmer list fetched successfully',
             'data' => $programmers
         ]);
     }
-
-    /**
-     * @OA\Get(
-     *     path="/api/v1/programmers/{id}",
-     *     tags={"Programmers"},
-     *     summary="جلب بيانات مبرمج محدد",
-     *     description="الحصول على تفاصيل مبرمج واحد",
-     *     @OA\Parameter(
-     *         name="id",
-     *         in="path",
-     *         description="معرف المبرمج",
-     *         required=true,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="بيانات المبرمج",
-     *         @OA\JsonContent(
-     *             type="object",
-     *             @OA\Property(property="status", type="string"),
-     *             @OA\Property(property="message", type="string"),
-     *             @OA\Property(property="data", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=404, description="المبرمج غير موجود")
-     * )
-     */
     public function show($id)
     {
         $programmer = Programmer::with('user')->find($id);
-
         if (!$programmer) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Programmer not found',
             ], 404);
         }
-
         return response()->json([
             'status' => 'success',
             'message' => 'Programmer fetched successfully',
@@ -123,37 +44,6 @@ class ProgrammerController extends Controller
             ]
         ]);
     }
-
-    /**
-     * @OA\Get(
-     *     path="/api/my/statistics",
-     *     tags={"Statistics"},
-     *     summary="جلب إحصائياتي",
-     *     description="الحصول على إحصائيات شاملة عن المبرمج الحالي",
-     *     security={{"Bearer": {}}},
-     *     @OA\Response(
-     *         response=200,
-     *         description="الإحصائيات",
-     *         @OA\JsonContent(
-     *             type="object",
-     *             @OA\Property(property="success", type="boolean", example=true),
-     *             @OA\Property(
-     *                 property="data",
-     *                 type="object",
-     *                 @OA\Property(property="programmer_id", type="integer"),
-     *                 @OA\Property(property="programmer_name", type="string"),
-     *                 @OA\Property(property="total_tasks_all_projects", type="integer"),
-     *                 @OA\Property(property="completed_tasks_all_projects", type="integer"),
-     *                 @OA\Property(property="overall_completion_rate", type="number"),
-     *                 @OA\Property(property="total_projects_participated", type="integer")
-     *             )
-     *         )
-     *     ),
-     *     @OA\Response(response=401, description="غير مصرح"),
-     *     @OA\Response(response=403, description="ممنوع"),
-     *     @OA\Response(response=404, description="ملف تعريفي غير موجود")
-     * )
-     */
     public function myStatistics()
     {
         $user = Auth::user();
@@ -163,7 +53,6 @@ class ProgrammerController extends Controller
                 'message' => 'Only programmers can access'
             ], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json([
@@ -171,31 +60,25 @@ class ProgrammerController extends Controller
                 'message' => 'Programmer profile not found'
             ], 404);
         }
-
         $totalTasks = $programmer->tasks()->count();
         $completedTasks = $programmer->tasks()->where('status', 'done')->count();
         $completionRate = $totalTasks > 0 ? round(($completedTasks / $totalTasks) * 100, 2) : 0;
-
         $projects = $programmer->teams()
             ->whereNull('team_members.left_at')
             ->with('project')
             ->get()
             ->pluck('project')
             ->unique('id');
-
         $totalProjects = $projects->count();
-
         $projectsStats = [];
         foreach ($projects as $project) {
             $tasksInProject = $programmer->tasks()
                 ->whereHas('team', function($q) use ($project) {
                     $q->where('project_id', $project->id);
                 })->get();
-
             $total = $tasksInProject->count();
             $completed = $tasksInProject->where('status', 'done')->count();
             $percentage = $total > 0 ? round(($completed / $total) * 100, 2) : 0;
-
             $projectsStats[] = [
                 'project_id' => $project->id,
                 'project_title' => $project->title,
@@ -203,7 +86,6 @@ class ProgrammerController extends Controller
                 'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
             ];
         }
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -217,61 +99,31 @@ class ProgrammerController extends Controller
             ]
         ]);
     }
-
-    /**
-     * @OA\Get(
-     *     path="/api/programmers/{id}/statistics",
-     *     tags={"Statistics"},
-     *     summary="جلب إحصائيات مبرمج محدد",
-     *     description="الحصول على إحصائيات مبرمج آخر",
-     *     security={{"Bearer": {}}},
-     *     @OA\Parameter(
-     *         name="id",
-     *         in="path",
-     *         description="معرف المبرمج",
-     *         required=true,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="الإحصائيات",
-     *         @OA\JsonContent(type="object")
-     *     ),
-     *     @OA\Response(response=401, description="غير مصرح"),
-     *     @OA\Response(response=404, description="المبرمج غير موجود")
-     * )
-     */
     public function programmerStatistics($id)
     {
         $programmer = Programmer::with('user')->find($id);
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer not found'], 404);
         }
-
         $totalTasks = $programmer->tasks()->count();
         $completedTasks = $programmer->tasks()->where('status', 'done')->count();
         $completionRate = $totalTasks > 0 ? round(($completedTasks / $totalTasks) * 100, 2) : 0;
-
         $projects = $programmer->teams()
             ->whereNull('team_members.left_at')
             ->with('project')
             ->get()
             ->pluck('project')
             ->unique('id');
-
         $totalProjects = $projects->count();
         $projectsStats = [];
-
         foreach ($projects as $project) {
             $tasksInProject = $programmer->tasks()
                 ->whereHas('team', function($q) use ($project) {
                     $q->where('project_id', $project->id);
                 })->get();
-
             $total = $tasksInProject->count();
             $completed = $tasksInProject->where('status', 'done')->count();
             $percentage = $total > 0 ? round(($completed / $total) * 100, 2) : 0;
-
             $projectsStats[] = [
                 'project_id' => $project->id,
                 'project_title' => $project->title,
@@ -283,7 +135,6 @@ class ProgrammerController extends Controller
                 'image_url' => $project->image_url ? Storage::disk('public')->url($project->image_url) : null,
             ];
         }
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -297,29 +148,19 @@ class ProgrammerController extends Controller
             ]
         ]);
     }
-
     public function store(StoreProgrammerRequest $request)
     {
         $validated = $request->validated();
-
         if ($request->hasFile('avatar_url')) {
             $validated['avatar_url'] = $request->file('avatar')->store('avatars', 'public');
         }
-
         $programmer = Programmer::create($validated);
-
         return response()->json([
             'status' => 'success',
             'message' => 'Programmer created successfully',
             'data' => $programmer
         ]);
     }
-
-    /**
-     * عرض لوحة المعلومات الخاصة بالمبرمج (ملخص كامل)
-     * 
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function dashboard()
     {
         try {
@@ -327,13 +168,10 @@ class ProgrammerController extends Controller
             if (!$user || $user->role !== 'programmer') {
                 return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
             }
-
             $programmer = $user->programmer;
             if (!$programmer) {
                 return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
             }
-
-            // ---- 1. بيانات الملف الشخصي (بدون user_name) ----
             $profileData = [
                 'name'       => $user->full_name,
                 'track'      => $programmer->track ?? 'general',
@@ -342,16 +180,11 @@ class ProgrammerController extends Controller
     : null,
                 'level'      => $this->getProgrammerLevel($programmer),
             ];
-
-            // ---- 2. إحصائيات المهام ----
             $completedTasks = $programmer->tasks()->where('status', 'done')->count();
             $inProgressTasks = $programmer->tasks()->whereIn('status', ['todo', 'in_progress', 'review'])->count();
-
-            // ---- 3. عدد الفرق النشطة ----
             $teamsCount = $programmer->teams()
                 ->wherePivotNull('left_at')
                 ->count();
-
             return response()->json([
                 'success' => true,
                 'data'    => [
@@ -363,7 +196,6 @@ class ProgrammerController extends Controller
                     'teams_count' => $teamsCount,
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Dashboard error: ' . $e->getMessage());
             return response()->json([
@@ -372,17 +204,11 @@ class ProgrammerController extends Controller
             ], 500);
         }
     }
-    /**
- * تحديد المستوى النصي للمبرمج بناءً على experience_level أو total_score
- */
 private function getProgrammerLevel($programmer)
 {
-    // إذا كان experience_level موجوداً في الجدول ومُعبأ، استخدمه
     if (!empty($programmer->experience_level)) {
         return $programmer->experience_level;
     }
-
-    // وإلا احسب من total_score
     $score = $programmer->total_score ?? 0;
     if ($score >= 1000) return 'expert';
     if ($score >= 700)  return 'advanced';
@@ -391,7 +217,6 @@ private function getProgrammerLevel($programmer)
     if ($score >= 50)   return 'junior';
     return 'beginner';
 }
-
    public function levelProgression()
 {
     try {
@@ -399,24 +224,16 @@ private function getProgrammerLevel($programmer)
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
         $score = $programmer->total_score ?? 0;
-
-        // ✅ استخدم experience_level من الـ programmer model
         $baseLevel = strtolower(trim($programmer->experience_level ?? ''));
-
-        // ✅ لو فاضي أو غلط، احسب من الـ score
         $validLevels = ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'];
         if (empty($baseLevel) || !in_array($baseLevel, $validLevels)) {
             $baseLevel = $this->getBaseLevelFromScore($score);
         }
-
-        // تعريف المستويات الفرعية
         $subLevels = [
             'beginner'     => ['bronze' => 0,   'silver' => 50,  'gold' => 100],
             'junior'       => ['bronze' => 200,  'silver' => 250, 'gold' => 300],
@@ -425,15 +242,11 @@ private function getProgrammerLevel($programmer)
             'advanced'     => ['bronze' => 800,  'silver' => 890, 'gold' => 980],
             'expert'       => ['bronze' => 1000, 'silver' => 1100, 'gold' => 1200],
         ];
-
         $subs = $subLevels[$baseLevel] ?? $subLevels['beginner'];
-
-        // ✅ تحديد الـ sub level بناءً على score
         $currentSubLevel = 'bronze';
         $currentThreshold = $subs['bronze'];
         $nextSubLevel = null;
         $nextThreshold = null;
-
         foreach ($subs as $sub => $threshold) {
             if ($score >= $threshold) {
                 $currentSubLevel = $sub;
@@ -444,8 +257,6 @@ private function getProgrammerLevel($programmer)
                 break;
             }
         }
-
-        // ✅ لو وصل لـ gold، الـ next يبقى المستوى اللي بعده
         if ($nextSubLevel === null && $baseLevel !== 'expert') {
             $nextBaseLevel = $this->getNextBaseLevel($baseLevel);
             if ($nextBaseLevel) {
@@ -453,10 +264,7 @@ private function getProgrammerLevel($programmer)
                 $nextThreshold = $subLevels[$nextBaseLevel]['bronze'];
             }
         }
-
         $isMaxLevel = ($baseLevel === 'expert' && $currentSubLevel === 'gold');
-
-        // ✅ حساب نسبة التقدم
         $progressPercentage = 0;
         if (!$isMaxLevel && $nextThreshold !== null && $nextThreshold > $currentThreshold) {
             $range = $nextThreshold - $currentThreshold;
@@ -466,9 +274,7 @@ private function getProgrammerLevel($programmer)
         } elseif ($isMaxLevel) {
             $progressPercentage = 100;
         }
-
         $fullLevelName = ucfirst($baseLevel) . ' ' . ucfirst($currentSubLevel);
-        
         $nextFullLevelName = null;
         if (!$isMaxLevel && $nextSubLevel) {
             $nextBase = ($currentSubLevel === 'gold') 
@@ -476,12 +282,10 @@ private function getProgrammerLevel($programmer)
                 : $baseLevel;
             $nextFullLevelName = ucfirst($nextBase) . ' ' . ucfirst($nextSubLevel);
         }
-
         $totalTasks = $programmer->tasks()->count();
         $averageRating = \App\Models\Evaluation::where('evaluated_id', $programmer->id)
             ->avg('average_score') ?? 0;
         $averageRating = round($averageRating, 2);
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -496,7 +300,6 @@ private function getProgrammerLevel($programmer)
                 'experience_level'      => $programmer->experience_level,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('Level progression error: ' . $e->getMessage());
         return response()->json([
@@ -505,7 +308,6 @@ private function getProgrammerLevel($programmer)
         ], 500);
     }
 }
-
 private function getBaseLevelFromScore($score)
 {
     if ($score >= 1000) return 'expert';
@@ -515,28 +317,21 @@ private function getBaseLevelFromScore($score)
     if ($score >= 50)   return 'junior';
     return 'beginner';
 }
-
 private function getNextBaseLevel($currentBaseLevel)
 {
     $levels = ['beginner', 'junior', 'intermediate', 'senior', 'advanced', 'expert'];
     $currentIndex = array_search($currentBaseLevel, $levels);
-    
     if ($currentIndex === false || $currentIndex >= count($levels) - 1) {
         return null;
-    }
-    
+    }   
     return $levels[$currentIndex + 1];
-}
-
-    
+}    
     public function searchByUsername(Request $request)
     {
         $query = $request->get('query', '');
-
         if (strlen($query) < 2) {
             return response()->json(['data' => []]);
         }
-
         $programmers = Programmer::with('user')
             ->where('user_name', 'LIKE', "%{$query}%")  
             ->limit(10)
@@ -552,7 +347,6 @@ private function getNextBaseLevel($currentBaseLevel)
                     'track' => $programmer->track,
                 ];
             });
-
         return response()->json(['data' => $programmers]);
     }
 }
