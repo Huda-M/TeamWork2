@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\User;
@@ -13,10 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use OpenApi\Annotations as OA;
 
-
 class ProjectController extends Controller
 {
-
 public function changeProjectLeader($projectId, $programmerId)
 {
     try {
@@ -27,7 +24,6 @@ public function changeProjectLeader($projectId, $programmerId)
                 'message' => 'Only programmers can access'
             ], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json([
@@ -35,7 +31,6 @@ public function changeProjectLeader($projectId, $programmerId)
                 'message' => 'Programmer profile not found'
             ], 404);
         }
-
         $project = Project::with('teams')->find($projectId);
         if (!$project) {
             return response()->json([
@@ -43,8 +38,6 @@ public function changeProjectLeader($projectId, $programmerId)
                 'message' => 'Project not found'
             ], 404);
         }
-
-        // جلب الفريق بتاع المشروع (نفترض مشروع = فريق واحد)
         $team = $project->teams->first();
         if (!$team) {
             return response()->json([
@@ -52,42 +45,29 @@ public function changeProjectLeader($projectId, $programmerId)
                 'message' => 'No team found for this project'
             ], 404);
         }
-
-        // ✅ التحقق: اللي بيغير لازم يكون الليدر الحالي أو الكرييتور
         $isCurrentLeader = $team->isLeader($programmer->id);
         $isCreator = $team->created_by === $programmer->id;
-
         if (!$isCurrentLeader && !$isCreator) {
             return response()->json([
                 'success' => false, 
                 'message' => 'Only the current team leader or creator can transfer leadership'
             ], 403);
         }
-
-        // ✅ التحقق: اللي هيتنقل له لازم يكون ميمبر في الفريق
         if (!$team->isMember($programmerId)) {
             return response()->json([
                 'success' => false, 
                 'message' => 'The selected programmer is not a member of this team'
             ], 400);
         }
-
-        // ❌ مينفعش ينقل لنفسه
         if ($team->leader_id == $programmerId) {
             return response()->json([
                 'success' => false, 
                 'message' => 'This programmer is already the team leader'
             ], 400);
         }
-
         DB::beginTransaction();
-
         $oldLeaderId = $team->leader_id;
-
-        // ✅ تحديث الليدر الجديد
         $team->update(['leader_id' => $programmerId]);
-
-
         Log::info('Team leader changed via project', [
             'project_id' => $projectId,
             'team_id' => $team->id,
@@ -95,9 +75,7 @@ public function changeProjectLeader($projectId, $programmerId)
             'new_leader_id' => $programmerId,
             'changed_by' => $programmer->id,
         ]);
-
         DB::commit();
-
         return response()->json([
             'success' => true,
             'message' => 'Team leader transferred successfully',
@@ -108,7 +86,6 @@ public function changeProjectLeader($projectId, $programmerId)
                 'previous_leader_id' => $oldLeaderId,
             ]
         ]);
-
     } catch (\Exception $e) {
         DB::rollBack();
         Log::error('Error changing project leader: ' . $e->getMessage());
@@ -122,34 +99,26 @@ public function changeProjectLeader($projectId, $programmerId)
     {
         try {
             $query = Project::with(['skills', 'user']);
-
             if ($request->has('skill')) {
                 $query->whereHas('skills', function($q) use ($request) {
                     $q->where('skills.id', $request->skill);
                 });
             }
-
             if ($request->has('difficulty')) {
                 $query->where('difficulty', $request->difficulty);
             }
-
             if ($request->has('search')) {
                 $query->where('title', 'like', '%' . $request->search . '%');
             }
-
             $projects = $query->paginate(15);
-
-            // Transform projects to include full image URLs
             $projects->getCollection()->transform(function ($project) {
                 return $this->transformProject($project);
             });
-
             return response()->json([
                 'success' => true,
                 'message' => 'Projects fetched successfully',
                 'data' => $projects
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching projects: ' . $e->getMessage());
             return response()->json([
@@ -158,7 +127,6 @@ public function changeProjectLeader($projectId, $programmerId)
             ], 500);
         }
     }
-
    public function zeroProject($projectId)
 {
     try {
@@ -166,47 +134,34 @@ public function changeProjectLeader($projectId, $programmerId)
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
-        // جلب المشروع مع الفرق والأعضاء والمهام
         $project = Project::with([
             'teams.activeMembers.programmer.user',
             'teams.tasks'
         ])->find($projectId);
-
         if (!$project) {
             return response()->json(['success' => false, 'message' => 'Project not found'], 404);
         }
-
-        // التحقق من أن المستخدم هو قائد الفريق في هذا المشروع
         $team = $project->teams->first();
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
-
-        // ✅ التحقق: الليدر بس اللي يقدر يشوف
         if (!$team->isLeader($programmer->id)) {
             return response()->json(['success' => false, 'message' => 'Only the team leader can view zero project details'], 403);
         }
-
-        // جمع جميع الأعضاء من كل فريق في المشروع
         $members = collect();
         foreach ($project->teams as $team) {
             foreach ($team->activeMembers as $member) {
                 $prog = $member->programmer;
-                
-                // ✅ استخدم $prog مش $programmer
                 $programmerTasks = $team->tasks->where('programmer_id', $prog->id);
                 $doneCount = $programmerTasks->where('status', 'done')->count();
                 $pendingCount = $programmerTasks->whereNotIn('status', ['done', 'cancelled'])->count();
-
                 $members->push([
                     'name'          => $prog->user->full_name,
-                    'avatar_url'    => $prog->avatar_url   // ← $prog هنا!
+                    'avatar_url'    => $prog->avatar_url   
                         ? Storage::disk('public')->url($prog->avatar_url) 
                         : null,
                     'track'         => $prog->track ?? 'general',
@@ -214,9 +169,7 @@ public function changeProjectLeader($projectId, $programmerId)
                 ]);
             }
         }
-
         $members = $members->unique('name')->values();
-
         $responseData = [
             'project_id'    => $project->id,
             'project_title' => $project->title,
@@ -225,13 +178,11 @@ public function changeProjectLeader($projectId, $programmerId)
             'pending_tasks' => $project->teams->flatMap->tasks->whereNotIn('status', ['done', 'cancelled'])->count(),
             'members'       => $members,
         ];
-
         return response()->json([
             'success' => true,
             'data'    => $responseData,
             'message' => 'Zero project details fetched successfully'
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error fetching zero project: ' . $e->getMessage());
         return response()->json([
@@ -240,40 +191,29 @@ public function changeProjectLeader($projectId, $programmerId)
         ], 500);
     }
 }
-
     public function store(StoreProjectRequest $request)
     {
         try {
             $user = $request->user();
-
             DB::beginTransaction();
-
             $validated = $request->validated();
-
-            // Handle project image upload like avatar
             if ($request->hasFile('image')) {
                 $validated['image_url'] = $request->file('image')->store('projects', 'public');
             }
-
             $project = Project::create($validated);
-
             if ($request->has('skills')) {
                 $project->skills()->sync($validated['skills']);
             }
-
             Log::info('Project created', [
                 'project_id' => $project->id,
                 'created_by' => $user->id
             ]);
-
             DB::commit();
-
             return response()->json([
                 'success' => true,
                 'data' => $this->transformProject($project->load('skills', 'user')),
                 'message' => 'Project created successfully'
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error creating project: ' . $e->getMessage());
@@ -283,7 +223,6 @@ public function changeProjectLeader($projectId, $programmerId)
             ], 500);
         }
     }
-
     public function markAsCompleted($projectId)
     {
         try {
@@ -291,12 +230,10 @@ public function changeProjectLeader($projectId, $programmerId)
             if (!$user) {
                 return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
             }
-
             $project = Project::with('teams')->find($projectId);
             if (!$project) {
                 return response()->json(['success' => false, 'message' => 'Project not found'], 404);
             }
-
             $team = $project->teams->first();
             if (!$team) {
                 return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
