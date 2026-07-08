@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\Report;
@@ -23,26 +22,20 @@ class ReportController extends Controller
                     'message' => 'Unauthorized access'
                 ], 403);
             }
-
             $query = Report::with(['targetUser', 'reporterUser', 'admin'])
                 ->orderBy('created_at', 'desc');
-
             if ($request->has('status')) {
                 $query->where('admin_action', $request->status);
             }
-
             if ($request->has('report_type')) {
                 $query->where('report_type', $request->report_type);
             }
-
             $reports = $query->paginate(20);
-
             return response()->json([
                 'success' => true,
                 'data' => $reports,
                 'message' => 'Reports fetched successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching reports: ' . $e->getMessage());
             return response()->json([
@@ -51,33 +44,25 @@ class ReportController extends Controller
             ], 500);
         }
     }
-
     public function store(StoreReportRequest $request)
 {
     try {
         $validated = $request->validated();
         $reporter = auth()->user();
-
-        // ✅ تحويل programmer_id لـ user_id
         $targetProgrammer = \App\Models\Programmer::find($validated['target_programmer_id']);
-        
         if (!$targetProgrammer) {
             return response()->json([
                 'success' => false,
-                'message' => 'المبرمج المستهدف غير موجود'
+                'message' => 'selected programmer dosen't exist'
             ], 404);
         }
-
         $targetUserId = $targetProgrammer->user_id;
-
-        // منع الإبلاغ عن نفسك
         if ($reporter->id == $targetUserId) {
             return response()->json([
                 'success' => false,
-                'message' => 'لا يمكنك الإبلاغ عن نفسك'
+                'message' => 'you can't report yourself'
             ], 400);
         }
-
         $targetUser = User::find($targetUserId);
         if ($targetUser->role === 'admin') {
             return response()->json([
@@ -85,21 +70,17 @@ class ReportController extends Controller
                 'message' => 'Cannot report admin users'
             ], 400);
         }
-
         $existingReport = Report::where('reporter_user_id', $reporter->id)
             ->where('target_user_id', $targetUserId)
             ->where('admin_action', 'pending')
             ->first();
-
         if ($existingReport) {
             return response()->json([
                 'success' => false,
                 'message' => 'You already have a pending report against this user'
             ], 400);
         }
-
         DB::beginTransaction();
-
         $report = Report::create([
             'target_user_id'   => $targetUserId,
             'reporter_user_id' => $reporter->id,
@@ -108,17 +89,13 @@ class ReportController extends Controller
             'status'           => 'generated',
             'report_type'      => 'other',
         ]);
-
         Log::info('New report created', [
             'report_id' => $report->id,
             'reporter' => $reporter->id,
             'target' => $targetUserId
         ]);
-
         DB::commit();
-
         $report = $report->fresh(['targetUser.programmer', 'reporterUser.programmer']);
-
         return response()->json([
             'success' => true,
             'message' => 'Report submitted successfully. Admin will review it soon.',
@@ -133,7 +110,6 @@ class ReportController extends Controller
                 'created_at' => $report->created_at,
             ]
         ], 201);
-
     } catch (\Exception $e) {
         DB::rollBack();
         return response()->json([
@@ -143,7 +119,6 @@ class ReportController extends Controller
         ], 500);
     }
 }
-    
     public function show(Report $report)
     {
         try {
@@ -153,13 +128,11 @@ class ReportController extends Controller
                     'message' => 'Unauthorized access'
                 ], 403);
             }
-
             return response()->json([
                 'success' => true,
                 'data' => $report->load(['targetUser', 'reporterUser', 'admin']),
                 'message' => 'Report fetched successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error showing report: ' . $e->getMessage());
             return response()->json([
@@ -168,7 +141,6 @@ class ReportController extends Controller
             ], 500);
         }
     }
-
     public function update(UpdateReportRequest $request, Report $report)
     {
         try {
@@ -178,36 +150,28 @@ class ReportController extends Controller
                     'message' => 'Unauthorized access'
                 ], 403);
             }
-
             $validated = $request->validated();
-
             DB::beginTransaction();
-
             $report->update([
                 'admin_action' => $validated['admin_action'],
                 'admin_notes' => $validated['admin_notes'] ?? null,
                 'admin_id' => auth()->id(),
                 'reviewed_at' => now(),
             ]);
-
             if ($validated['admin_action'] === 'approved') {
                 $this->applyPenalties($report->targetUser);
             }
-
             Log::info('Report updated', [
                 'report_id' => $report->id,
                 'action' => $validated['admin_action'],
                 'admin_id' => auth()->id()
             ]);
-
             DB::commit();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Report updated successfully',
                 'data' => $report->fresh(['targetUser', 'reporterUser', 'admin'])
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error updating report: ' . $e->getMessage());
@@ -217,13 +181,10 @@ class ReportController extends Controller
             ], 500);
         }
     }
-
     private function applyPenalties(User $user)
     {
         $user->increment('reports_count');
-
         $reportsCount = $user->reports_count;
-
         if ($reportsCount >= 5) {
             $user->update([
                 'is_banned' => true,
@@ -231,7 +192,6 @@ class ReportController extends Controller
                 'is_suspended' => false,
                 'suspended_until' => null,
             ]);
-
             Log::warning('User banned permanently', [
                 'user_id' => $user->id,
                 'reports_count' => $reportsCount
@@ -239,12 +199,10 @@ class ReportController extends Controller
         }
         else {
             $suspendedUntil = now()->addDays(5);
-
             $user->update([
                 'is_suspended' => true,
                 'suspended_until' => $suspendedUntil,
             ]);
-
             Report::where('target_user_id', $user->id)
                 ->where('admin_action', 'approved')
                 ->latest()
@@ -253,7 +211,6 @@ class ReportController extends Controller
                     'suspended_until' => $suspendedUntil,
                     'suspension_count' => $reportsCount,
                 ]);
-
             Log::info('User suspended for 5 days', [
                 'user_id' => $user->id,
                 'suspended_until' => $suspendedUntil,
@@ -261,7 +218,6 @@ class ReportController extends Controller
             ]);
         }
     }
-
     public function statistics()
     {
         try {
@@ -271,7 +227,6 @@ class ReportController extends Controller
                     'message' => 'Unauthorized access'
                 ], 403);
             }
-
             $stats = [
                 'total_reports' => Report::count(),
                 'pending_reports' => Report::where('admin_action', 'pending')->count(),
@@ -287,13 +242,11 @@ class ReportController extends Controller
                 'suspended_users' => User::where('is_suspended', true)->count(),
                 'banned_users' => User::where('is_banned', true)->count(),
             ];
-
             return response()->json([
                 'success' => true,
                 'data' => $stats,
                 'message' => 'Statistics fetched successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching report statistics: ' . $e->getMessage());
             return response()->json([
@@ -302,23 +255,19 @@ class ReportController extends Controller
             ], 500);
         }
     }
-
     public function myReports(Request $request)
     {
         try {
             $user = auth()->user();
-
             $reports = Report::where('reporter_user_id', $user->id)
                 ->with(['targetUser'])
                 ->orderBy('created_at', 'desc')
                 ->paginate(20);
-
             return response()->json([
                 'success' => true,
                 'data' => $reports,
                 'message' => 'Your reports fetched successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching my reports: ' . $e->getMessage());
             return response()->json([
@@ -327,23 +276,19 @@ class ReportController extends Controller
             ], 500);
         }
     }
-
     public function reportsAgainstMe(Request $request)
     {
         try {
             $user = auth()->user();
-
             $reports = Report::where('target_user_id', $user->id)
                 ->with(['reporterUser'])
                 ->orderBy('created_at', 'desc')
                 ->paginate(20);
-
             return response()->json([
                 'success' => true,
                 'data' => $reports,
                 'message' => 'Reports against you fetched successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching reports against me: ' . $e->getMessage());
             return response()->json([
@@ -352,7 +297,6 @@ class ReportController extends Controller
             ], 500);
         }
     }
-
     public function destroy(Report $report)
     {
         try {
@@ -362,14 +306,11 @@ class ReportController extends Controller
                     'message' => 'Unauthorized access'
                 ], 403);
             }
-
             $report->delete();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Report deleted successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error deleting report: ' . $e->getMessage());
             return response()->json([
@@ -381,53 +322,44 @@ class ReportController extends Controller
    public function getUserReportInfo($programmerId)
 {
     try {
-        // ✅ جلب الـ programmer بالـ programmer_id
-        $programmer = \App\Models\Programmer::find($programmerId);
+         $programmer = \App\Models\Programmer::find($programmerId);
         
         if (!$programmer) {
             return response()->json([
                 'success' => false,
-                'message' => 'المبرمج غير موجود'
+                'message' => 'programmer dosen't exist'
             ], 404);
         }
-
         $user = $programmer->user;
-
-        // منع الإبلاغ عن الذات
         if ($user->id === auth()->id()) {
             return response()->json([
                 'success' => false,
-                'message' => 'لا يمكنك الإبلاغ عن نفسك'
+                'message' => 'you can't report yourself'
             ], 400);
         }
-
-        // منع الإبلاغ عن الأدمن
         if ($user->role === 'admin') {
             return response()->json([
                 'success' => false,
-                'message' => 'لا يمكن الإبلاغ عن المشرفين'
+                'message' => 'you can't report admin'
             ], 400);
         }
-
         $data = [
             'programmer_id' => $programmer->id,
             'user_id' => $user->id,
             'name' => $user->full_name,
-            'track' => $programmer->track ?? 'غير محدد',
+            'track' => $programmer->track ?? 'undefined',
             'avatar_url' => $programmer->avatar_url 
                 ? \Illuminate\Support\Facades\Storage::disk('public')->url($programmer->avatar_url) 
                 : null,
         ];
-
         return response()->json([
             'success' => true,
             'data' => $data
         ]);
-
     } catch (\Exception $e) {
         return response()->json([
             'success' => false,
-            'message' => 'المبرمج غير موجود'
+            'message' => 'programmer dosen't exist'
         ], 404);
     }
 }
@@ -435,7 +367,6 @@ class ReportController extends Controller
     {
         try {
             $user = auth()->user();
-
             if ($user->is_banned) {
                 return response()->json([
                     'success' => false,
@@ -446,7 +377,6 @@ class ReportController extends Controller
                     ]
                 ], 403);
             }
-
             if ($user->is_suspended && $user->suspended_until && now()->lt($user->suspended_until)) {
                 return response()->json([
                     'success' => false,
@@ -458,14 +388,12 @@ class ReportController extends Controller
                     ]
                 ], 403);
             }
-
             if ($user->is_suspended && $user->suspended_until && now()->gte($user->suspended_until)) {
                 $user->update([
                     'is_suspended' => false,
                     'suspended_until' => null,
                 ]);
             }
-
             return response()->json([
                 'success' => true,
                 'message' => 'Account is active',
@@ -473,7 +401,6 @@ class ReportController extends Controller
                     'status' => 'active',
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error checking user status: ' . $e->getMessage());
             return response()->json([
