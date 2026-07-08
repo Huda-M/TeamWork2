@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Services\AITeamEvaluationService;
@@ -37,7 +36,6 @@ class TeamController extends Controller
 {
     protected $teamMatchingService;
     protected $aiRecommendationService;
-
     public function __construct(TeamMatchingService $teamMatchingService, AITeamRecommendationService $aiRecommendationService,AITeamEvaluationService $aiEvaluationService)
     {
         $this->teamMatchingService = $teamMatchingService;
@@ -54,7 +52,6 @@ public function evaluateProjectWithAI($projectId)
                 'message' => 'Only programmers can access'
             ], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json([
@@ -62,64 +59,45 @@ public function evaluateProjectWithAI($projectId)
                 'message' => 'Programmer profile not found'
             ], 404);
         }
-
-        // ✅ جلب المشروع مع كل الـ relations المطلوبة
-$project = Project::with([
-    'teams.activeMembers.programmer.skills',
-    'teams.tasks',
-    'teams.messages'
-])->find($projectId);
-       
-
+        $project = Project::with([
+            'teams.activeMembers.programmer.skills',
+            'teams.tasks',
+            'teams.messages'
+             ])->find($projectId);
         if (!$project) {
             return response()->json([
                 'success' => false,
                 'message' => 'Project not found'
             ], 404);
         }
-
-        // ✅ جلب الفريق المرتبط بالمشروع
         $team = $project->teams->first();
-
         if (!$team) {
             return response()->json([
                 'success' => false,
                 'message' => 'No team found for this project'
             ], 404);
         }
-
-        // ✅ التحقق من أن المبرمج عضو في الفريق
         if (!$team->isMember($programmer->id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You are not a member of this team'
             ], 403);
         }
-
-        // ✅ التحقق من أن المبرمج هو الليدر
         if (!$team->isLeader($programmer->id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only the team leader can perform AI evaluation'
             ], 403);
         }
-
-        // ✅ التحقق من أن المشروع مكتمل
         if ($project->status !== 'completed') {
             return response()->json([
                 'success' => false,
                 'message' => 'You can only evaluate after the project is completed'
             ], 400);
         }
-
         $aiRequestData = $this->prepareAIEvaluationData($team, $project);
-
-        // إرسال للـ AI API
         $aiResponse = $this->aiEvaluationService->evaluateTeam($aiRequestData);
-
-        // حفظ التقييمات
         $savedEvaluations = $this->saveAIEvaluations($aiResponse, $team, $programmer, $project);
-
         return response()->json([
             'success' => true,
             'message' => 'AI evaluation completed successfully',
@@ -130,7 +108,6 @@ $project = Project::with([
                 'ai_raw_response' => $aiResponse,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('AI evaluation error: ' . $e->getMessage());
         return response()->json([
@@ -141,14 +118,11 @@ $project = Project::with([
 }
  private function prepareAIEvaluationData(Team $team, Project $project): array
 {
-    // ✅ تأكد من loading الـ relations
     $team->loadMissing([
         'activeMembers.programmer.skills',
         'tasks',
         'messages'
     ]);
-
-    // تجهيز الـ members
     $members = $team->activeMembers ? $team->activeMembers->map(function ($member) {
         $prog = $member->programmer;
         return [
@@ -159,8 +133,6 @@ $project = Project::with([
             })->toArray() : [],
         ];
     })->toArray() : [];
-
-    // تجهيز الـ tasks
     $tasks = $team->tasks ? $team->tasks->map(function ($task) {
         return [
             'id' => $task->id,
@@ -179,8 +151,6 @@ $project = Project::with([
             'is_blocked' => $task->is_blocked ?? false,
         ];
     })->toArray() : [];
-
-    // تجهيز الـ task history
     $taskIds = $team->tasks ? $team->tasks->pluck('id') : collect();
     $taskHistory = $taskIds->isNotEmpty() ? TaskHistory::whereIn('task_id', $taskIds)
         ->get()
@@ -192,8 +162,6 @@ $project = Project::with([
                 'change_description' => $history->change_description,
             ];
         })->toArray() : [];
-
-    // تجهيز الـ messages
     $teamMessages = TeamMessage::where('team_id', $team->id)
         ->get()
         ->map(function ($message) {
@@ -204,8 +172,6 @@ $project = Project::with([
                 'message_text' => $message->message_text,
             ];
         })->toArray();
-
-    // تجهيز الـ activities
     $programmerIds = $team->activeMembers ? $team->activeMembers->pluck('programmer_id') : collect();
     $programmerActivities = $programmerIds->isNotEmpty() ? ProgrammerActivity::where('project_id', $project->id)
         ->whereIn('programmer_id', $programmerIds)
@@ -224,7 +190,6 @@ $project = Project::with([
                 'activity_date' => $activity->activity_date?->toDateString(),
             ];
         })->toArray() : [];
-
     return [
         'project' => [
             'id' => $project->id,
@@ -246,29 +211,21 @@ $project = Project::with([
         'programmer_activities' => $programmerActivities,
     ];
 }
-
 private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $evaluator, Project $project): array
 {
     $saved = [];
-
     foreach ($aiResponse['evaluations'] as $eval) {
         $programmerId = $eval['programmer_id'];
         $overallScore = $eval['overall_score'];
         $breakdown = $eval['breakdown'] ?? [];
         $explanation = $eval['explanation'] ?? '';
-
-        // التحقق من أن المبرمج عضو في الفريق
         if (!$team->isMember($programmerId)) {
             continue;
         }
-
-        // ✅ التحقق من عدم وجود تقييم AI سابق
         $existing = AIEvaluation::where('project_id', $project->id)
             ->where('evaluated_id', $programmerId)
             ->first();
-
         if ($existing) {
-            // ✅ تحديث التقييم الموجود
             $existing->update([
                 'overall_score' => $overallScore,
                 'breakdown' => $breakdown,
@@ -284,8 +241,6 @@ private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $ev
             ];
             continue;
         }
-
-        // ✅ إنشاء تقييم AI جديد
         $aiEval = AIEvaluation::create([
             'project_id' => $project->id,
             'team_id' => $team->id,
@@ -296,7 +251,6 @@ private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $ev
             'explanation' => $explanation,
             'is_ai_generated' => true,
         ]);
-
         $saved[] = [
             'evaluation_id' => $aiEval->id,
             'programmer_id' => $programmerId,
@@ -305,14 +259,8 @@ private function saveAIEvaluations(array $aiResponse, Team $team, Programmer $ev
             'updated' => false,
         ];
     }
-
     return $saved;
 }
-/**
- * عرض تقييمات AI لمشروع معين
- * GET /api/projects/{projectId}/ai-evaluations
- * أي عضو في التيم يقدر يشوف
- */
 public function getProjectAIEvaluations($projectId)
 {
     try {
@@ -323,7 +271,6 @@ public function getProjectAIEvaluations($projectId)
                 'message' => 'Only programmers can access'
             ], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json([
@@ -331,35 +278,26 @@ public function getProjectAIEvaluations($projectId)
                 'message' => 'Programmer profile not found'
             ], 404);
         }
-
-        // جلب المشروع مع الفريق
         $project = Project::with('teams')->find($projectId);
-
         if (!$project) {
             return response()->json([
                 'success' => false,
                 'message' => 'Project not found'
             ], 404);
         }
-
         $team = $project->teams->first();
-
         if (!$team) {
             return response()->json([
                 'success' => false,
                 'message' => 'No team found for this project'
             ], 404);
         }
-
-        // ✅ أي عضو في التيم يقدر يشوف (مش الليدر بس)
         if (!$team->isMember($programmer->id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You are not a member of this team'
             ], 403);
         }
-
-        // ✅ جلب تقييمات AI المحفوظة
         $evaluations = AIEvaluation::with(['evaluated.user'])
             ->where('project_id', $projectId)
             ->get()
@@ -378,18 +316,16 @@ public function getProjectAIEvaluations($projectId)
                     'updated_at' => $eval->updated_at,
                 ];
             });
-
         return response()->json([
             'success' => true,
             'data' => [
                 'project_id' => (int) $projectId,
                 'project_name' => $project->title,
-                'is_leader' => $team->isLeader($programmer->id), // ← معلومة للـ frontend
+                'is_leader' => $team->isLeader($programmer->id), 
                 'evaluations_count' => $evaluations->count(),
                 'evaluations' => $evaluations,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error fetching AI evaluations: ' . $e->getMessage());
         return response()->json([
@@ -398,7 +334,6 @@ public function getProjectAIEvaluations($projectId)
         ], 500);
     }
 }
-
     public function index(Request $request)
     {
         try {
@@ -414,7 +349,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch teams'], 500);
         }
     }
-
     public function showTeam($id)
     {
         try {
@@ -426,7 +360,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to show team'], 500);
         }
     }
-
     public function getTeamDetails($projectId)
     {
         try {
@@ -444,7 +377,7 @@ public function getProjectAIEvaluations($projectId)
                         'programmer_id' => $member->programmer_id,
                         'name' => $prog->user->full_name,
                         'track' => $prog->track ?? 'general',
-                        'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                        'avatar_url' => $prog->avatar_url 
                             ? asset('storage/' . $prog->avatar_url)
                             : null,
                     ];
@@ -455,40 +388,31 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
         }
     }
-
     public function swapProjectLeader(Request $request, $projectId, $programmerId)
     {
         try {
             $user = Auth::user();
             $currentLeader = $user->programmer;
-
             $project = Project::with('teams')->findOrFail($projectId);
             $team = $project->teams->first();
-
             if (!$team) {
                 return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
             }
-
             if (!$team->isLeader($currentLeader->id) && $user->role !== 'admin') {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
-
             $newLeader = Programmer::findOrFail($programmerId);
-
             if (!$team->isMember($newLeader->id)) {
                 return response()->json(['success' => false, 'message' => 'Programmer is not a member of this team'], 400);
             }
-
             DB::transaction(function () use ($team, $currentLeader, $newLeader) {
                 TeamMember::where('team_id', $team->id)
                     ->where('programmer_id', $currentLeader->id)
                     ->update(['role' => 'member']);
-
                 TeamMember::where('team_id', $team->id)
                     ->where('programmer_id', $newLeader->id)
                     ->update(['role' => 'leader']);
             });
-
             $team->load('activeMembers.programmer.user');
             $tokens = [];
             foreach ($team->activeMembers as $member) {
@@ -501,50 +425,38 @@ public function getProjectAIEvaluations($projectId)
                     }
                 }
             }
-
             $tokens = array_unique($tokens);
             if (! empty($tokens)) {
                 $pushNotify = new PushNotify;
                 $pushNotify->sendBulkNotification($tokens, 'New Team Leader', "{$newLeader->user->full_name} is now the leader of team {$team->name}.", ['team_id' => $team->id, 'new_leader_id' => $newLeader->id]);
             }
-
             return response()->json(['success' => true, 'message' => "Leader role transferred from {$currentLeader->user->full_name} to {$newLeader->user->full_name}"]);
-
         } catch (\Exception $e) {
             Log::error('Error swapping leader: '.$e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to swap leader'], 500);
         }
     }
-
     public function softDeleteProjectTeam($projectId)
     {
         $project = Project::with('teams')->findOrFail($projectId);
         $team = $project->teams->first();
-
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
-
         $user = Auth::user();
         $programmer = $user->programmer;
-
-        // ✅ FIXED: Check leader OR creator OR admin
         $isLeader = $team->isLeader($programmer->id);
         $isCreator = $team->created_by === $programmer->id;
-
         if (!$isLeader && !$isCreator && $user->role !== 'admin') {
             return response()->json([
                 'success' => false,
                 'message' => 'Only team leader, creator, or admin can delete team'
             ], 403);
         }
-
         $team->delete();
         $team->activeMembers()->update(['left_at' => now()]);
-
         return response()->json(['success' => true, 'message' => 'Team soft deleted']);
     }
-
     public function store(Request $request)
     {
         DB::beginTransaction();
@@ -641,7 +553,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to create team', 'error' => $e->getMessage()], 500);
         }
     }
-
     public function inviteByUsername(Request $request, $id)
     {
         DB::beginTransaction();
@@ -694,7 +605,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to send invitation'], 500);
         }
     }
-
     public function acceptInvitationById(Request $request, $invitationId)
     {
         DB::beginTransaction();
@@ -736,7 +646,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to accept invitation'], 500);
         }
     }
-
     public function declineInvitationById(Request $request, $invitationId)
     {
         DB::beginTransaction();
@@ -769,7 +678,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to decline invitation'], 500);
         }
     }
-
     public function getMyInvitations(Request $request)
     {
         try {
@@ -789,7 +697,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch invitations.'], 500);
         }
     }
-
     public function teamMembers($id)
     {
         try {
@@ -805,7 +712,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch team members'], 500);
         }
     }
-
     public function getAIRandomRecommendations(Request $request)
     {
         try {
@@ -820,24 +726,19 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to get recommendations'], 500);
         }
     }
-
     public function updateProjectTeam(Request $request, $projectId)
     {
         try {
             $user = Auth::user();
-
             $project = Project::with('teams')->findOrFail($projectId);
             $team = $project->teams->first();
-
             if (!$team) {
                 return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
             }
-
             $isLeader = $team->isLeader($user->programmer->id);
             if (!$isLeader && $user->role !== 'admin') {
                 return response()->json(['success' => false, 'message' => 'Only team leader can update team settings'], 403);
             }
-
             $validated = $request->validate(['name' => 'sometimes|string|max:255', 'description' => 'nullable|string', 'github_url' => 'nullable|url', 'avatar_url' => 'nullable|url', 'is_public' => 'nullable|boolean', 'category' => 'nullable|array', 'required_role' => 'nullable|array', 'experience_level' => 'nullable|in:beginner,intermediate,advanced,expert']);
             $team->update($validated);
             $pushNotification = new PushNotify;
@@ -856,9 +757,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to update team'], 500);
         }
     }
-
-
-
     public function getFullTeamDetails($teamId, Request $request)
     {
         try {
@@ -874,7 +772,7 @@ public function getProjectAIEvaluations($projectId)
             $githubLink = $team->project->github_url ?? null;
             $members = $team->activeMembers->map(function ($member) {
                 $prog = $member->programmer;
-                return ['id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                return ['id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url  
                             ? asset('storage/' . $prog->avatar_url)
                             : null, 'track' => $prog->track ?? 'general', 'role' => $member->role];
             });
@@ -895,7 +793,6 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
         }
     }
-
     public function joinViaAIRecommendation(Request $request)
     {
         $validator = Validator::make($request->all(), ['team_id' => 'required|exists:teams,id']);
@@ -919,43 +816,33 @@ public function getProjectAIEvaluations($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to join team'], 500);
         }
     }
-
-   /**
- * عرض أعضاء الفريق باستخدام معرف المشروع (بدلاً من معرف الفريق)
- * الراوت: GET /api/teams/{projectId}/members-list
- */
 public function getTeamMembersList($projectId)
 {
     try {
-        // جلب الفريق المرتبط بهذا المشروع (يفترض وجود فريق واحد لكل مشروع)
         $team = Team::with('activeMembers.programmer.user')
             ->where('project_id', $projectId)
             ->first();
-
         if (!$team) {
             return response()->json([
                 'success' => false,
                 'message' => 'No team found for this project'
             ], 404);
         }
-
         $members = $team->activeMembers->map(function ($member) {
             $prog = $member->programmer;
             return [
                 'programmer_id' => $prog->id,
                 'name' => $prog->user->full_name,
                 'track' => $prog->track ?? 'general',
-                'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                'avatar_url' => $prog->avatar_url 
                             ? asset('storage/' . $prog->avatar_url)
                             : null,
             ];
         });
-
         return response()->json([
             'success' => true,
             'data' => $members
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error fetching team members list: ' . $e->getMessage());
         return response()->json([
@@ -964,7 +851,6 @@ public function getTeamMembersList($projectId)
         ], 500);
     }
 }
-
     public function getTeamMembersWithRatings($teamId)
     {
         try {
@@ -974,7 +860,7 @@ public function getTeamMembersList($projectId)
                 $avgScore = Evaluation::where('evaluated_id', $prog->id)->where('team_id', $team->id)->avg('average_score') ?? 0;
                 $stars = round($avgScore / 2, 1);
                 $latestFeedback = Evaluation::where('evaluated_id', $prog->id)->where('team_id', $team->id)->whereNotNull('feedback')->orderBy('created_at', 'desc')->value('feedback');
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'avatar_url' => $prog->avatar_url  
                             ? asset('storage/' . $prog->avatar_url)
                             : null, 'track' => $prog->track ?? 'general', 'average_rating' => $stars, 'latest_feedback' => $latestFeedback];
             });
@@ -984,7 +870,6 @@ public function getTeamMembersList($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch data'], 500);
         }
     }
-
     public function getTeamBasicDetails($id)
     {
         try {
@@ -998,7 +883,6 @@ public function getTeamMembersList($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
         }
     }
-
     public function getTeamMembersWithMyRatings($teamId)
     {
         try {
@@ -1018,7 +902,7 @@ public function getTeamMembersList($projectId)
                     $starsGiven = round($evaluation->average_score / 2, 1);
                     $feedbackGiven = $evaluation->feedback;
                 }
-                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                return ['programmer_id' => $prog->id, 'name' => $prog->user->full_name, 'track' => $prog->track ?? 'general', 'avatar_url' => $prog->avatar_url  
                             ? asset('storage/' . $prog->avatar_url)
                             : null, 'stars_given_to_me' => $starsGiven, 'feedback_from_them' => $feedbackGiven];
             });
@@ -1028,7 +912,6 @@ public function getTeamMembersList($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to fetch team members with ratings'], 500);
         }
     }
-
     public function evaluateTeamMembers($teamId, EvaluateTeamRequest $request)
     {
         try {
@@ -1069,38 +952,28 @@ public function getTeamMembersList($projectId)
             return response()->json(['success' => false, 'message' => 'Failed to submit evaluations: '.$e->getMessage()], 500);
         }
     }
-    /**
- * عرض تفاصيل دعوة معينة (خاصة بالمبرمج المدعو)
- */
 public function getInvitationDetails($invitationId)
 {
     try {
         $user = auth()->user();
         $programmer = $user->programmer;
-
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
         $invitation = TeamInvitation::with([
             'team.project',
             'team.activeMembers.programmer.user',
             'team.leader.programmer.user',
             'inviter.user'
         ])->find($invitationId);
-
         if (!$invitation) {
             return response()->json(['success' => false, 'message' => 'Invitation not found'], 404);
         }
-
         if ($invitation->programmer_id !== $programmer->id) {
             return response()->json(['success' => false, 'message' => 'This invitation is not for you'], 403);
         }
-
         $team = $invitation->team;
         $project = $team ? $team->project : null;
-
-        // ----- معالجة المرسل (inviter) بأمان -----
         $inviter = $invitation->inviter;
         $inviterData = null;
         if ($inviter && $inviter->user) {
@@ -1109,7 +982,7 @@ public function getInvitationDetails($invitationId)
                 'track'      => $inviter->track ?? 'general',
                 'avatar_url' => $inviter->avatar_url
                     ? Storage::disk('public')->url($inviter->avatar_url)
-                    : null,  // ✅ FIXED: full URL
+                    : null,  
             ];
         } else {
             $inviterData = [
@@ -1118,8 +991,6 @@ public function getInvitationDetails($invitationId)
                 'avatar_url' => null,
             ];
         }
-
-        // ----- معالجة القائد بأمان -----
         $leader = $team ? $team->leader?->programmer : null;
         $leaderData = null;
         if ($leader && $leader->user) {
@@ -1128,7 +999,7 @@ public function getInvitationDetails($invitationId)
                 'track'      => $leader->track ?? 'general',
                 'avatar_url' => $leader->avatar_url
                     ? Storage::disk('public')->url($leader->avatar_url)
-                    : null,  // ✅ FIXED: full URL
+                    : null,  
             ];
         } else {
             $leaderData = [
@@ -1137,8 +1008,6 @@ public function getInvitationDetails($invitationId)
                 'avatar_url' => null,
             ];
         }
-
-        // ----- أعضاء الفريق (تجاهل المحذوفين) -----
         $members = $team ? $team->activeMembers
             ->filter(function ($member) {
                 return $member->programmer && $member->programmer->user;
@@ -1149,18 +1018,15 @@ public function getInvitationDetails($invitationId)
                     'name'       => $prog->user->full_name,
                     'avatar_url' => $prog->avatar_url
                         ? Storage::disk('public')->url($prog->avatar_url)
-                        : null,  // ✅ FIXED: full URL
+                        : null,  
                     'track'      => $prog->track ?? 'general',
                 ];
             })->values() : collect();
-
-        // ----- بيانات المشروع بأمان -----
         $projectData = $project ? [
             'title'       => $project->title ?? 'Deleted Project',
             'category'    => $project->category_name ?? null,
             'description' => $project->description ?? null,
         ] : null;
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -1178,27 +1044,19 @@ public function getInvitationDetails($invitationId)
                 'created_at' => $invitation->created_at,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error fetching invitation details: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to fetch invitation details'], 500);
     }
 }
-    /**
- * عرض جميع الدعوات المستلمة للمبرمج الحالي مع تفاصيل كل فريق
- *
- * @return \Illuminate\Http\JsonResponse
- */
 public function getAllMyInvitations()
 {
     try {
         $user = auth()->user();
         $programmer = $user->programmer;
-
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
         $invitations = TeamInvitation::where('programmer_id', $programmer->id)
             ->with([
                 'team.project',
@@ -1208,12 +1066,9 @@ public function getAllMyInvitations()
             ])
             ->orderBy('created_at', 'desc')
             ->get();
-
         $data = $invitations->map(function ($invitation) {
             $team = $invitation->team;
             $project = $team ? $team->project : null;
-
-            // --- معالجة المرسل (inviter) بأمان ---
             $inviter = $invitation->inviter;
             $inviterData = null;
             if ($inviter && $inviter->user) {
@@ -1222,7 +1077,7 @@ public function getAllMyInvitations()
                     'track'      => $inviter->track ?? 'general',
                     'avatar_url' => $inviter->avatar_url
                         ? Storage::disk('public')->url($inviter->avatar_url)
-                        : null,  // ✅ FIXED: full URL
+                        : null,  
                 ];
             } else {
                 $inviterData = [
@@ -1231,14 +1086,10 @@ public function getAllMyInvitations()
                     'avatar_url' => null,
                 ];
             }
-
-            // --- معالجة القائد بأمان ---
             $leader = $team ? $team->leader?->programmer : null;
             $leaderAvatar = $leader && $leader->avatar_url
                 ? Storage::disk('public')->url($leader->avatar_url)
-                : null;  // ✅ FIXED: full URL
-
-            // --- معالجة الأعضاء (تجاهل المحذوفين) ---
+                : null;  
             $membersAvatars = $team ? $team->activeMembers
                 ->filter(function ($member) {
                     return $member->programmer && $member->programmer->user;
@@ -1247,11 +1098,10 @@ public function getAllMyInvitations()
                     $prog = $member->programmer;
                     return $prog->avatar_url
                         ? Storage::disk('public')->url($prog->avatar_url)
-                        : null;  // ✅ FIXED: full URL
+                        : null;  
                 })
                 ->filter()
                 ->values() : collect();
-
             return [
                 'invitation_id' => $invitation->id,
                 'status'        => $invitation->status,
@@ -1272,13 +1122,11 @@ public function getAllMyInvitations()
                 ],
             ];
         });
-
         return response()->json([
             'success' => true,
             'data' => $data,
             'count' => $data->count(),
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error fetching all invitations: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to fetch invitations'], 500);
@@ -1291,34 +1139,24 @@ public function getProjectTeamDetails($projectId, Request $request)
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
-        // جلب المشروع مع الفريق
         $project = Project::with(['teams.activeMembers.programmer.user', 'teams.tasks.programmer.user'])
             ->find($projectId);
-
         if (!$project) {
             return response()->json(['success' => false, 'message' => 'Project not found'], 404);
         }
-
-        // جلب الفريق الأول (أو الفريق اللي فيه المبرمج)
         $team = $project->teams->first(function ($t) use ($programmer) {
             return $t->isMember($programmer->id);
         });
-
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this project'], 403);
         }
-
         $myTrack = $programmer->track ?? 'general';
         $projectDescription = $project->description;
         $githubLink = $project->github_url ?? $team->github_url ?? null;
-
-        // أعضاء الفريق
         $members = $team->activeMembers->map(function ($member) {
             $prog = $member->programmer;
             return [
@@ -1331,11 +1169,8 @@ public function getProjectTeamDetails($projectId, Request $request)
                 'role' => $member->role,
             ];
         });
-
-        // التاسكات
         $tasksView = $request->query('tasks_view', 'my');
         $tasks = [];
-
         if ($tasksView === 'my') {
             $tasks = $team->tasks->where('programmer_id', $programmer->id)->map(function ($task) {
                 return [
@@ -1369,13 +1204,12 @@ public function getProjectTeamDetails($projectId, Request $request)
                 ];
             })->values();
         }
-
         return response()->json([
             'success' => true,
             'data' => [
                 'project_id' => (int) $projectId,
                 'project_name' => $project->title,
-                'team_id' => $team->id,              // ← للـ reference بس
+                'team_id' => $team->id,              
                 'team_name' => $team->name,
                 'project_description' => $projectDescription,
                 'github_link' => $githubLink,
@@ -1385,16 +1219,11 @@ public function getProjectTeamDetails($projectId, Request $request)
                 'tasks' => $tasks,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error in getProjectTeamDetails: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
 }
-    /**
- * عرض تفاصيل كاملة للفريق المرتبط بمشروع معين
- * (نفس سلوك getFullTeamDetails لكن بـ projectId)
- */
 public function getProjectFullDetails($projectId, Request $request)
 {
     try {
@@ -1402,50 +1231,38 @@ public function getProjectFullDetails($projectId, Request $request)
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
-
         $programmer = $user->programmer;
         if (!$programmer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
-        // جلب الفريق المرتبط بالمشروع
         $team = Team::with([
             'project',
             'activeMembers.programmer.user',
             'tasks.programmer.user'
         ])->where('project_id', $projectId)->first();
-
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
-
-        // التحقق من أن المبرمج عضو في هذا الفريق
         if (!$team->isMember($programmer->id)) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
         }
-
         $myTrack = $programmer->track ?? 'general';
         $projectDescription = $team->project->description ?? null;
         $githubLink = $team->project->github_url ?? null;
-
-        // أعضاء الفريق
         $members = $team->activeMembers->map(function ($member) {
             $prog = $member->programmer;
             return [
                 'id'         => $prog->id,
                 'name'       => $prog->user->full_name,
-                'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                'avatar_url' => $prog->avatar_url  
                             ? asset('storage/' . $prog->avatar_url)
                             : null,
                 'track'      => $prog->track ?? 'general',
                 'role'       => $member->role,
             ];
         });
-
-        // تجهيز التاسكات حسب الطلب
         $tasksView = $request->query('tasks_view', 'my');
         $tasks = [];
-
         if ($tasksView === 'my') {
             $tasks = $team->tasks
                 ->where('programmer_id', $programmer->id)
@@ -1479,7 +1296,6 @@ public function getProjectFullDetails($projectId, Request $request)
                 ];
             })->values();
         }
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -1495,22 +1311,17 @@ public function getProjectFullDetails($projectId, Request $request)
                 'tasks'              => $tasks,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error in getProjectFullDetails: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to fetch team details'], 500);
     }
 }
-    /**
- * عرض تفاصيل أساسية للفريق باستخدام projectId (نسخة basic-details)
- */
 public function getProjectBasicDetails($projectId)
 {
     try {
         $team = Team::with(['project', 'activeMembers.programmer.user'])
             ->where('project_id', $projectId)
             ->firstOrFail();
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -1522,7 +1333,7 @@ public function getProjectBasicDetails($projectId)
                         'programmer_id' => $member->programmer_id,
                         'name' => $prog->user->full_name,
                         'track' => $prog->track ?? 'general',
-                        'avatar_url' => $prog->avatar_url  // ✅ FIXED
+                        'avatar_url' => $prog->avatar_url  
                             ? asset('storage/' . $prog->avatar_url)
                             : null,
                     ];
@@ -1541,44 +1352,35 @@ public function getProjectMembersWithMyRatings($projectId)
         if (!$user || $user->role !== 'programmer') {
             return response()->json(['success' => false, 'message' => 'Only programmers can access'], 403);
         }
-
         $currentProgrammer = $user->programmer;
         if (!$currentProgrammer) {
             return response()->json(['success' => false, 'message' => 'Programmer profile not found'], 404);
         }
-
         $team = Team::with(['project', 'activeMembers.programmer.user'])
             ->where('project_id', $projectId)
             ->first();
-
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
-
         if (!$team->isMember($currentProgrammer->id)) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
         }
-
         $members = $team->activeMembers
             ->filter(function ($member) use ($currentProgrammer) {
                 return $member->programmer_id !== $currentProgrammer->id;
             })
-            ->map(function ($member) use ($currentProgrammer, $projectId) {  // ✅ FIXED
+            ->map(function ($member) use ($currentProgrammer, $projectId) {  
                 $prog = $member->programmer;
-
                 $evaluation = Evaluation::where('evaluator_id', $prog->id)
                     ->where('evaluated_id', $currentProgrammer->id)
                     ->where('project_id', $projectId)
                     ->first();
-
                 $starsGiven = null;
                 $feedbackGiven = null;
-
                 if ($evaluation) {
                     $starsGiven = round($evaluation->average_score / 2, 1);
                     $feedbackGiven = $evaluation->feedback;
                 }
-
                 return [
                     'programmer_id' => $prog->id,
                     'name' => $prog->user->full_name,
@@ -1590,7 +1392,6 @@ public function getProjectMembersWithMyRatings($projectId)
                     'feedback_from_them' => $feedbackGiven,
                 ];
             });
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -1599,84 +1400,60 @@ public function getProjectMembersWithMyRatings($projectId)
                 'members' => $members,
             ]
         ]);
-
     } catch (\Exception $e) {
         Log::error('Error in getProjectMembersWithMyRatings: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to fetch ratings: ' . $e->getMessage()], 500);
     }
 }
-
 public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $request)
 {
     try {
         $user = auth()->user();
         $evaluator = $user->programmer;
-
-        // جلب المشروع مع الفريق
         $project = Project::with('teams.activeMembers')->find($projectId);
         if (!$project) {
             return response()->json(['success' => false, 'message' => 'Project not found'], 404);
         }
-
-        // جلب الفريق المرتبط بالمشروع (نفترض فريق واحد)
         $team = $project->teams->first();
         if (!$team) {
             return response()->json(['success' => false, 'message' => 'No team found for this project'], 404);
         }
-
-        // التحقق من أن المستخدم عضو في هذا الفريق
         if (!$team->isMember($evaluator->id)) {
             return response()->json(['success' => false, 'message' => 'You are not a member of this team'], 403);
         }
-
-        // التحقق من أن المشروع مكتمل
         if ($project->status !== 'completed') {
             return response()->json([
                 'success' => false,
                 'message' => 'You can only evaluate team members after the project is completed'
             ], 400);
         }
-
         $validated = $request->validated();
         $evaluationsData = $validated['evaluations'];
         $errors = [];
         $successCount = 0;
-
         DB::beginTransaction();
-
         foreach ($evaluationsData as $eval) {
             $evaluatedId = $eval['evaluated_id'];
             $rating = $eval['rating'];
             $feedback = $eval['feedback'] ?? null;
-
-            // منع التقييم الذاتي
             if ($evaluatedId == $evaluator->id) {
                 $errors[] = "You cannot evaluate yourself (ID: $evaluatedId)";
                 continue;
             }
-
-            // التحقق من أن المقيم عضو في الفريق
             if (!$team->isMember($evaluatedId)) {
                 $errors[] = "Programmer ID $evaluatedId is not a member of this team";
                 continue;
             }
-
-            // التحقق من عدم وجود تقييم سابق
             $existing = Evaluation::where('project_id', $project->id)
                 ->where('team_id', $team->id)
                 ->where('evaluator_id', $evaluator->id)
                 ->where('evaluated_id', $evaluatedId)
                 ->first();
-
             if ($existing) {
                 $errors[] = "You have already evaluated programmer ID $evaluatedId";
                 continue;
             }
-
-            // تحويل الـ rating (1-5) إلى average_score (1-10)
             $averageScore = $rating * 2;
-
-            // إنشاء التقييم
             Evaluation::create([
                 'project_id' => $project->id,
                 'team_id' => $team->id,
@@ -1696,8 +1473,6 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
                 'is_completed' => true,
                 'submitted_at' => now(),
             ]);
-
-            // إضافة نقاط للمُقيَّم
             $evaluatedProgrammer = Programmer::find($evaluatedId);
             if ($evaluatedProgrammer && method_exists($evaluatedProgrammer, 'addStars')) {
                 $points = $rating * 10;
@@ -1706,12 +1481,9 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
                     'rating' => $rating
                 ]);
             }
-
             $successCount++;
         }
-
         DB::commit();
-
         return response()->json([
             'success' => true,
             'message' => "Successfully submitted $successCount evaluation(s).",
@@ -1719,7 +1491,6 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
             'total_submitted' => $successCount,
             'total_requested' => count($evaluationsData)
         ], 201);
-
     } catch (\Exception $e) {
         DB::rollBack();
         Log::error('Error evaluating team members: ' . $e->getMessage());
@@ -1732,14 +1503,12 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
         $team = Team::with(['activeMembers.programmer.user'])
             ->where('project_id', $projectId)
             ->first();
-
         if (!$team) {
             return response()->json([
                 'success' => false,
                 'message' => 'No team found for this project'
             ], 404);
         }
-
         $members = $team->activeMembers->map(function ($member) {
             $prog = $member->programmer;
             return [
@@ -1751,7 +1520,6 @@ public function evaluateProjectTeamMembers($projectId, EvaluateTeamRequest $requ
                     : null,
             ];
         });
-
         return response()->json([
             'success' => true,
             'data' => [
