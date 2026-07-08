@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\Evaluation;
@@ -18,7 +17,6 @@ class EvaluationController extends Controller
     {
         try {
             $project = Project::findOrFail($projectId);
-
             $evaluations = Evaluation::where('project_id', $projectId)
                 ->with(['evaluator.user', 'evaluated.user'])
                 ->get()
@@ -44,13 +42,11 @@ class EvaluationController extends Controller
                         'feedbacks' => $evals->pluck('feedback')->filter(),
                     ];
                 });
-
             return response()->json([
                 'success' => true,
                 'data' => $evaluations,
                 'message' => 'Evaluations fetched successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching evaluations: ' . $e->getMessage());
             return response()->json([
@@ -59,47 +55,39 @@ class EvaluationController extends Controller
             ], 500);
         }
     }
-
     public function startEvaluation($projectId, $teamId)
     {
         try {
             $project = Project::findOrFail($projectId);
             $team = Team::findOrFail($teamId);
-
             $user = Auth::user();
             $programmer = $user->programmer;
-
             if (!$team->isMember($programmer->id)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You are not a member of this team'
                 ], 403);
             }
-
             if ($project->status !== 'completed') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Project is not completed yet'
                 ], 400);
             }
-
             $existingEvaluations = Evaluation::where('project_id', $projectId)
                 ->where('team_id', $teamId)
                 ->where('evaluator_id', $programmer->id)
                 ->exists();
-
             if ($existingEvaluations) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You have already submitted evaluations for this project'
                 ], 400);
             }
-
             $membersToEvaluate = $team->activeMembers()
                 ->where('programmer_id', '!=', $programmer->id)
                 ->with('programmer.user')
                 ->get();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Evaluation started',
@@ -121,7 +109,6 @@ class EvaluationController extends Controller
                     })
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error starting evaluation: ' . $e->getMessage());
             return response()->json([
@@ -130,7 +117,6 @@ class EvaluationController extends Controller
             ], 500);
         }
     }
-
     public function store(Request $request, $projectId, $teamId)
     {
         $validator = Validator::make($request->all(), [
@@ -146,57 +132,47 @@ class EvaluationController extends Controller
             'feedback' => 'nullable|string',
             'is_anonymous' => 'boolean'
         ]);
-
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'errors' => $validator->errors()
             ], 422);
         }
-
         DB::beginTransaction();
-
         try {
             $project = Project::findOrFail($projectId);
             $team = Team::findOrFail($teamId);
-
             $user = Auth::user();
             $evaluator = $user->programmer;
-
             if (!$team->isMember($evaluator->id)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You are not a member of this team'
                 ], 403);
             }
-
             if ($evaluator->id == $request->evaluated_id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You cannot evaluate yourself'
                 ], 400);
             }
-
             if (!$team->isMember($request->evaluated_id)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'The evaluated programmer is not in this team'
                 ], 400);
             }
-
             $existing = Evaluation::where('project_id', $projectId)
                 ->where('team_id', $teamId)
                 ->where('evaluator_id', $evaluator->id)
                 ->where('evaluated_id', $request->evaluated_id)
                 ->first();
-
             if ($existing) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You have already evaluated this programmer'
                 ], 400);
             }
-
             $average = (
                 $request->technical_skills +
                 $request->communication +
@@ -205,7 +181,6 @@ class EvaluationController extends Controller
                 $request->reliability +
                 $request->code_quality
             ) / 6;
-
             $evaluation = Evaluation::create([
                 'project_id' => $projectId,
                 'team_id' => $teamId,
@@ -225,22 +200,18 @@ class EvaluationController extends Controller
                 'is_completed' => true,
                 'submitted_at' => now()
             ]);
-
             $evaluated = Programmer::find($request->evaluated_id);
             $bonusPoints = $average * 10;
             $evaluated->addScore($bonusPoints, 'Received peer evaluation', [
                 'project_id' => $projectId,
                 'average_score' => $average
             ]);
-
             DB::commit();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Evaluation submitted successfully',
                 'data' => $evaluation
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error submitting evaluation: ' . $e->getMessage());
@@ -250,22 +221,18 @@ class EvaluationController extends Controller
             ], 500);
         }
     }
-
     public function myEvaluationsAsEvaluator()
     {
         try {
             $programmer = Auth::user()->programmer;
-
             $evaluations = Evaluation::where('evaluator_id', $programmer->id)
                 ->with(['project', 'team', 'evaluated.user'])
                 ->orderBy('created_at', 'desc')
                 ->get();
-
             return response()->json([
                 'success' => true,
                 'data' => $evaluations
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching my evaluations: ' . $e->getMessage());
             return response()->json([
@@ -274,22 +241,18 @@ class EvaluationController extends Controller
             ], 500);
         }
     }
-
     public function myEvaluationsAsEvaluated()
     {
         try {
             $programmer = Auth::user()->programmer;
-
             $evaluations = Evaluation::where('evaluated_id', $programmer->id)
                 ->with(['project', 'team', 'evaluator.user'])
                 ->orderBy('created_at', 'desc')
                 ->get();
-
             return response()->json([
                 'success' => true,
                 'data' => $evaluations
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching received evaluations: ' . $e->getMessage());
             return response()->json([
@@ -298,12 +261,10 @@ class EvaluationController extends Controller
             ], 500);
         }
     }
-
     public function programmerStats($programmerId)
     {
         try {
             $evaluations = Evaluation::where('evaluated_id', $programmerId)->get();
-
             if ($evaluations->isEmpty()) {
                 return response()->json([
                     'success' => true,
@@ -313,7 +274,6 @@ class EvaluationController extends Controller
                     ]
                 ]);
             }
-
             $stats = [
                 'total_evaluations' => $evaluations->count(),
                 'average_scores' => [
@@ -331,12 +291,10 @@ class EvaluationController extends Controller
                     ->filter()
                     ->values()
             ];
-
             return response()->json([
                 'success' => true,
                 'data' => $stats
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching programmer stats: ' . $e->getMessage());
             return response()->json([
