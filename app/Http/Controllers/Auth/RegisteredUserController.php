@@ -38,7 +38,8 @@ class RegisteredUserController extends Controller
         ]);
         $deletedUser = User::onlyTrashed()->where('email', $request->email)->first();
         if ($deletedUser) {
-            $deletedUser->forceDelete();
+             $deletedUser->email = 'deleted_' . $deletedUser->id . '_' . $deletedUser->email;
+             $deletedUser->save();
         }
         $role = $request->source === 'mobile' ? 'programmer' : 'company';
         cache()->put('registration:' . $request->email, [
